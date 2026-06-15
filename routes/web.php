@@ -1,5 +1,10 @@
 <?php
 
+use App\Http\Controllers\BrandsController;
+use App\Http\Controllers\ConfiguratorController;
+use App\Http\Controllers\ConfiguratorImportController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ImportedProductsController;
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Settings\SecurityController;
@@ -16,11 +21,16 @@ Route::get('/', function () {
     ]);
 });
 
-Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/configurator', ConfiguratorController::class)->name('configurator.show');
+
+Route::get('/dashboard', DashboardController::class)
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
 Route::middleware('auth')->group(function () {
+    Route::post('/dashboard/import-csv', [ConfiguratorImportController::class, 'store'])->name('dashboard.import');
+    Route::get('/brands', BrandsController::class)->name('brands.index');
+    Route::get('/imported-products', ImportedProductsController::class)->name('imported-products.index');
     Route::redirect('/settings', '/settings/profile');
     Route::get('/settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/settings/profile', [ProfileController::class, 'update'])->name('profile.update');

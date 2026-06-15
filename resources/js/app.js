@@ -31,7 +31,7 @@ createInertiaApp({
                                 default: () => pageNode,
                             }),
                     });
-            } else if (name !== 'Welcome') {
+            } else if (!['Welcome', 'Configurator'].includes(name)) {
                 page.default.layout = AppLayout;
             }
         }
