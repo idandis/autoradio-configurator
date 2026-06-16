@@ -14,6 +14,7 @@ class ConfiguratorVariant extends Model
         'configurator_product_id',
         'title',
         'sku',
+        'shopify_variant_id',
         'option_value',
         'price',
         'image_url',

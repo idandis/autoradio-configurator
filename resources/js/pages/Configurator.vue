@@ -6,6 +6,7 @@ type Variant = {
     id: number;
     title: string;
     sku: string | null;
+    shopifyVariantId: string | null;
     price: number;
     image: string | null;
 };
@@ -27,6 +28,7 @@ type SimpleOption = {
     title: string;
     price: number;
     image?: string | null;
+    shopifyVariantId?: string | null;
 };
 
 const props = defineProps<{
@@ -57,18 +59,20 @@ const models = computed(() => {
     ];
 });
 
+const brandVehicles = computed(() =>
+    props.vehicles.filter((vehicle) => vehicle.brand === selectedBrand.value),
+);
+
 const matchingVehicles = computed(() =>
-    props.vehicles.filter(
+    brandVehicles.value.filter(
         (vehicle) =>
-            vehicle.brand === selectedBrand.value &&
-            vehicle.model === selectedModel.value,
+            selectedModel.value === null || vehicle.model === selectedModel.value,
     ),
 );
 
 const availableYears = computed(() => {
     const years = new Set<number>();
-
-    matchingVehicles.value.forEach((vehicle) => {
+    brandVehicles.value.forEach((vehicle) => {
         const from = vehicle.yearFrom ?? new Date().getFullYear();
         const to = vehicle.yearTo ?? from;
 
@@ -122,6 +126,75 @@ const productsSubtotal = computed(
 const total = computed(
     () => productsSubtotal.value + (selectedInstallation.value?.price ?? 0),
 );
+
+const checkoutLineItems = computed(() => {
+    const items: Array<{ variantId: string; quantity: number }> = [];
+
+    if (selectedScreen.value?.shopifyVariantId) {
+        items.push({
+            variantId: selectedScreen.value.shopifyVariantId,
+            quantity: 1,
+        });
+    }
+
+    if (selectedCamera.value.key !== 'none' && selectedCamera.value.shopifyVariantId) {
+        items.push({
+            variantId: selectedCamera.value.shopifyVariantId,
+            quantity: 1,
+        });
+    }
+
+    if (
+        selectedInstallation.value.key !== 'none' &&
+        selectedInstallation.value.shopifyVariantId
+    ) {
+        items.push({
+            variantId: selectedInstallation.value.shopifyVariantId,
+            quantity: 1,
+        });
+    }
+
+    return items;
+});
+
+const canCheckout = computed(() => {
+    if (!selectedScreen.value?.shopifyVariantId) {
+        return false;
+    }
+
+    if (selectedCamera.value.key !== 'none' && !selectedCamera.value.shopifyVariantId) {
+        return false;
+    }
+
+    if (
+        selectedInstallation.value.key !== 'none' &&
+        !selectedInstallation.value.shopifyVariantId
+    ) {
+        return false;
+    }
+
+    return checkoutLineItems.value.length > 0;
+});
+
+const checkoutUrl = computed(() => {
+    if (!canCheckout.value) {
+        return null;
+    }
+
+    const cartPath = checkoutLineItems.value
+        .map((item) => `${item.variantId}:${item.quantity}`)
+        .join(',');
+
+    return `${window.location.origin}/cart/${cartPath}`;
+});
+
+const goToCheckout = () => {
+    if (!checkoutUrl.value) {
+        return;
+    }
+
+    window.location.href = checkoutUrl.value;
+};
 
 watch(
     brands,
@@ -191,7 +264,7 @@ watch(
                                 <div class="flex flex-wrap gap-2">
                                     <button
                                         v-for="brand in brands"
-                                        :key="brand"
+                                        :key="brand ?? 'unknown-brand'"
                                         type="button"
                                         @click="selectedBrand = brand"
                                         class="rounded-lg border px-4 py-3 text-sm transition"
@@ -228,7 +301,7 @@ watch(
                             <div class="flex flex-wrap gap-2">
                                 <button
                                     v-for="model in models"
-                                    :key="model"
+                                    :key="model ?? 'unknown-model'"
                                     type="button"
                                     @click="selectedModel = model"
                                     class="rounded-lg border px-4 py-3 text-sm transition"
@@ -413,7 +486,9 @@ watch(
 
                         <button
                             type="button"
-                            class="w-full rounded-xl bg-red-600 px-5 py-4 text-base font-semibold text-white transition hover:bg-red-500"
+                            @click="goToCheckout"
+                            class="w-full rounded-xl bg-red-600 px-5 py-4 text-base font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="!canCheckout"
                         >
                             Aggiungi al carrello e paga
                         </button>

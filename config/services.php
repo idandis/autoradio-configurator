@@ -37,6 +37,7 @@ return [
 
     'shopify' => [
         'store' => env('SHOPIFY_STORE'),
+        'storefront_url' => env('SHOPIFY_STOREFRONT_URL'),
         'client_id' => env('SHOPIFY_CLIENT_ID'),
         'client_secret' => env('SHOPIFY_CLIENT_SECRET'),
         'scopes' => env('SHOPIFY_SCOPES', 'read_products'),

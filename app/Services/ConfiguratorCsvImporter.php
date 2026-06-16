@@ -6,12 +6,14 @@ use App\Models\ConfiguratorProduct;
 use App\Support\VehicleTitleParser;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use RuntimeException;
 
 class ConfiguratorCsvImporter
 {
     private const CAMERA_STANDARD_HANDLE = 'camara-trasera-estandar';
     private const CAMERA_SPECIFIC_HANDLE = 'camara-trasera-especifica';
+    private ?bool $supportsShopifyVariantId = null;
 
     public function import(string|UploadedFile $source): array
     {
@@ -82,7 +84,7 @@ class ConfiguratorCsvImporter
         $mapped = [];
 
         foreach ($headers as $index => $header) {
-            $mapped[$header] = $row[$index] ?? null;
+            $mapped[$this->sanitizeCsvValue($header)] = $this->sanitizeCsvValue($row[$index] ?? null);
         }
 
         return $mapped;
@@ -101,7 +103,7 @@ class ConfiguratorCsvImporter
         }
 
         $brand = $this->normalizeBrand($primaryRow['MARCA DE COCHE (product.metafields.custom.radio_type)'] ?? null);
-        $vehicleData = $category === 'screen'
+        $vehicleData = $category === 'screen' && $brand !== null
             ? VehicleTitleParser::parse($title, $brand)
             : ['model' => null, 'year_from' => null, 'year_to' => null];
 
@@ -114,7 +116,7 @@ class ConfiguratorCsvImporter
                 return null;
             }
 
-            return [
+            $variant = [
                 'title' => $optionValue !== '' ? $optionValue : ($row['Title'] ?: $sku),
                 'sku' => $sku !== '' ? $sku : null,
                 'option_value' => $optionValue !== '' ? $optionValue : null,
@@ -125,6 +127,12 @@ class ConfiguratorCsvImporter
                     'variant_image' => $row['Variant Image'] ?? null,
                 ],
             ];
+
+            if ($this->supportsShopifyVariantId()) {
+                $variant['shopify_variant_id'] = $this->normalizeShopifyVariantId($row['Variant ID'] ?? null);
+            }
+
+            return $variant;
         }, $rows)));
 
         if ($variants === []) {
@@ -239,5 +247,36 @@ class ConfiguratorCsvImporter
         $brand = trim((string) $brand);
 
         return $brand !== '' ? $brand : null;
+    }
+
+    private function sanitizeCsvValue(mixed $value): mixed
+    {
+        if (! is_string($value)) {
+            return $value;
+        }
+
+        $normalized = mb_convert_encoding($value, 'UTF-8', ['UTF-8', 'Windows-1252', 'ISO-8859-1']);
+
+        return preg_replace('/^\xEF\xBB\xBF/u', '', $normalized) ?? $normalized;
+    }
+
+    private function normalizeShopifyVariantId(mixed $value): ?string
+    {
+        $value = trim((string) $value);
+
+        if ($value === '') {
+            return null;
+        }
+
+        if (preg_match('/\d+$/', $value, $matches) === 1) {
+            return $matches[0];
+        }
+
+        return null;
+    }
+
+    private function supportsShopifyVariantId(): bool
+    {
+        return $this->supportsShopifyVariantId ??= Schema::hasColumn('configurator_variants', 'shopify_variant_id');
     }
 }

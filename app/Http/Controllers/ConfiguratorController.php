@@ -45,6 +45,7 @@ class ConfiguratorController extends Controller
                     'id' => $variant->id,
                     'title' => $variant->title,
                     'sku' => $variant->sku,
+                    'shopifyVariantId' => $variant->shopify_variant_id,
                     'price' => (float) $variant->price,
                     'image' => $variant->image_url ?: $product->image_url,
                 ])->sortBy('price')->values(),
@@ -77,6 +78,7 @@ class ConfiguratorController extends Controller
                 'title' => $product->title,
                 'price' => (float) $product->price_min,
                 'image' => $product->image_url,
+                'shopifyVariantId' => $product->variants->first()?->shopify_variant_id,
             ];
         }
 
@@ -104,6 +106,7 @@ class ConfiguratorController extends Controller
                 'key' => $product->handle,
                 'title' => $product->title,
                 'price' => (float) $product->price_min,
+                'shopifyVariantId' => $product->variants->first()?->shopify_variant_id,
             ];
         }
 
