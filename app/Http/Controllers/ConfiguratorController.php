@@ -93,20 +93,13 @@ class ConfiguratorController extends Controller
             'price' => 0,
         ]];
 
-        $screenOnly = $products->where('subtype', 'screen_only')->sortBy('price_min')->first();
-        $cameraOnly = $products->where('subtype', 'camera_only')->sortBy('price_min')->first();
-        $screenCamera = $products->where('subtype', 'screen_camera')->sortBy('price_min')->first();
-
-        foreach ([$screenOnly, $cameraOnly, $screenCamera] as $product) {
-            if (! $product) {
-                continue;
-            }
-
+        foreach ($products->sortBy('price_min')->values() as $product) {
             $options[] = [
                 'key' => $product->handle,
                 'title' => $product->title,
                 'price' => (float) $product->price_min,
                 'shopifyVariantId' => $product->variants->first()?->shopify_variant_id,
+                'subtype' => $product->subtype,
             ];
         }
 

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
+use RuntimeException;
 
 class ShopifyService
 {
@@ -12,9 +13,14 @@ class ShopifyService
 
     public function __construct()
     {
-        $this->store = config('services.shopify.store');
-        $this->token = config('services.shopify.token');
-        $this->version = config('services.shopify.version');
+        $this->store = (string) (config('services.shopify.store') ?? '');
+        $this->token = (string) config('services.shopify.token');
+        $this->version = (string) (config('services.shopify.version') ?? '2026-04');
+    }
+
+    public function isConfigured(): bool
+    {
+        return $this->store !== '' && $this->token !== '';
     }
 
     /**
@@ -22,6 +28,10 @@ class ShopifyService
      */
     public function graphql(string $query, array $variables = []): array
     {
+        if (! $this->isConfigured()) {
+            throw new RuntimeException('Shopify API is not configured.');
+        }
+
         $response = Http::withHeaders([
             'X-Shopify-Access-Token' => $this->token,
             'Content-Type' => 'application/json',
@@ -115,5 +125,83 @@ class ShopifyService
         }
 
         return $products;
+    }
+
+    public function getVariantsByIds(array $variantIds): array
+    {
+        $variantIds = array_values(array_unique(array_filter(array_map(
+            fn ($id) => trim((string) $id),
+            $variantIds
+        ))));
+
+        if ($variantIds === []) {
+            return [];
+        }
+
+        $query = <<<'GRAPHQL'
+        query GetVariantNodes($ids: [ID!]!) {
+          nodes(ids: $ids) {
+            ... on ProductVariant {
+              id
+              title
+              sku
+              price
+              image {
+                url
+              }
+              product {
+                id
+                title
+                handle
+                productType
+                tags
+                featuredImage {
+                  url
+                }
+              }
+            }
+          }
+        }
+        GRAPHQL;
+
+        $result = [];
+
+        foreach (array_chunk($variantIds, 100) as $chunk) {
+            $gids = array_map(
+                fn (string $id) => str_starts_with($id, 'gid://') ? $id : "gid://shopify/ProductVariant/{$id}",
+                $chunk
+            );
+
+            $response = $this->graphql($query, ['ids' => $gids]);
+
+            foreach ($response['data']['nodes'] ?? [] as $node) {
+                if (! is_array($node) || ! isset($node['id'], $node['product']['handle'])) {
+                    continue;
+                }
+
+                $numericId = preg_match('/(\d+)$/', $node['id'], $matches) === 1
+                    ? $matches[1]
+                    : null;
+
+                if ($numericId === null) {
+                    continue;
+                }
+
+                $result[$numericId] = [
+                    'variant_id' => $numericId,
+                    'variant_title' => $node['title'] ?? null,
+                    'sku' => $node['sku'] ?? null,
+                    'price' => $node['price'] ?? null,
+                    'image_url' => $node['image']['url'] ?? null,
+                    'product_title' => $node['product']['title'] ?? null,
+                    'product_handle' => $node['product']['handle'] ?? null,
+                    'product_type' => $node['product']['productType'] ?? null,
+                    'product_tags' => $node['product']['tags'] ?? [],
+                    'featured_image' => $node['product']['featuredImage']['url'] ?? null,
+                ];
+            }
+        }
+
+        return $result;
     }
 }

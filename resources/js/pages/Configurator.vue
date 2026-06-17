@@ -29,6 +29,7 @@ type SimpleOption = {
     price: number;
     image?: string | null;
     shopifyVariantId?: string | null;
+    subtype?: string | null;
 };
 
 const props = defineProps<{
@@ -112,11 +113,23 @@ const selectedCamera = computed(
         props.cameraOptions[0],
 );
 
+const visibleInstallationOptions = computed(() => {
+    if (selectedCamera.value.key !== 'none') {
+        return props.installationOptions;
+    }
+
+    return props.installationOptions.filter(
+        (option) =>
+            option.key === 'none' ||
+            !['camera_only', 'screen_camera'].includes(option.subtype ?? ''),
+    );
+});
+
 const selectedInstallation = computed(
     () =>
-        props.installationOptions.find(
+        visibleInstallationOptions.value.find(
             (option) => option.key === selectedInstallationKey.value,
-        ) ?? props.installationOptions[0],
+        ) ?? visibleInstallationOptions.value[0],
 );
 
 const productsSubtotal = computed(
@@ -185,7 +198,7 @@ const checkoutUrl = computed(() => {
         .map((item) => `${item.variantId}:${item.quantity}`)
         .join(',');
 
-    return `${window.location.origin}/cart/${cartPath}`;
+    return `https://www.autoradiocanario.com/cart/${cartPath}`;
 });
 
 const goToCheckout = () => {
@@ -216,6 +229,16 @@ watch(
     availableYears,
     (nextYears) => {
         selectedYear.value = nextYears[nextYears.length - 1] ?? null;
+    },
+    { immediate: true },
+);
+
+watch(
+    visibleInstallationOptions,
+    (nextOptions) => {
+        if (!nextOptions.some((option) => option.key === selectedInstallationKey.value)) {
+            selectedInstallationKey.value = nextOptions[0]?.key ?? 'none';
+        }
     },
     { immediate: true },
 );
@@ -388,7 +411,7 @@ watch(
                             </h2>
                             <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                                 <button
-                                    v-for="installation in installationOptions"
+                                    v-for="installation in visibleInstallationOptions"
                                     :key="installation.key"
                                     type="button"
                                     @click="selectedInstallationKey = installation.key"
@@ -417,17 +440,17 @@ watch(
                     </p>
 
                     <div class="mt-6 space-y-4">
-                        <div class="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-                            <p class="text-lg font-semibold">
-                                {{ selectedBrand }} {{ selectedModel }}
-                            </p>
+                            <div class="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+                                <p class="text-lg font-semibold">
+                                    {{ selectedBrand }} {{ selectedModel }}
+                                </p>
                             <p class="text-sm text-neutral-400">
                                 {{ selectedYear }}
                             </p>
-                            <p class="mt-3 text-sm text-neutral-500">
-                                {{ selectedVehicle?.title }}
-                            </p>
-                        </div>
+                                <p class="mt-3 text-sm text-neutral-500">
+                                    {{ selectedVehicle?.title }}
+                                </p>
+                            </div>
 
                         <div class="space-y-3 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
                             <div class="flex items-start justify-between gap-4">

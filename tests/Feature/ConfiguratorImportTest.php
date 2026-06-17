@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\ConfiguratorProduct;
+use App\Services\ShopifyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
@@ -34,6 +35,67 @@ CSV;
         $this->assertDatabaseHas('configurator_variants', [
             'sku' => 'YARIS-32',
             'shopify_variant_id' => '1111111111',
+        ]);
+    }
+
+    public function test_csv_import_supports_new_export_format(): void
+    {
+        $this->mock(ShopifyService::class, function ($mock): void {
+            $mock->shouldReceive('isConfigured')->andReturn(true);
+            $mock->shouldReceive('getVariantsByIds')
+                ->once()
+                ->andReturn([
+                    '57508028350808' => [
+                        'variant_id' => '57508028350808',
+                        'variant_title' => 'Cámara Trasera HD 1080P AHD/CVBS',
+                        'sku' => 'CAM-HD-HYU',
+                        'price' => '49.90',
+                        'image_url' => 'https://example.com/camera.jpg',
+                        'product_title' => 'Cámara Trasera HD 1080P AHD/CVBS con Visión Nocturna para Hyundai i20',
+                        'product_handle' => 'camara-trasera-hd-1080p-ahd-cvbs-con-vision-nocturna-para-hyundai-i20',
+                        'product_type' => 'CAM',
+                        'product_tags' => ['cam Trasera', 'HYUNDAI'],
+                        'featured_image' => 'https://example.com/camera-featured.jpg',
+                    ],
+                    '57494413705560' => [
+                        'variant_id' => '57494413705560',
+                        'variant_title' => '4core 2-32GB',
+                        'sku' => 'COROLLA-32',
+                        'price' => '199.00',
+                        'image_url' => 'https://example.com/screen.jpg',
+                        'product_title' => 'Toyota Corolla E120 2000-2012 – Autoradio Android 12 QLED 9"',
+                        'product_handle' => 'toyota-corolla-e120-2000-2012-autoradio-android-12-qled-9',
+                        'product_type' => 'Radio AM/FM',
+                        'product_tags' => ['2DIN', "9''", 'TOYOTA'],
+                        'featured_image' => 'https://example.com/screen-featured.jpg',
+                    ],
+                ]);
+        });
+
+        $csv = <<<CSV
+Product Type,Collection Titles,Product Tags,Product Title,Product Handle,Product Image,Variant Id,Variant Title
+CAM,Cámaras,"cam Trasera,HYUNDAI",Cámara Trasera HD 1080P AHD/CVBS con Visión Nocturna para Hyundai i20,camara-trasera-hd-1080p-ahd-cvbs-con-vision-nocturna-para-hyundai-i20,"https://example.com/camera.jpg, https://example.com/camera-2.jpg",57508028350808,Cámara Trasera HD 1080P AHD/CVBS con Visión Nocturna para Hyundai i20
+Radio AM/FM,TOYOTA,"2DIN,9'',TOYOTA","Toyota Corolla E120 2000-2012 – Autoradio Android 12 QLED 9"" con CarPlay Inalámbrico, GPS y 4G",toyota-corolla-e120-2000-2012-autoradio-android-12-qled-9,"https://example.com/screen.jpg, https://example.com/screen-2.jpg",57494413705560,"Toyota Corolla E120 2000-2012 – Autoradio Android 12 QLED 9"" con CarPlay Inalámbrico, GPS y 4G"
+CSV;
+
+        $file = UploadedFile::fake()->createWithContent('catalog.csv', $csv);
+
+        $this->actingAs(\App\Models\User::factory()->create())
+            ->post(route('dashboard.import'), [
+                'catalog' => $file,
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseCount('configurator_products', 2);
+        $this->assertDatabaseHas('configurator_products', [
+            'handle' => 'toyota-corolla-e120-2000-2012-autoradio-android-12-qled-9',
+            'brand' => 'TOYOTA',
+            'model' => 'Corolla E120',
+        ]);
+        $this->assertDatabaseHas('configurator_variants', [
+            'sku' => 'COROLLA-32',
+            'shopify_variant_id' => '57494413705560',
+            'title' => '4core 2-32GB',
         ]);
     }
 }
