@@ -7,6 +7,14 @@ const props = defineProps({
         type: String,
         required: true,
     },
+    method: {
+        type: String,
+        default: 'get',
+    },
+    as: {
+        type: String,
+        default: 'a',
+    },
     active: {
         type: Boolean,
     },
@@ -20,7 +28,7 @@ const classes = computed(() =>
 </script>
 
 <template>
-    <Link :href="href" :class="classes">
+    <Link :href="href" :method="method" :as="as" :class="classes">
         <slot />
     </Link>
 </template>

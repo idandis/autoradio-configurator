@@ -8,7 +8,7 @@ import {
     SlidersHorizontal,
     Tags,
 } from '@lucide/vue';
-import AppLogo from '@/components/AppLogo.vue';
+import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import NavFooter from '@/components/NavFooter.vue';
 import NavMain from '@/components/NavMain.vue';
 import NavUser from '@/components/NavUser.vue';
@@ -67,8 +67,8 @@ const footerNavItems: NavItem[] = [
             <SidebarMenu>
                 <SidebarMenuItem>
                     <SidebarMenuButton size="lg" as-child>
-                        <Link :href="dashboard()">
-                            <AppLogo />
+                        <Link :href="dashboard()" class="flex justify-center py-1">
+                            <AppLogoIcon class="h-12 w-auto max-w-15.5" /> <b>AUTORADIOCANARIO</b>
                         </Link>
                     </SidebarMenuButton>
                 </SidebarMenuItem>

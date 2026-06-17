@@ -40,6 +40,7 @@ defineProps<Props>();
             class="block w-full cursor-pointer"
             :href="logout()"
             as="button"
+            method="post"
             data-test="logout-button"
         >
             <LogOut class="mr-2 h-4 w-4" />
