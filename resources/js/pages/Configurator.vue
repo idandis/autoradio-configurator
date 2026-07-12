@@ -201,6 +201,16 @@ const checkoutUrl = computed(() => {
     return `https://www.autoradiocanario.com/cart/${cartPath}`;
 });
 
+watch(
+    checkoutUrl,
+    (nextUrl) => {
+        if (nextUrl) {
+            console.log('[Configurator] checkout URL:', nextUrl);
+        }
+    },
+    { immediate: true },
+);
+
 const goToCheckout = () => {
     if (!checkoutUrl.value) {
         return;

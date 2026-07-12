@@ -128,6 +128,11 @@ class ConfiguratorCsvImporter
             ? VehicleTitleParser::parse($title, $brand)
             : ['model' => null, 'year_from' => null, 'year_to' => null];
 
+        $explicitModel = $this->normalizeBrand($this->value($primaryRow, ['Product.custom.modello_auto']));
+        if ($explicitModel !== null) {
+            $vehicleData['model'] = $explicitModel;
+        }
+
         $variants = array_values(array_filter(array_map(function (array $row) {
             $variantId = $this->normalizeShopifyVariantId($this->value($row, ['Variant ID', 'Variant Id']));
             $enriched = $variantId ? ($this->variantCatalog[$variantId] ?? []) : [];
@@ -300,7 +305,7 @@ class ConfiguratorCsvImporter
 
     private function resolveBrand(array $row, string $category): ?string
     {
-        $explicitBrand = $this->normalizeBrand($this->value($row, ['MARCA DE COCHE (product.metafields.custom.radio_type)']));
+        $explicitBrand = $this->normalizeBrand($this->value($row, ['Product.custom.radio_type', 'MARCA DE COCHE (product.metafields.custom.radio_type)']));
 
         if ($explicitBrand !== null) {
             return $explicitBrand;
