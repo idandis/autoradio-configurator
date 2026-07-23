@@ -29,6 +29,7 @@ type SimpleOption = {
     price: number;
     image?: string | null;
     shopifyVariantId?: string | null;
+    sku?: string | null;
     subtype?: string | null;
     location?: string | null;
     isStandard?: boolean;
@@ -485,8 +486,27 @@ const checkPostalCode = async () => {
         return;
     }
 
+    const matchesConfiguredZone = props.installationZones.some((zone) =>
+        zone.postalRanges.some(
+            (range) => normalized >= range.from && normalized <= range.to,
+        ),
+    );
+
+    if (matchesConfiguredZone) {
+        postalCode.value = normalized;
+        checkedPostalCode.value = normalized;
+        resolvedInstallationArea.value = null;
+        postalCodeError.value = null;
+        return;
+    }
+
     try {
         const response = await fetch(`/configurator/postal-code/${normalized}`);
+
+        if (!response.ok) {
+            throw new Error('Postal code lookup failed.');
+        }
+
         const result = await response.json();
 
         postalCode.value = normalized;
@@ -656,6 +676,251 @@ const copyCheckoutUrl = async () => {
     }, 2500);
 };
 
+const showQuoteModal = ref(false);
+const quoteClientName = ref('');
+const quoteClientPhone = ref('');
+const quoteClientEmail = ref('');
+const quoteGenerationError = ref<string | null>(null);
+
+const escapeHtml = (value: string) =>
+    value.replace(/[&<>"']/g, (character) => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;',
+    })[character] ?? character);
+
+const euroFormatter = new Intl.NumberFormat('es-ES', {
+    style: 'currency',
+    currency: 'EUR',
+});
+
+const nextQuoteNumber = async () => {
+    const csrfToken = document
+        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
+        ?.content;
+    const response = await fetch('/admin/quote-number', {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+        },
+        credentials: 'same-origin',
+        body: '{}',
+    });
+
+    if (!response.ok) {
+        throw new Error('Unable to reserve quote number.');
+    }
+
+    const result = await response.json();
+
+    return String(result.number);
+};
+
+const generateQuote = async () => {
+    if (!quoteClientName.value.trim() || !hasSelectedProducts.value) {
+        return;
+    }
+
+    quoteGenerationError.value = null;
+    const printWindow = window.open('', '_blank');
+
+    if (!printWindow) {
+        quoteGenerationError.value = 'Il browser ha bloccato la finestra del preventivo.';
+        return;
+    }
+
+    let quoteNumber: string;
+
+    try {
+        quoteNumber = await nextQuoteNumber();
+    } catch {
+        printWindow.close();
+        quoteGenerationError.value = 'Impossibile generare il numero progressivo. Riprova.';
+        return;
+    }
+
+    const quoteDate = new Intl.DateTimeFormat('es-ES').format(new Date());
+    const vehicle = [selectedBrand.value, selectedModel.value, selectedYear.value]
+        .filter(Boolean)
+        .join(' ');
+    const items: Array<{
+        code: string;
+        description: string;
+        quantity: number;
+        price: number;
+    }> = [];
+
+    if (selectedScreen.value) {
+        items.push({
+            code: selectedScreen.value.sku || selectedVehicle.value?.handle || 'PANTALLA',
+            description: `${selectedVehicle.value?.title ?? 'Pantalla autoradio'} — Variante: ${selectedScreen.value.title}`,
+            quantity: 1,
+            price: selectedScreen.value.price,
+        });
+    }
+
+    selectedCameras.value.forEach((camera) => {
+        items.push({
+            code: camera.sku || camera.key,
+            description: camera.title,
+            quantity: 1,
+            price: camera.price,
+        });
+    });
+
+    if (selectedSpeaker.value) {
+        items.push({
+            code: selectedSpeaker.value.sku || selectedSpeaker.value.handle,
+            description: selectedSpeaker.value.productTitle,
+            quantity: 1,
+            price: selectedSpeaker.value.price,
+        });
+    }
+
+    if (selectedInstallation.value) {
+        items.push({
+            code: selectedInstallation.value.sku || selectedInstallation.value.key,
+            description: selectedInstallation.value.title,
+            quantity: 1,
+            price: selectedInstallation.value.price,
+        });
+    }
+
+    if (activeDiscount.value && discountAmount.value > 0) {
+        items.push({
+            code: activeDiscount.value.code,
+            description: `Descuento por compra online (${activeDiscount.value.percentage}%)`,
+            quantity: 1,
+            price: -discountAmount.value,
+        });
+    }
+
+    const rows = items.map((item) => `
+        <tr>
+            <td class="code">${escapeHtml(item.code)}</td>
+            <td>${escapeHtml(item.description)}</td>
+            <td class="center">${item.quantity}</td>
+            <td class="money">${euroFormatter.format(item.price)}</td>
+            <td class="money">${euroFormatter.format(item.price * item.quantity)}</td>
+        </tr>
+    `).join('');
+    const includedItems = items
+        .filter((item) => item.price >= 0)
+        .map((item) => `<li>${escapeHtml(item.description)}</li>`)
+        .join('');
+    const checkoutLink = checkoutUrl.value
+        ? `<p class="checkout"><strong>Enlace de compra:</strong><br><span>${escapeHtml(checkoutUrl.value)}</span></p>`
+        : '';
+
+    printWindow.document.write(`<!doctype html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>${escapeHtml(quoteNumber)} — Presupuesto AutoRadioCanario</title>
+    <style>
+        @page { size: A4; margin: 12mm; }
+        * { box-sizing: border-box; }
+        body { margin: 0; color: #292727; font-family: Arial, Helvetica, sans-serif; font-size: 11px; }
+        .page { width: 100%; min-height: 268mm; display: flex; flex-direction: column; }
+        .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
+        .brand { display: flex; align-items: center; gap: 10px; }
+        .brand img { width: 95px; height: 68px; object-fit: contain; background: #121212; }
+        .brand-name { font-size: 22px; font-weight: 800; letter-spacing: .4px; }
+        .tagline { margin-top: 5px; font-size: 7px; letter-spacing: 2px; }
+        .quote-title { text-align: right; }
+        .quote-title h1 { margin: 10px 0 5px; font-size: 24px; text-transform: uppercase; }
+        .details { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 18px; }
+        .details h2 { margin: 0 0 4px; font-size: 15px; }
+        .details p { margin: 3px 0; }
+        .issuer { text-align: right; }
+        .date { margin: 14px 0; font-size: 13px; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        th, td { border: 1.3px solid #292727; padding: 8px 7px; vertical-align: middle; }
+        tr { break-inside: avoid; page-break-inside: avoid; }
+        th { background: #f8d7d7; font-size: 12px; }
+        th:nth-child(1) { width: 16%; }
+        th:nth-child(2) { width: 46%; }
+        th:nth-child(3) { width: 7%; }
+        th:nth-child(4), th:nth-child(5) { width: 15.5%; }
+        td { font-size: 10px; font-weight: 600; }
+        .code, .center { text-align: center; }
+        .money { text-align: right; white-space: nowrap; }
+        .notes { margin-top: 22px; font-size: 9px; }
+        .notes ul { margin: 5px 0 14px; padding-left: 18px; }
+        .legal { line-height: 1.35; }
+        .checkout { margin-top: 12px; overflow-wrap: anywhere; font-size: 8px; }
+        .total { display: grid; grid-template-columns: 2fr 1fr; margin-top: auto; border: 1.3px solid #292727; font-size: 14px; font-weight: 800; }
+        .total div { padding: 10px; }
+        .total .amount { border-left: 1.3px solid #292727; background: #f8d7d7; text-align: center; }
+        footer { margin: 12px -12mm 0; padding: 18px 12mm; background: #f8d7d7; text-align: center; font-size: 7px; letter-spacing: 1.2px; break-inside: avoid; page-break-inside: avoid; }
+        @media print {
+            html, body { height: auto; }
+            .page { min-height: auto; break-after: avoid; page-break-after: avoid; }
+            .total { margin-top: 16px; }
+            .total, footer { break-inside: avoid; page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+<main class="page">
+    <header class="header">
+        <div class="brand">
+            <img src="${window.location.origin}/images/logo.png" alt="AutoRadioCanario">
+            <div>
+                <div class="brand-name">AUTORADIOCANARIO</div>
+                <div class="tagline">CADA COCHE TIENE DERECHO A SU PROPIA RADIO</div>
+            </div>
+        </div>
+        <div class="quote-title">
+            <h1>Presupuesto</h1>
+            <div>Nº: ${escapeHtml(quoteNumber)}</div>
+        </div>
+    </header>
+    <section class="details">
+        <div>
+            <h2>Cliente:</h2>
+            <p><strong>${escapeHtml(quoteClientName.value.trim())}</strong></p>
+            ${quoteClientPhone.value.trim() ? `<p>Teléfono: ${escapeHtml(quoteClientPhone.value.trim())}</p>` : ''}
+            ${quoteClientEmail.value.trim() ? `<p>Correo: ${escapeHtml(quoteClientEmail.value.trim())}</p>` : ''}
+            <p>Vehículo: ${escapeHtml(vehicle || 'No especificado')}</p>
+        </div>
+        <div class="issuer">
+            <h2>Emitido por:</h2>
+            <p>AutoRadioCanario</p>
+            <p>Y9309149M</p>
+            <p>Avenida Mencey 49</p>
+            <p>35120 Arguineguín</p>
+            <p>Las Palmas</p>
+        </div>
+    </section>
+    <p class="date"><strong>Fecha:</strong> ${escapeHtml(quoteDate)}</p>
+    <table>
+        <thead><tr><th>Artículo</th><th>Descripción</th><th>Cant.</th><th>Precio unitario</th><th>Importe</th></tr></thead>
+        <tbody>${rows}</tbody>
+    </table>
+    <section class="notes">
+        <strong>Incluye:</strong>
+        <ul>${includedItems}</ul>
+        <p class="legal">Este presupuesto incluye los productos y servicios indicados y la asistencia antes y después de la venta. Los importes incluyen IGIC cuando corresponda. No incluye costes ocultos ni pagos adicionales no especificados.</p>
+        ${checkoutLink}
+    </section>
+    <section class="total">
+        <div>Total</div>
+        <div class="amount">${euroFormatter.format(discountedTotal.value)}</div>
+    </section>
+    <footer>INFO@AUTORADIOCANARIO.COM &nbsp;&nbsp; AUTORADIOCANARIO &nbsp;&nbsp; WHATSAPP: +34 694 259 117</footer>
+</main>
+<script>window.addEventListener('load', () => window.print());<\/script>
+</body>
+</html>`);
+    printWindow.document.close();
+    showQuoteModal.value = false;
+};
+
 watch(
     checkoutUrl,
     (nextUrl) => {
@@ -765,6 +1030,14 @@ watch(
                     </p>
                 </div>
                 <div v-if="isAdmin" class="flex shrink-0 flex-col gap-2 sm:flex-row">
+                    <button
+                        type="button"
+                        :disabled="!hasSelectedProducts"
+                        class="inline-flex items-center justify-center rounded-md border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 transition hover:border-amber-400 hover:text-amber-400 disabled:cursor-not-allowed disabled:border-neutral-800 disabled:text-neutral-600"
+                        @click="quoteGenerationError = null; showQuoteModal = true"
+                    >
+                        Crea preventivo
+                    </button>
                     <button
                         type="button"
                         :disabled="!checkoutUrl"
@@ -1347,5 +1620,81 @@ watch(
             <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer" class="underline hover:text-neutral-500">GeoNames</a>
             (CC BY 4.0).
         </p>
+
+        <div
+            v-if="isAdmin && showQuoteModal"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+            @click.self="showQuoteModal = false"
+        >
+            <section class="w-full max-w-lg rounded-2xl border border-neutral-700 bg-[#121212] p-6 shadow-2xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl font-semibold text-white">Crea preventivo</h2>
+                        <p class="mt-1 text-sm text-neutral-400">
+                            Inserisci i dati del cliente. Potrai stampare o salvare il documento come PDF.
+                        </p>
+                    </div>
+                    <button
+                        type="button"
+                        class="rounded-md px-2 py-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                        aria-label="Chiudi"
+                        @click="showQuoteModal = false"
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                <div class="mt-6 grid gap-4">
+                    <label class="grid gap-2 text-sm text-neutral-300">
+                        Cliente *
+                        <input
+                            v-model="quoteClientName"
+                            type="text"
+                            class="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white"
+                            placeholder="Nome e cognome"
+                        />
+                    </label>
+                    <label class="grid gap-2 text-sm text-neutral-300">
+                        Telefono
+                        <input
+                            v-model="quoteClientPhone"
+                            type="tel"
+                            class="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white"
+                            placeholder="+34..."
+                        />
+                    </label>
+                    <label class="grid gap-2 text-sm text-neutral-300">
+                        Email
+                        <input
+                            v-model="quoteClientEmail"
+                            type="email"
+                            class="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white"
+                            placeholder="cliente@email.com"
+                        />
+                    </label>
+                </div>
+                <p v-if="quoteGenerationError" class="mt-4 text-sm text-red-400">
+                    {{ quoteGenerationError }}
+                </p>
+
+                <div class="mt-6 flex justify-end gap-3">
+                    <button
+                        type="button"
+                        class="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-900"
+                        @click="showQuoteModal = false"
+                    >
+                        Annulla
+                    </button>
+                    <button
+                        type="button"
+                        :disabled="!quoteClientName.trim()"
+                        class="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+                        @click="generateQuote"
+                    >
+                        Genera preventivo
+                    </button>
+                </div>
+            </section>
+        </div>
     </div>
 </template>

@@ -92,6 +92,7 @@ class ConfiguratorController extends Controller
                 'price' => (float) $product->price_min,
                 'image' => $product->image_url,
                 'shopifyVariantId' => $product->variants->first()?->shopify_variant_id,
+                'sku' => $product->variants->first()?->sku,
                 'isStandard' => $product->handle === 'camara-trasera-estandar',
                 'brand' => $product->brand,
                 'model' => $product->model,
@@ -113,6 +114,7 @@ class ConfiguratorController extends Controller
                 'title' => $product->title,
                 'price' => (float) $product->price_min,
                 'shopifyVariantId' => $product->variants->first()?->shopify_variant_id,
+                'sku' => $product->variants->first()?->sku,
                 'subtype' => $product->subtype,
                 'location' => $product->meta['installation']['location'] ?? null,
             ];
@@ -162,6 +164,7 @@ class ConfiguratorController extends Controller
                     'price' => (float) $variant->price,
                     'image' => $product->image_url ?: $variant->image_url,
                     'shopifyVariantId' => $variant->shopify_variant_id,
+                    'sku' => $variant->sku,
                     'sizes' => $sizes,
                     'categories' => $categories,
                 ];

@@ -44,4 +44,29 @@ class ConfiguratorPostalCodeTest extends TestCase
             ->assertJsonPath('installationArea.name', 'Gran Canaria')
             ->assertJsonPath('installationArea.productHandles.0', 'installazione-gran-canaria');
     }
+
+    public function test_canary_postal_code_missing_from_geonames_is_resolved_by_prefix(): void
+    {
+        ConfiguratorProduct::create([
+            'handle' => 'installazione-gran-canaria',
+            'category' => 'installation',
+            'subtype' => 'screen_only',
+            'title' => 'Installazione Gran Canaria',
+            'price_min' => 100,
+            'meta' => [
+                'installation' => [
+                    'location' => 'GRAN CANARIA',
+                    'type' => 'screen_only',
+                ],
+            ],
+        ]);
+
+        $this->getJson('/configurator/postal-code/35124')
+            ->assertOk()
+            ->assertJsonPath('found', true)
+            ->assertJsonPath('postalCode', '35124')
+            ->assertJsonPath('island', 'Gran Canaria')
+            ->assertJsonPath('installationArea.name', 'Gran Canaria')
+            ->assertJsonPath('installationArea.productHandles.0', 'installazione-gran-canaria');
+    }
 }

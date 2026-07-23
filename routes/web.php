@@ -10,6 +10,7 @@ use App\Http\Controllers\ImportedProductsController;
 use App\Http\Controllers\InstallationZonesController;
 use App\Http\Controllers\ModelsController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\QuoteNumberController;
 use App\Http\Controllers\Settings\SecurityController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -35,6 +36,7 @@ Route::get('/configurator/postal-code/{postalCode}', ConfiguratorPostalCodeContr
 
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::post('/admin/quote-number', QuoteNumberController::class)->name('admin.quote-number');
     Route::post('/dashboard/import-csv', [ConfiguratorImportController::class, 'store'])->name('dashboard.import');
     Route::get('/brands', BrandsController::class)->name('brands.index');
     Route::get('/models', ModelsController::class)->name('models.index');

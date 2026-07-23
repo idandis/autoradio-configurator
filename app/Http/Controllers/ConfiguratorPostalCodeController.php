@@ -17,11 +17,12 @@ class ConfiguratorPostalCodeController extends Controller
             ->where('postal_code', $postalCode)
             ->first();
 
-        if (! $postalCodeRecord) {
+        $location = $postalCodeRecord?->island ?? $this->canaryIsland($postalCode);
+
+        if (! $postalCodeRecord && ! $location) {
             return response()->json(['found' => false]);
         }
 
-        $location = $postalCodeRecord->island;
         $productHandles = [];
 
         if ($location) {
@@ -38,10 +39,10 @@ class ConfiguratorPostalCodeController extends Controller
 
         return response()->json([
             'found' => true,
-            'postalCode' => $postalCodeRecord->postal_code,
-            'placeName' => $postalCodeRecord->place_name,
-            'province' => $postalCodeRecord->province,
-            'island' => $postalCodeRecord->island,
+            'postalCode' => $postalCode,
+            'placeName' => $postalCodeRecord?->place_name,
+            'province' => $postalCodeRecord?->province,
+            'island' => $location,
             'installationArea' => $location ? [
                 'name' => $location,
                 'productHandles' => $productHandles,
@@ -52,5 +53,19 @@ class ConfiguratorPostalCodeController extends Controller
     private function normalize(string $value): string
     {
         return Str::lower(Str::ascii(trim($value)));
+    }
+
+    private function canaryIsland(string $postalCode): ?string
+    {
+        return match (substr($postalCode, 0, 3)) {
+            '350', '351', '352', '353', '354' => 'Gran Canaria',
+            '355' => 'Lanzarote',
+            '356' => 'Fuerteventura',
+            '380', '381', '382', '383', '384', '385', '386' => 'Tenerife',
+            '387' => 'La Palma',
+            '388' => 'La Gomera',
+            '389' => 'El Hierro',
+            default => null,
+        };
     }
 }
