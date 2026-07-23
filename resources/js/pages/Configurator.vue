@@ -823,7 +823,11 @@ const generateQuote = async () => {
     <title>${escapeHtml(quoteNumber)} — Presupuesto AutoRadioCanario</title>
     <style>
         @page { size: A4; margin: 12mm; }
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
         body { margin: 0; color: #292727; font-family: Arial, Helvetica, sans-serif; font-size: 11px; }
         .page { width: 100%; min-height: 268mm; display: flex; flex-direction: column; }
         .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
@@ -861,6 +865,10 @@ const generateQuote = async () => {
             html, body { height: auto; }
             .page { min-height: auto; break-after: avoid; page-break-after: avoid; }
             .total { margin-top: 16px; }
+            th, .total .amount, footer {
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
             .total, footer { break-inside: avoid; page-break-inside: avoid; }
         }
     </style>
@@ -1481,7 +1489,7 @@ watch(
                         <div v-else class="h-52 bg-[#121212]"></div>
                     </div>
 
-                    <div class="lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
+                    <div class="quote-scrollbar lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
                     <p class="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-amber-400">
                         Preventivo
                     </p>
@@ -1698,3 +1706,29 @@ watch(
         </div>
     </div>
 </template>
+
+<style scoped>
+.quote-scrollbar {
+    scrollbar-color: #525252 #171717;
+    scrollbar-width: thin;
+}
+
+.quote-scrollbar::-webkit-scrollbar {
+    width: 8px;
+}
+
+.quote-scrollbar::-webkit-scrollbar-track {
+    border-radius: 9999px;
+    background: #171717;
+}
+
+.quote-scrollbar::-webkit-scrollbar-thumb {
+    border: 2px solid #171717;
+    border-radius: 9999px;
+    background: #525252;
+}
+
+.quote-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #737373;
+}
+</style>
