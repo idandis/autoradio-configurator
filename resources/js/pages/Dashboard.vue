@@ -5,6 +5,7 @@ const props = defineProps<{
     stats: {
         screens: number;
         cameras: number;
+        speakers: number;
         installations: number;
         vehicles: number;
     };
@@ -13,6 +14,7 @@ const props = defineProps<{
 
 const form = useForm({
     catalog: null as File | null,
+    mode: 'add' as 'replace' | 'add',
 });
 
 const updateFile = (event: Event) => {
@@ -32,7 +34,7 @@ const submit = () => {
     <Head title="Dashboard" />
 
     <div class="flex flex-1 flex-col gap-6 p-4">
-        <div class="grid gap-4 md:grid-cols-4">
+        <div class="grid gap-4 md:grid-cols-5">
             <div class="rounded-xl border border-sidebar-border/70 bg-card p-5">
                 <p class="text-sm text-muted-foreground">Veicoli</p>
                 <p class="mt-2 text-3xl font-semibold">{{ props.stats.vehicles }}</p>
@@ -46,6 +48,10 @@ const submit = () => {
                 <p class="mt-2 text-3xl font-semibold">{{ props.stats.cameras }}</p>
             </div>
             <div class="rounded-xl border border-sidebar-border/70 bg-card p-5">
+                <p class="text-sm text-muted-foreground">Altoparlanti</p>
+                <p class="mt-2 text-3xl font-semibold">{{ props.stats.speakers }}</p>
+            </div>
+            <div class="rounded-xl border border-sidebar-border/70 bg-card p-5">
                 <p class="text-sm text-muted-foreground">Installazioni</p>
                 <p class="mt-2 text-3xl font-semibold">{{ props.stats.installations }}</p>
             </div>
@@ -57,8 +63,8 @@ const submit = () => {
                     <div>
                         <h1 class="text-2xl font-semibold">Import catalogo configuratore</h1>
                         <p class="mt-2 text-sm text-muted-foreground">
-                            Carica l'export CSV di Shopify. Il sistema estrae prodotti schermo,
-                            camere e installazioni e aggiorna il configuratore pubblico.
+                            Carica l'export CSV o Excel di Shopify. Il sistema estrae prodotti schermo,
+                            camere, altoparlanti e installazioni e aggiorna il configuratore pubblico.
                         </p>
                     </div>
 
@@ -70,12 +76,30 @@ const submit = () => {
                     </div>
 
                     <form @submit.prevent="submit" class="space-y-4">
+                        <fieldset class="grid gap-3">
+                            <legend class="text-sm font-medium">Modalità di importazione</legend>
+                            <label class="flex cursor-pointer gap-3 rounded-lg border border-sidebar-border/70 p-4" :class="form.mode === 'replace' ? 'border-primary bg-primary/5' : ''">
+                                <input v-model="form.mode" type="radio" value="replace" class="mt-1" />
+                                <span>
+                                    <span class="block text-sm font-medium">Sostituzione completa</span>
+                                    <span class="mt-1 block text-xs text-muted-foreground">Cancella il catalogo precedente e conserva solamente i dati del nuovo file.</span>
+                                </span>
+                            </label>
+                            <label class="flex cursor-pointer gap-3 rounded-lg border border-sidebar-border/70 p-4" :class="form.mode === 'add' ? 'border-primary bg-primary/5' : ''">
+                                <input v-model="form.mode" type="radio" value="add" class="mt-1" />
+                                <span>
+                                    <span class="block text-sm font-medium">Aggiungi o aggiorna</span>
+                                    <span class="mt-1 block text-xs text-muted-foreground">Mantiene gli altri prodotti e aggiorna quelli con lo stesso Handle.</span>
+                                </span>
+                            </label>
+                        </fieldset>
+
                         <div class="space-y-2">
-                            <label for="catalog" class="text-sm font-medium">CSV Shopify</label>
+                            <label for="catalog" class="text-sm font-medium">CSV o Excel Shopify</label>
                             <input
                                 id="catalog"
                                 type="file"
-                                accept=".csv,text/csv"
+                                accept=".csv,.xls,.xlsx,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                                 class="block w-full rounded-lg border border-sidebar-border/70 bg-background px-4 py-3 text-sm"
                                 @change="updateFile"
                             />
@@ -107,7 +131,7 @@ const submit = () => {
                     <div class="rounded-lg border border-sidebar-border/70 px-4 py-3 text-sm text-muted-foreground">
                         In alternativa puoi importare da CLI con
                         <code class="ml-1 rounded bg-muted px-1.5 py-0.5 text-foreground">
-                            php artisan configurator:import-csv /percorso/file.csv
+                            php artisan configurator:import-csv /percorso/file.csv --add
                         </code>
                     </div>
                 </div>

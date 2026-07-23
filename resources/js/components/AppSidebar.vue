@@ -2,8 +2,10 @@
 import { Link } from '@inertiajs/vue3';
 import {
     BookOpen,
+    CarFront,
     FolderGit2,
     LayoutGrid,
+    MapPin,
     PackageSearch,
     SlidersHorizontal,
     Tags,
@@ -21,7 +23,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import { brands, configurator, dashboard, importedProducts } from '@/routes';
+import { brands, configurator, dashboard, importedProducts, installationZones, models } from '@/routes';
 import type { NavItem } from '@/types';
 
 const mainNavItems: NavItem[] = [
@@ -39,6 +41,16 @@ const mainNavItems: NavItem[] = [
         title: 'Marche',
         href: brands(),
         icon: Tags,
+    },
+    {
+        title: 'Modelli',
+        href: models(),
+        icon: CarFront,
+    },
+    {
+        title: 'Zone installazione',
+        href: installationZones(),
+        icon: MapPin,
     },
     {
         title: 'Prodotti importati',
