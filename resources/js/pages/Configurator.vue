@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 
 type Variant = {
@@ -222,6 +222,94 @@ const selectedScreenProductUrl = computed(() => {
 });
 
 const failedVehicleImage = ref<string | null>(null);
+const zoomedImage = ref<{ src: string; alt: string } | null>(null);
+
+const openImageZoom = (src: string, alt: string) => {
+    zoomedImage.value = { src, alt };
+};
+
+const closeImageZoom = () => {
+    zoomedImage.value = null;
+};
+
+const closeImageZoomOnEscape = (event: KeyboardEvent) => {
+    if (event.key === 'Escape') {
+        closeImageZoom();
+    }
+};
+
+let variantScrollElement: HTMLElement | null = null;
+let variantScrollVelocity = 0;
+let variantScrollFrame: number | null = null;
+
+const stopVariantAutoScroll = () => {
+    variantScrollVelocity = 0;
+    variantScrollElement = null;
+
+    if (variantScrollFrame !== null) {
+        window.cancelAnimationFrame(variantScrollFrame);
+        variantScrollFrame = null;
+    }
+};
+
+const runVariantAutoScroll = () => {
+    if (!variantScrollElement || variantScrollVelocity === 0) {
+        variantScrollFrame = null;
+        return;
+    }
+
+    const previousScrollTop = variantScrollElement.scrollTop;
+    variantScrollElement.scrollTop += variantScrollVelocity;
+
+    if (variantScrollElement.scrollTop === previousScrollTop) {
+        variantScrollVelocity = 0;
+        variantScrollFrame = null;
+        return;
+    }
+
+    variantScrollFrame = window.requestAnimationFrame(runVariantAutoScroll);
+};
+
+const updateVariantAutoScroll = (event: PointerEvent) => {
+    if (event.pointerType !== 'mouse') {
+        stopVariantAutoScroll();
+        return;
+    }
+
+    const element = event.currentTarget as HTMLElement;
+    const bounds = element.getBoundingClientRect();
+    const edgeSize = Math.min(72, bounds.height / 3);
+    const distanceFromTop = event.clientY - bounds.top;
+    const distanceFromBottom = bounds.bottom - event.clientY;
+
+    variantScrollElement = element;
+
+    if (distanceFromBottom < edgeSize) {
+        variantScrollVelocity = 1 + (1 - distanceFromBottom / edgeSize) * 7;
+    } else if (distanceFromTop < edgeSize) {
+        variantScrollVelocity = -(1 + (1 - distanceFromTop / edgeSize) * 7);
+    } else {
+        variantScrollVelocity = 0;
+    }
+
+    if (variantScrollVelocity === 0) {
+        if (variantScrollFrame !== null) {
+            window.cancelAnimationFrame(variantScrollFrame);
+            variantScrollFrame = null;
+        }
+        return;
+    }
+
+    if (variantScrollFrame === null) {
+        variantScrollFrame = window.requestAnimationFrame(runVariantAutoScroll);
+    }
+};
+
+onMounted(() => window.addEventListener('keydown', closeImageZoomOnEscape));
+onBeforeUnmount(() => {
+    window.removeEventListener('keydown', closeImageZoomOnEscape);
+    stopVariantAutoScroll();
+});
 const failedBrandImage = ref<string | null>(null);
 
 const slugifyVehiclePart = (value: string) =>
@@ -756,7 +844,11 @@ const generateQuote = async () => {
 
     if (selectedScreen.value) {
         items.push({
-            code: selectedScreen.value.sku || selectedVehicle.value?.handle || 'PANTALLA',
+            code:
+                selectedScreen.value.shopifyVariantId ||
+                selectedScreen.value.sku ||
+                selectedVehicle.value?.handle ||
+                'PANTALLA',
             description: `${selectedVehicle.value?.title ?? 'Pantalla autoradio'} — Variante: ${selectedScreen.value.title}`,
             quantity: 1,
             price: selectedScreen.value.price,
@@ -907,7 +999,7 @@ const generateQuote = async () => {
     </section>
     <p class="date"><strong>Fecha:</strong> ${escapeHtml(quoteDate)}</p>
     <table>
-        <thead><tr><th>Artículo</th><th>Descripción</th><th>Cant.</th><th>Precio unitario</th><th>Importe</th></tr></thead>
+        <thead><tr><th>ID</th><th>Descripción</th><th>Cant.</th><th>Precio unitario</th><th>Importe</th></tr></thead>
         <tbody>${rows}</tbody>
     </table>
     <section class="notes">
@@ -1160,12 +1252,19 @@ watch(
                                 class="mt-4 grid gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
                             >
                                 <div class="relative flex min-h-64 items-center justify-center overflow-hidden rounded-xl border border-neutral-800 bg-[#121212] p-4">
-                                    <img
+                                    <button
                                         v-if="selectedScreenImage"
-                                        :src="selectedScreenImage"
-                                        :alt="selectedVehicle?.title ?? 'Schermo'"
-                                        class="max-h-72 w-full rounded-lg object-contain object-center"
-                                    />
+                                        type="button"
+                                        class="flex h-full w-full cursor-zoom-in items-center justify-center rounded-lg"
+                                        aria-label="Ingrandisci immagine pantalla"
+                                        @click="openImageZoom(selectedScreenImage, selectedVehicle?.title ?? 'Schermo')"
+                                    >
+                                        <img
+                                            :src="selectedScreenImage"
+                                            :alt="selectedVehicle?.title ?? 'Schermo'"
+                                            class="max-h-72 w-full rounded-lg object-contain object-center"
+                                        />
+                                    </button>
                                     <p v-else class="text-sm text-neutral-500">
                                         Immagine non disponibile
                                     </p>
@@ -1180,23 +1279,27 @@ watch(
                                     </a>
                                 </div>
 
-                                <div class="overflow-x-auto pb-1">
-                                    <div class="grid grid-flow-col grid-rows-5 gap-2 [grid-auto-columns:minmax(150px,1fr)]">
+                                <div
+                                    class="quote-scrollbar max-h-72 overflow-y-auto pr-2"
+                                    @pointermove="updateVariantAutoScroll"
+                                    @pointerleave="stopVariantAutoScroll"
+                                >
+                                    <div class="grid gap-2">
                                         <button
                                             v-for="variant in selectedVehicle?.variants ?? []"
                                             :key="variant.id"
                                             type="button"
                                             @click="selectedScreenVariantId = variant.id"
-                                            class="min-h-12 rounded-lg border px-3 py-2 text-left text-sm font-medium leading-tight transition"
+                                            class="flex min-h-10 w-full items-center justify-between gap-4 rounded-lg border px-3 py-2 text-left text-sm font-medium leading-tight transition"
                                             :class="
                                                 selectedScreenVariantId === variant.id
                                                     ? 'border-amber-400 bg-amber-400 text-black'
                                                     : 'border-neutral-800 bg-[#121212] text-neutral-200 hover:border-neutral-600'
                                             "
                                         >
-                                            <span class="block">{{ variant.title }}</span>
+                                            <span class="min-w-0 flex-1 truncate">{{ variant.title }}</span>
                                             <span
-                                                class="mt-1 block text-xs"
+                                                class="shrink-0 whitespace-nowrap text-xs"
                                                 :class="
                                                     selectedScreenVariantId === variant.id
                                                         ? 'text-black/70'
@@ -1476,14 +1579,21 @@ watch(
                                 </div>
                             </div>
 
-                            <div class="flex h-36 min-w-0 items-center justify-center bg-[#121212] p-3">
-                                <img
+                            <div class="flex h-52 min-w-0 items-center justify-center bg-[#121212] p-1">
+                                <button
                                     v-if="selectedVehicleImageUrl && failedVehicleImage !== selectedVehicleImageUrl"
-                                    :src="selectedVehicleImageUrl"
-                                    :alt="`${selectedBrand} ${selectedModel} ${selectedYear}`"
-                                    class="h-full w-full object-contain"
-                                    @error="failedVehicleImage = selectedVehicleImageUrl"
-                                />
+                                    type="button"
+                                    class="flex h-full w-full cursor-zoom-in items-center justify-center"
+                                    aria-label="Ingrandisci immagine veicolo"
+                                    @click="openImageZoom(selectedVehicleImageUrl, `${selectedBrand} ${selectedModel} ${selectedYear}`)"
+                                >
+                                    <img
+                                        :src="selectedVehicleImageUrl"
+                                        :alt="`${selectedBrand} ${selectedModel} ${selectedYear}`"
+                                        class="h-full w-full object-contain"
+                                        @error="failedVehicleImage = selectedVehicleImageUrl"
+                                    />
+                                </button>
                             </div>
                         </div>
                         <div v-else class="h-52 bg-[#121212]"></div>
@@ -1628,6 +1738,22 @@ watch(
             <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer" class="underline hover:text-neutral-500">GeoNames</a>
             (CC BY 4.0).
         </p>
+
+        <div
+            v-if="zoomedImage"
+            class="fixed inset-0 z-[70] flex cursor-zoom-out items-center justify-center bg-black/90 p-4 backdrop-blur-sm sm:p-8"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="zoomedImage.alt"
+            @click="closeImageZoom"
+        >
+            <img
+                :src="zoomedImage.src"
+                :alt="zoomedImage.alt"
+                class="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
+            />
+            <span class="absolute right-5 top-4 text-3xl text-white/70" aria-hidden="true">✕</span>
+        </div>
 
         <div
             v-if="isAdmin && showQuoteModal"
