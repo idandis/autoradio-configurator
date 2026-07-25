@@ -332,6 +332,10 @@ class ConfiguratorCsvImporter
     {
         $needle = mb_strtolower(trim($handle.' '.$title.' '.$tags));
 
+        if (str_contains($needle, 'precheck') || str_contains($needle, 'pre-check')) {
+            return 'installation';
+        }
+
         if (
             str_contains($needle, 'instalacion base') ||
             str_contains($needle, 'instalación base') ||
@@ -431,6 +435,10 @@ class ConfiguratorCsvImporter
         }
 
         if ($category === 'installation') {
+            if (str_contains($needle, 'precheck') || str_contains($needle, 'pre-check')) {
+                return 'precheck';
+            }
+
             if ($explicitType !== null) {
                 return $explicitType;
             }
@@ -467,6 +475,7 @@ class ConfiguratorCsvImporter
         $normalizedType = preg_replace('/\s+/u', ' ', $normalizedType) ?? $normalizedType;
 
         $subtype = match ($normalizedType) {
+            'precheck', 'pre-check' => 'precheck',
             'pantalla' => 'screen_only',
             'pantalla+camara', 'pantalla + camara', 'pantalla+camera', 'pantalla + camera' => 'screen_camera',
             'solo camara', 'camara', 'solo camera', 'camera' => 'camera_only',

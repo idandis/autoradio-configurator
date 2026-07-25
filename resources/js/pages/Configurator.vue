@@ -53,7 +53,13 @@ type SpeakerOption = SimpleOption & {
     categories: string[];
 };
 
+type TranslationTree = {
+    [key: string]: string | TranslationTree;
+};
+
 const props = defineProps<{
+    locale: 'es' | 'it' | 'en';
+    translations: TranslationTree;
     vehicles: Vehicle[];
     cameraOptions: SimpleOption[];
     speakerOptions: SpeakerOption[];
@@ -62,6 +68,34 @@ const props = defineProps<{
     vehicleImages: string[];
     brandImages: string[];
 }>();
+
+const t = (key: string, replacements: Record<string, string | number> = {}) => {
+    let value: string | TranslationTree = props.translations;
+
+    for (const segment of key.split('.')) {
+        if (typeof value === 'string' || !(segment in value)) {
+            return key;
+        }
+
+        value = value[segment];
+    }
+
+    if (typeof value !== 'string') {
+        return key;
+    }
+
+    return Object.entries(replacements).reduce(
+        (translated, [placeholder, replacement]) =>
+            translated.replaceAll(`:${placeholder}`, String(replacement)),
+        value,
+    );
+};
+
+const storefrontUrl = (path: string) => {
+    const localePrefix = props.locale === 'es' ? '' : `/${props.locale}`;
+
+    return `https://www.autoradiocanario.com${localePrefix}${path}`;
+};
 
 const page = usePage();
 const isAdmin = computed(() => Boolean(page.props.auth?.user?.is_admin));
@@ -96,6 +130,8 @@ const selectedSpeakerSize = ref<string>('');
 const selectedSpeakerCategory = ref<string>('');
 const selectedSpeakerKey = ref<string | null>(null);
 const selectedInstallationKey = ref<string | null>(null);
+const selectedPrecheckMethod = ref<'self' | 'installer' | null>(null);
+const selectedServiceZone = ref<'north' | 'capital' | 'south' | null>(null);
 const postalCode = ref('');
 const checkedPostalCode = ref<string | null>(null);
 const postalCodeError = ref<string | null>(null);
@@ -161,13 +197,12 @@ const availableYears = computed(() => {
     return [...years].sort((a, b) => a - b);
 });
 
-const selectedVehicle = computed(() => {
+const compatibleVehicles = computed(() => {
     if (selectedYear.value === null || selectedModel.value === null) {
-        return null;
+        return [];
     }
 
-    return (
-        matchingVehicles.value.find((vehicle) => {
+    return matchingVehicles.value.filter((vehicle) => {
             if (vehicle.yearFrom === null || vehicle.yearTo === null) {
                 return false;
             }
@@ -176,8 +211,7 @@ const selectedVehicle = computed(() => {
                 selectedYear.value! >= vehicle.yearFrom &&
                 selectedYear.value! <= vehicle.yearTo
             );
-        }) ?? null
-    );
+        });
 });
 
 const selectedCompatibilityEntry = computed(() => {
@@ -202,24 +236,39 @@ const selectedCompatibilityEntry = computed(() => {
     );
 });
 
-const selectedScreen = computed(
+const selectedVehicle = computed(
     () =>
-        selectedVehicle.value?.variants.find(
-            (variant) => variant.id === selectedScreenVariantId.value,
-        ) ?? selectedVehicle.value?.variants[0] ?? null,
+        compatibleVehicles.value.find((vehicle) =>
+            vehicle.variants.some(
+                (variant) => variant.id === selectedScreenVariantId.value,
+            ),
+        ) ?? null,
 );
 
-const selectedScreenImage = computed(
-    () => selectedVehicle.value?.image ?? selectedVehicle.value?.variants[0]?.image ?? null,
-);
+const selectedScreen = computed(() => {
+    for (const vehicle of compatibleVehicles.value) {
+        const variant = vehicle.variants.find(
+            (candidate) => candidate.id === selectedScreenVariantId.value,
+        );
 
-const selectedScreenProductUrl = computed(() => {
-    if (!selectedVehicle.value?.handle) {
-        return null;
+        if (variant) {
+            return variant;
+        }
     }
 
-    return `https://www.autoradiocanario.com/products/${encodeURIComponent(selectedVehicle.value.handle)}`;
+    return null;
 });
+
+const toggleScreenVariant = (variantId: number) => {
+    selectedScreenVariantId.value =
+        selectedScreenVariantId.value === variantId ? null : variantId;
+};
+
+const screenImage = (vehicle: Vehicle) =>
+    vehicle.image ?? vehicle.variants.find((variant) => variant.image)?.image ?? null;
+
+const screenProductUrl = (vehicle: Vehicle) =>
+    `https://www.autoradiocanario.com/products/${encodeURIComponent(vehicle.handle)}`;
 
 const failedVehicleImage = ref<string | null>(null);
 const zoomedImage = ref<{ src: string; alt: string } | null>(null);
@@ -305,7 +354,10 @@ const updateVariantAutoScroll = (event: PointerEvent) => {
     }
 };
 
-onMounted(() => window.addEventListener('keydown', closeImageZoomOnEscape));
+onMounted(() => {
+    document.documentElement.lang = props.locale;
+    window.addEventListener('keydown', closeImageZoomOnEscape);
+});
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', closeImageZoomOnEscape);
     stopVariantAutoScroll();
@@ -473,7 +525,13 @@ const toggleCamera = (key: string) => {
 };
 
 const speakerCategories = computed(() =>
-    [...new Set(props.speakerOptions.flatMap((speaker) => speaker.categories))]
+    [
+        ...new Set(
+            props.speakerOptions
+                .flatMap((speaker) => speaker.categories)
+                .filter((category) => category.toLocaleLowerCase() !== 'motocicleta'),
+        ),
+    ]
         .sort((a, b) => a.localeCompare(b)),
 );
 
@@ -534,6 +592,31 @@ const matchedInstallationZone = computed(() => {
     ) ?? null;
 });
 
+const isGranCanaria = computed(() =>
+    matchedInstallationZone.value?.name
+        .toLocaleLowerCase()
+        .includes('gran canaria') ?? false,
+);
+
+const precheckProduct = computed(() =>
+    props.installationOptions.find((option) =>
+        option.subtype === 'precheck' ||
+        option.title.toLocaleLowerCase().includes('precheck'),
+    ) ?? null,
+);
+
+const precheckPrice = computed(() =>
+    selectedPrecheckMethod.value === 'installer'
+        ? (precheckProduct.value?.price ?? 40)
+        : 0,
+);
+
+const serviceZones = computed(() => [
+    { key: 'north' as const, label: t('installation.zone_north') },
+    { key: 'capital' as const, label: t('installation.zone_capital') },
+    { key: 'south' as const, label: t('installation.zone_south') },
+]);
+
 const hasSelectedProducts = computed(
     () => Boolean(selectedScreen.value || selectedCameras.value.length || selectedSpeaker.value),
 );
@@ -553,13 +636,19 @@ const requiredInstallationSubtype = computed(() => {
 });
 
 const visibleInstallationOptions = computed(() => {
-    if (!matchedInstallationZone.value || !requiredInstallationSubtype.value) {
+    if (
+        !matchedInstallationZone.value ||
+        !requiredInstallationSubtype.value ||
+        !selectedServiceZone.value ||
+        !selectedPrecheckMethod.value
+    ) {
         return [];
     }
 
     return props.installationOptions.filter(
         (option) =>
             matchedInstallationZone.value!.productHandles.includes(option.key) &&
+            option !== precheckProduct.value &&
             option.subtype === requiredInstallationSubtype.value,
     );
 });
@@ -570,7 +659,7 @@ const checkPostalCode = async () => {
     if (!/^\d{5}$/.test(normalized)) {
         checkedPostalCode.value = null;
         resolvedInstallationArea.value = null;
-        postalCodeError.value = 'Inserisci un CAP valido di 5 cifre.';
+        postalCodeError.value = t('errors.postal_invalid');
         return;
     }
 
@@ -606,7 +695,7 @@ const checkPostalCode = async () => {
     } catch {
         checkedPostalCode.value = null;
         resolvedInstallationArea.value = null;
-        postalCodeError.value = 'Impossibile verificare il CAP. Riprova.';
+        postalCodeError.value = t('errors.postal_lookup');
     }
 };
 
@@ -625,7 +714,10 @@ const productsSubtotal = computed(
 );
 
 const total = computed(
-    () => productsSubtotal.value + (selectedInstallation.value?.price ?? 0),
+    () =>
+        productsSubtotal.value +
+        precheckPrice.value +
+        (selectedInstallation.value?.price ?? 0),
 );
 
 const discountTiers = [
@@ -688,10 +780,28 @@ const checkoutLineItems = computed(() => {
         });
     }
 
+    if (
+        selectedPrecheckMethod.value === 'installer' &&
+        precheckProduct.value?.shopifyVariantId
+    ) {
+        items.push({
+            variantId: precheckProduct.value.shopifyVariantId,
+            quantity: 1,
+        });
+    }
+
     return items;
 });
 
 const canCheckout = computed(() => {
+    if (!selectedPrecheckMethod.value) {
+        return false;
+    }
+
+    if (isGranCanaria.value && !selectedServiceZone.value) {
+        return false;
+    }
+
     if (selectedScreen.value && !selectedScreen.value.shopifyVariantId) {
         return false;
     }
@@ -707,6 +817,13 @@ const canCheckout = computed(() => {
     if (
         selectedInstallation.value &&
         !selectedInstallation.value.shopifyVariantId
+    ) {
+        return false;
+    }
+
+    if (
+        selectedPrecheckMethod.value === 'installer' &&
+        !precheckProduct.value?.shopifyVariantId
     ) {
         return false;
     }
@@ -779,10 +896,16 @@ const escapeHtml = (value: string) =>
         "'": '&#039;',
     })[character] ?? character);
 
-const euroFormatter = new Intl.NumberFormat('es-ES', {
+const localeTag = computed(() => ({
+    es: 'es-ES',
+    it: 'it-IT',
+    en: 'en-GB',
+})[props.locale]);
+
+const euroFormatter = computed(() => new Intl.NumberFormat(localeTag.value, {
     style: 'currency',
     currency: 'EUR',
-});
+}));
 
 const nextQuoteNumber = async () => {
     const csrfToken = document
@@ -817,7 +940,7 @@ const generateQuote = async () => {
     const printWindow = window.open('', '_blank');
 
     if (!printWindow) {
-        quoteGenerationError.value = 'Il browser ha bloccato la finestra del preventivo.';
+        quoteGenerationError.value = t('errors.popup_blocked');
         return;
     }
 
@@ -827,11 +950,11 @@ const generateQuote = async () => {
         quoteNumber = await nextQuoteNumber();
     } catch {
         printWindow.close();
-        quoteGenerationError.value = 'Impossibile generare il numero progressivo. Riprova.';
+        quoteGenerationError.value = t('errors.quote_number');
         return;
     }
 
-    const quoteDate = new Intl.DateTimeFormat('es-ES').format(new Date());
+    const quoteDate = new Intl.DateTimeFormat(localeTag.value).format(new Date());
     const vehicle = [selectedBrand.value, selectedModel.value, selectedYear.value]
         .filter(Boolean)
         .join(' ');
@@ -849,7 +972,7 @@ const generateQuote = async () => {
                 selectedScreen.value.sku ||
                 selectedVehicle.value?.handle ||
                 'PANTALLA',
-            description: `${selectedVehicle.value?.title ?? 'Pantalla autoradio'} — Variante: ${selectedScreen.value.title}`,
+            description: `${selectedVehicle.value?.title ?? t('print.screen')} — ${t('print.variant', { variant: selectedScreen.value.title })}`,
             quantity: 1,
             price: selectedScreen.value.price,
         });
@@ -882,10 +1005,23 @@ const generateQuote = async () => {
         });
     }
 
+    if (selectedPrecheckMethod.value) {
+        items.push({
+            code: precheckProduct.value?.sku || 'PRECHECK',
+            description: selectedPrecheckMethod.value === 'installer'
+                ? `${t('installation.precheck_installer_title')} — ${serviceZones.value.find((zone) => zone.key === selectedServiceZone.value)?.label ?? ''}`
+                : t('installation.precheck_self_title'),
+            quantity: 1,
+            price: precheckPrice.value,
+        });
+    }
+
     if (activeDiscount.value && discountAmount.value > 0) {
         items.push({
             code: activeDiscount.value.code,
-            description: `Descuento por compra online (${activeDiscount.value.percentage}%)`,
+            description: t('print.online_discount', {
+                percentage: activeDiscount.value.percentage,
+            }),
             quantity: 1,
             price: -discountAmount.value,
         });
@@ -896,8 +1032,8 @@ const generateQuote = async () => {
             <td class="code">${escapeHtml(item.code)}</td>
             <td>${escapeHtml(item.description)}</td>
             <td class="center">${item.quantity}</td>
-            <td class="money">${euroFormatter.format(item.price)}</td>
-            <td class="money">${euroFormatter.format(item.price * item.quantity)}</td>
+            <td class="money">${euroFormatter.value.format(item.price)}</td>
+            <td class="money">${euroFormatter.value.format(item.price * item.quantity)}</td>
         </tr>
     `).join('');
     const includedItems = items
@@ -905,14 +1041,14 @@ const generateQuote = async () => {
         .map((item) => `<li>${escapeHtml(item.description)}</li>`)
         .join('');
     const checkoutLink = checkoutUrl.value
-        ? `<p class="checkout"><strong>Enlace de compra:</strong><br><span>${escapeHtml(checkoutUrl.value)}</span></p>`
+        ? `<p class="checkout"><strong>${escapeHtml(t('print.purchase_link'))}:</strong><br><span>${escapeHtml(checkoutUrl.value)}</span></p>`
         : '';
 
     printWindow.document.write(`<!doctype html>
-<html lang="es">
+<html lang="${props.locale}">
 <head>
     <meta charset="utf-8">
-    <title>${escapeHtml(quoteNumber)} — Presupuesto AutoRadioCanario</title>
+    <title>${escapeHtml(quoteNumber)} — ${escapeHtml(t('print.document_title'))}</title>
     <style>
         @page { size: A4; margin: 12mm; }
         * {
@@ -972,24 +1108,24 @@ const generateQuote = async () => {
             <img src="${window.location.origin}/images/logo.png" alt="AutoRadioCanario">
             <div>
                 <div class="brand-name">AUTORADIOCANARIO</div>
-                <div class="tagline">CADA COCHE TIENE DERECHO A SU PROPIA RADIO</div>
+                <div class="tagline">${escapeHtml(t('print.tagline'))}</div>
             </div>
         </div>
         <div class="quote-title">
-            <h1>Presupuesto</h1>
-            <div>Nº: ${escapeHtml(quoteNumber)}</div>
+            <h1>${escapeHtml(t('quote.title'))}</h1>
+            <div>${escapeHtml(t('print.number'))}: ${escapeHtml(quoteNumber)}</div>
         </div>
     </header>
     <section class="details">
         <div>
-            <h2>Cliente:</h2>
+            <h2>${escapeHtml(t('print.client'))}:</h2>
             <p><strong>${escapeHtml(quoteClientName.value.trim())}</strong></p>
-            ${quoteClientPhone.value.trim() ? `<p>Teléfono: ${escapeHtml(quoteClientPhone.value.trim())}</p>` : ''}
-            ${quoteClientEmail.value.trim() ? `<p>Correo: ${escapeHtml(quoteClientEmail.value.trim())}</p>` : ''}
-            <p>Vehículo: ${escapeHtml(vehicle || 'No especificado')}</p>
+            ${quoteClientPhone.value.trim() ? `<p>${escapeHtml(t('print.phone'))}: ${escapeHtml(quoteClientPhone.value.trim())}</p>` : ''}
+            ${quoteClientEmail.value.trim() ? `<p>${escapeHtml(t('print.email'))}: ${escapeHtml(quoteClientEmail.value.trim())}</p>` : ''}
+            <p>${escapeHtml(t('print.vehicle'))}: ${escapeHtml(vehicle || t('print.not_specified'))}</p>
         </div>
         <div class="issuer">
-            <h2>Emitido por:</h2>
+            <h2>${escapeHtml(t('print.issued_by'))}:</h2>
             <p>AutoRadioCanario</p>
             <p>Y9309149M</p>
             <p>Avenida Mencey 49</p>
@@ -997,20 +1133,20 @@ const generateQuote = async () => {
             <p>Las Palmas</p>
         </div>
     </section>
-    <p class="date"><strong>Fecha:</strong> ${escapeHtml(quoteDate)}</p>
+    <p class="date"><strong>${escapeHtml(t('print.date'))}:</strong> ${escapeHtml(quoteDate)}</p>
     <table>
-        <thead><tr><th>ID</th><th>Descripción</th><th>Cant.</th><th>Precio unitario</th><th>Importe</th></tr></thead>
+        <thead><tr><th>ID</th><th>${escapeHtml(t('print.description'))}</th><th>${escapeHtml(t('print.quantity'))}</th><th>${escapeHtml(t('print.unit_price'))}</th><th>${escapeHtml(t('print.amount'))}</th></tr></thead>
         <tbody>${rows}</tbody>
     </table>
     <section class="notes">
-        <strong>Incluye:</strong>
+        <strong>${escapeHtml(t('print.includes'))}:</strong>
         <ul>${includedItems}</ul>
-        <p class="legal">Este presupuesto incluye los productos y servicios indicados y la asistencia antes y después de la venta. Los importes incluyen IGIC cuando corresponda. No incluye costes ocultos ni pagos adicionales no especificados.</p>
+        <p class="legal">${escapeHtml(t('print.legal'))}</p>
         ${checkoutLink}
     </section>
     <section class="total">
-        <div>Total</div>
-        <div class="amount">${euroFormatter.format(discountedTotal.value)}</div>
+        <div>${escapeHtml(t('quote.total'))}</div>
+        <div class="amount">${euroFormatter.value.format(discountedTotal.value)}</div>
     </section>
     <footer>INFO@AUTORADIOCANARIO.COM &nbsp;&nbsp; AUTORADIOCANARIO &nbsp;&nbsp; WHATSAPP: +34 694 259 117</footer>
 </main>
@@ -1069,6 +1205,9 @@ watch(postalCode, (nextPostalCode) => {
         checkedPostalCode.value = null;
         resolvedInstallationArea.value = null;
         postalCodeError.value = null;
+        selectedServiceZone.value = null;
+        selectedPrecheckMethod.value = null;
+        selectedInstallationKey.value = null;
     }
 });
 
@@ -1103,30 +1242,37 @@ watch(
 );
 
 watch(
-    selectedVehicle,
-    (vehicle) => {
-        selectedScreenVariantId.value = vehicle?.variants[0]?.id ?? null;
+    compatibleVehicles,
+    (vehicles) => {
+        const selectionIsStillAvailable = vehicles.some((vehicle) =>
+            vehicle.variants.some(
+                (variant) => variant.id === selectedScreenVariantId.value,
+            ),
+        );
+
+        if (!selectionIsStillAvailable) {
+            selectedScreenVariantId.value = null;
+        }
     },
     { immediate: true },
 );
 </script>
 
 <template>
-    <Head title="Configuratore" />
+    <Head :title="t('page_title')" />
 
     <div class="min-h-screen bg-[#121212] text-white">
         <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
             <div class="mb-8 flex items-start justify-between gap-6">
                 <div>
                     <p class="text-sm font-medium uppercase tracking-[0.24em] text-amber-400">
-                        Configuratore autoradio
+                        {{ t('intro.eyebrow') }}
                     </p>
                     <h1 class="mt-3 text-4xl font-semibold tracking-tight">
-                        Trova la soluzione perfetta per la tua auto
+                        {{ t('intro.title') }}
                     </h1>
                     <p class="mt-3 max-w-3xl text-base text-neutral-400">
-                        Seleziona marca, anno e modello. Ti mostreremo soltanto schermi,
-                        retrocamere e servizi compatibili con il tuo veicolo.
+                        {{ t('intro.description') }}
                     </p>
                 </div>
                 <div v-if="isAdmin" class="flex shrink-0 flex-col gap-2 sm:flex-row">
@@ -1136,7 +1282,7 @@ watch(
                         class="inline-flex items-center justify-center rounded-md border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 transition hover:border-amber-400 hover:text-amber-400 disabled:cursor-not-allowed disabled:border-neutral-800 disabled:text-neutral-600"
                         @click="quoteGenerationError = null; showQuoteModal = true"
                     >
-                        Crea preventivo
+                        {{ t('actions.create_quote') }}
                     </button>
                     <button
                         type="button"
@@ -1146,17 +1292,17 @@ watch(
                     >
                         {{
                             copyCheckoutStatus === 'copied'
-                                ? 'Link copiato!'
+                                ? t('actions.copied')
                                 : copyCheckoutStatus === 'error'
-                                    ? 'Copia non riuscita'
-                                    : 'Copia link carrello'
+                                    ? t('actions.copy_failed')
+                                    : t('actions.copy_cart_link')
                         }}
                     </button>
                     <a
                         href="/dashboard"
                         class="inline-flex items-center justify-center rounded-md border border-neutral-800 px-4 py-2 text-sm text-neutral-200 transition hover:border-neutral-700 hover:bg-neutral-900"
                     >
-                        Dashboard import
+                        {{ t('admin.dashboard') }}
                     </a>
                 </div>
             </div>
@@ -1165,7 +1311,7 @@ watch(
                 <section class="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
                     <div class="grid gap-6">
                         <h2 class="text-2xl font-semibold text-amber-400">
-                            1. Scegli la tua auto
+                            {{ t('steps.vehicle') }}
                         </h2>
 
                         <div
@@ -1177,7 +1323,7 @@ watch(
                                     for="vehicle-brand"
                                     class="mb-3 block text-sm font-medium text-neutral-300"
                                 >
-                                    Marca
+                                    {{ t('fields.brand') }}
                                 </label>
                                 <select
                                     id="vehicle-brand"
@@ -1196,7 +1342,7 @@ watch(
                             </div>
 
                             <div v-if="selectedBrand">
-                                <label class="mb-3 block text-sm font-medium text-neutral-300">Anno</label>
+                                <label class="mb-3 block text-sm font-medium text-neutral-300">{{ t('fields.year') }}</label>
                                 <select
                                     v-model="selectedYear"
                                     class="w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-sm text-white"
@@ -1215,7 +1361,7 @@ watch(
 
                         <div v-if="selectedBrand && selectedYear !== null" class="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-end">
                             <div class="grid gap-3">
-                                <label class="text-sm font-medium text-neutral-300">Modello</label>
+                                <label class="text-sm font-medium text-neutral-300">{{ t('fields.model') }}</label>
                                 <div class="flex flex-wrap gap-2">
                                     <button
                                         v-for="model in models"
@@ -1234,103 +1380,115 @@ watch(
                                 </div>
                             </div>
                             <a
-                                href="https://www.autoradiocanario.com/it/pages/configura-tu-sistema-de-sonido-perfecto"
+                                :href="storefrontUrl('/pages/configura-tu-sistema-de-sonido-perfecto')"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 class="inline-flex min-h-12 items-center justify-center rounded-lg border border-amber-400 px-4 py-3 text-center text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black"
                             >
-                                Non trovi il tuo modello? Scrivici
+                                {{ t('vehicle.missing_model') }}
                             </a>
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
                             <h2 class="text-2xl font-semibold text-amber-400">
-                                2. Scegli il tuo schermo
+                                {{ t('steps.screen') }}
                             </h2>
-                            <div
-                                v-if="selectedYear !== null && selectedVehicle"
-                                class="mt-4 grid gap-5 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
-                            >
-                                <div class="relative flex min-h-64 items-center justify-center overflow-hidden rounded-xl border border-neutral-800 bg-[#121212] p-4">
-                                    <button
-                                        v-if="selectedScreenImage"
-                                        type="button"
-                                        class="flex h-full w-full cursor-zoom-in items-center justify-center rounded-lg"
-                                        aria-label="Ingrandisci immagine pantalla"
-                                        @click="openImageZoom(selectedScreenImage, selectedVehicle?.title ?? 'Schermo')"
-                                    >
-                                        <img
-                                            :src="selectedScreenImage"
-                                            :alt="selectedVehicle?.title ?? 'Schermo'"
-                                            class="max-h-72 w-full rounded-lg object-contain object-center"
-                                        />
-                                    </button>
-                                    <p v-else class="text-sm text-neutral-500">
-                                        Immagine non disponibile
-                                    </p>
-                                    <a
-                                        v-if="selectedScreenProductUrl"
-                                        :href="selectedScreenProductUrl"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="absolute left-1/2 top-3 -translate-x-1/2 rounded-lg border border-amber-400 bg-[#121212]/90 px-3 py-2 text-xs font-semibold text-amber-400 shadow-lg backdrop-blur transition hover:bg-amber-400 hover:text-black"
-                                    >
-                                        Dettagli scheda
-                                    </a>
-                                </div>
-
-                                <div
-                                    class="quote-scrollbar max-h-72 overflow-y-auto pr-2"
-                                    @pointermove="updateVariantAutoScroll"
-                                    @pointerleave="stopVariantAutoScroll"
+                            <div v-if="selectedYear !== null && compatibleVehicles.length" class="mt-4 grid gap-5">
+                                <article
+                                    v-for="vehicle in compatibleVehicles"
+                                    :key="vehicle.id"
+                                    class="grid gap-5 rounded-xl border p-4 transition lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
+                                    :class="
+                                        selectedVehicle?.id === vehicle.id
+                                            ? 'border-amber-400/70 bg-amber-400/5'
+                                            : 'border-neutral-800 bg-[#121212]'
+                                    "
                                 >
-                                    <div class="grid gap-2">
+                                    <div class="relative flex min-h-64 items-center justify-center overflow-hidden rounded-xl border border-neutral-800 bg-[#121212] p-4">
                                         <button
-                                            v-for="variant in selectedVehicle?.variants ?? []"
-                                            :key="variant.id"
+                                            v-if="screenImage(vehicle)"
                                             type="button"
-                                            @click="selectedScreenVariantId = variant.id"
-                                            class="flex min-h-10 w-full items-center justify-between gap-4 rounded-lg border px-3 py-2 text-left text-sm font-medium leading-tight transition"
-                                            :class="
-                                                selectedScreenVariantId === variant.id
-                                                    ? 'border-amber-400 bg-amber-400 text-black'
-                                                    : 'border-neutral-800 bg-[#121212] text-neutral-200 hover:border-neutral-600'
-                                            "
+                                            class="flex h-full w-full cursor-zoom-in items-center justify-center rounded-lg"
+                                            :aria-label="t('screen.zoom')"
+                                            @click="openImageZoom(screenImage(vehicle)!, vehicle.title)"
                                         >
-                                            <span class="min-w-0 flex-1 truncate">{{ variant.title }}</span>
-                                            <span
-                                                class="shrink-0 whitespace-nowrap text-xs"
-                                                :class="
-                                                    selectedScreenVariantId === variant.id
-                                                        ? 'text-black/70'
-                                                        : 'text-neutral-400'
-                                                "
-                                            >
-                                                {{ variant.price.toFixed(2) }} €
-                                            </span>
+                                            <img
+                                                :src="screenImage(vehicle)!"
+                                                :alt="vehicle.title"
+                                                class="max-h-72 w-full rounded-lg object-contain object-center"
+                                            />
                                         </button>
+                                        <p v-else class="text-sm text-neutral-500">
+                                            {{ t('vehicle.image_unavailable') }}
+                                        </p>
+                                        <a
+                                            :href="screenProductUrl(vehicle)"
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            class="absolute left-1/2 top-3 -translate-x-1/2 rounded-lg border border-amber-400 bg-[#121212]/90 px-3 py-2 text-xs font-semibold text-amber-400 shadow-lg backdrop-blur transition hover:bg-amber-400 hover:text-black"
+                                        >
+                                            {{ t('screen.product_details') }}
+                                        </a>
                                     </div>
-                                </div>
+
+                                    <div class="min-w-0">
+                                        <h3 class="mb-3 text-base font-semibold text-white">
+                                            {{ vehicle.title }}
+                                        </h3>
+                                        <div
+                                            class="quote-scrollbar max-h-72 overflow-y-auto pr-2"
+                                            @pointermove="updateVariantAutoScroll"
+                                            @pointerleave="stopVariantAutoScroll"
+                                        >
+                                            <div class="grid gap-2">
+                                                <button
+                                                    v-for="variant in vehicle.variants"
+                                                    :key="variant.id"
+                                                    type="button"
+                                                    @click="toggleScreenVariant(variant.id)"
+                                                    class="group flex min-h-10 w-full items-center justify-between gap-4 rounded-lg border px-3 py-2 text-left text-sm font-medium leading-tight transition"
+                                                    :class="
+                                                        selectedScreenVariantId === variant.id
+                                                            ? 'border-amber-400 bg-amber-400 text-black'
+                                                            : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'
+                                                    "
+                                                >
+                                                    <span class="min-w-0 flex-1 truncate">{{ variant.title }}</span>
+                                                    <span
+                                                        class="shrink-0 whitespace-nowrap text-xs"
+                                                        :class="
+                                                            selectedScreenVariantId === variant.id
+                                                                ? 'text-black/70'
+                                                                : 'text-amber-400 group-hover:text-black'
+                                                        "
+                                                    >
+                                                        {{ variant.price.toFixed(2) }} €
+                                                    </span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </article>
                             </div>
                             <p
                                 v-else-if="selectedBrand && selectedModel && selectedYear"
                                 class="mt-4 text-sm text-neutral-300"
                             >
                                 <a
-                                    href="https://www.autoradiocanario.com/it/pages/configura-tu-sistema-de-sonido-perfecto"
+                                    :href="storefrontUrl('/pages/configura-tu-sistema-de-sonido-perfecto')"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     class="font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
-                                >Non trovi il tuo schermo? Scrivici</a>, te lo troviamo subito!
+                                >{{ t('screen.missing') }}</a>
                             </p>
                             <p v-else class="mt-4 text-sm text-neutral-500">
-                                Seleziona marca, anno e modello per visualizzare gli schermi disponibili.
+                                {{ t('screen.select_vehicle') }}
                             </p>
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
                             <h2 class="text-2xl font-semibold text-amber-400">
-                                3. Aggiungi camera
+                                {{ t('steps.camera') }}
                             </h2>
                             <div class="mt-4 grid gap-4 md:grid-cols-3">
                                 <div
@@ -1368,7 +1526,7 @@ watch(
                                         rel="noopener noreferrer"
                                         class="absolute left-1/2 top-3 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-amber-400 bg-[#121212]/90 px-3 py-2 text-xs font-semibold text-amber-400 shadow-lg backdrop-blur transition hover:bg-amber-400 hover:text-black"
                                     >
-                                        Dettagli scheda
+                                        {{ t('screen.product_details') }}
                                     </a>
                                 </div>
                             </div>
@@ -1377,44 +1535,53 @@ watch(
                                 class="mt-4 text-sm text-neutral-300"
                             >
                                 <a
-                                    href="https://www.autoradiocanario.com/it/pages/configura-tu-sistema-de-sonido-perfecto"
+                                    :href="storefrontUrl('/pages/configura-tu-sistema-de-sonido-perfecto')"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     class="font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
-                                >Non trovi una camera specifica? Scrivici</a>, te la troviamo subito!
+                                >{{ t('camera.missing') }}</a>
                             </p>
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
                             <h2 class="text-2xl font-semibold text-amber-400">
-                                4. Aggiungi altoparlanti
+                                {{ t('steps.speaker') }}
                             </h2>
-                            <div class="mt-4 grid max-w-2xl gap-4 sm:grid-cols-2">
+                            <div class="mt-4 grid max-w-2xl gap-4">
                                 <div>
-                                    <label for="speaker-category" class="mb-2 block text-sm font-medium text-neutral-300">
-                                        Tipo di altoparlante
-                                    </label>
-                                    <select
-                                        id="speaker-category"
-                                        v-model="selectedSpeakerCategory"
-                                        class="w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-sm text-white"
-                                    >
-                                        <option value="">Seleziona un tipo</option>
-                                        <option v-for="category in speakerCategories" :key="category" :value="category">
+                                    <p class="mb-3 block text-sm font-medium text-neutral-300">
+                                        {{ t('speaker.type') }}
+                                    </p>
+                                    <div class="flex flex-wrap gap-2">
+                                        <button
+                                            v-for="category in speakerCategories"
+                                            :key="category"
+                                            type="button"
+                                            class="rounded-lg border px-4 py-3 text-sm transition"
+                                            :class="
+                                                selectedSpeakerCategory === category
+                                                    ? 'border-amber-400 bg-amber-400 text-black'
+                                                    : 'border-neutral-800 bg-[#121212] text-neutral-200 hover:border-neutral-700'
+                                            "
+                                            @click="
+                                                selectedSpeakerCategory =
+                                                    selectedSpeakerCategory === category ? '' : category
+                                            "
+                                        >
                                             {{ category }}
-                                        </option>
-                                    </select>
+                                        </button>
+                                    </div>
                                 </div>
-                                <div v-if="selectedSpeakerCategory">
+                                <div v-if="selectedSpeakerCategory" class="max-w-sm">
                                 <label for="speaker-size" class="mb-2 block text-sm font-medium text-neutral-300">
-                                    Misura altoparlante
+                                    {{ t('speaker.size') }}
                                 </label>
                                 <select
                                     id="speaker-size"
                                     v-model="selectedSpeakerSize"
                                     class="w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-sm text-white"
                                 >
-                                    <option value="">Seleziona una misura</option>
+                                    <option value="">{{ t('speaker.select_size') }}</option>
                                     <option v-for="size in speakerSizes" :key="size" :value="size">
                                         {{ formatSpeakerSize(size) }}
                                     </option>
@@ -1452,22 +1619,25 @@ watch(
                                         rel="noopener noreferrer"
                                         class="absolute left-1/2 top-3 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-amber-400 bg-[#121212]/90 px-3 py-2 text-xs font-semibold text-amber-400 shadow-lg transition hover:bg-amber-400 hover:text-black"
                                     >
-                                        Dettagli scheda
+                                        {{ t('screen.product_details') }}
                                     </a>
                                 </article>
                             </div>
                             <p v-else-if="selectedSpeakerCategory && selectedSpeakerSize" class="mt-4 text-sm text-neutral-500">
-                                Nessun altoparlante disponibile per questa misura.
+                                {{ t('speaker.no_options') }}
                             </p>
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
                             <h2 class="text-2xl font-semibold text-amber-400">
-                                5. Installazione
+                                {{ t('steps.installation') }}
                             </h2>
+                            <p class="mt-2 max-w-3xl text-sm leading-6 text-neutral-400">
+                                {{ t('installation.intro') }}
+                            </p>
                             <div class="mt-4 rounded-xl border border-neutral-800 bg-[#121212] p-4">
                                 <label for="postal-code" class="block text-sm font-medium text-neutral-200">
-                                    Dove desideri l'installazione?
+                                    {{ t('installation.question') }}
                                 </label>
                                 <div class="mt-3 flex flex-col gap-3 sm:flex-row">
                                     <input
@@ -1476,43 +1646,150 @@ watch(
                                         type="text"
                                         inputmode="numeric"
                                         maxlength="5"
-                                        placeholder="Inserisci CAP"
+                                        :placeholder="t('installation.postal_placeholder')"
                                         class="min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white placeholder:text-neutral-600"
                                         @keyup.enter="checkPostalCode"
                                     />
                                     <button type="button" class="rounded-lg bg-amber-400 px-5 py-3 text-sm font-semibold text-black transition hover:bg-amber-300" @click="checkPostalCode">
-                                        Verifica disponibilità
+                                        {{ t('installation.check') }}
                                     </button>
                                 </div>
                                 <p v-if="postalCodeError" class="mt-3 text-sm text-red-400">{{ postalCodeError }}</p>
-                                <p v-else-if="checkedPostalCode && matchedInstallationZone && visibleInstallationOptions.length" class="mt-3 text-sm text-emerald-400">
-                                    Installazione disponibile nella zona {{ matchedInstallationZone.name }}.
+                                <p v-else-if="checkedPostalCode && isGranCanaria" class="mt-3 text-sm text-emerald-400">
+                                    {{ t('installation.gran_canaria_available') }}
                                 </p>
-                                <p v-else-if="checkedPostalCode && matchedInstallationZone && hasSelectedProducts" class="mt-3 text-sm text-amber-400">
-                                    <span class="text-emerald-400">Installazione disponibile:</span>
+                                <p v-else-if="checkedPostalCode" class="mt-3 text-sm text-amber-400">
+                                    {{ t('installation.gran_canaria_only') }}
                                     <a
-                                        href="https://www.autoradiocanario.com/it/pages/contact"
+                                        :href="storefrontUrl('/pages/contact')"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         class="font-semibold underline underline-offset-2 hover:text-amber-300"
-                                    >consultaci per i dettagli</a>.
-                                </p>
-                                <p v-else-if="checkedPostalCode && !matchedInstallationZone" class="mt-3 text-sm text-amber-400">
-                                    L'installazione potrebbe non essere disponibile:
-                                    <a
-                                        href="https://www.autoradiocanario.com/it/pages/contact"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="font-semibold underline underline-offset-2 hover:text-amber-300"
-                                    >consultaci per i dettagli</a>.
-                                </p>
-                                <p v-else-if="checkedPostalCode" class="mt-3 text-sm text-neutral-500">
-                                    Seleziona almeno un prodotto per visualizzare il servizio di installazione corrispondente.
+                                    >{{ t('installation.contact_details') }}</a>.
                                 </p>
                                 <p v-else class="mt-3 text-sm text-neutral-500">
-                                    Verifica il CAP per visualizzare i servizi disponibili nella tua zona.
+                                    {{ t('installation.check_to_view') }}
                                 </p>
                             </div>
+
+                            <div v-if="checkedPostalCode && isGranCanaria" class="mt-4 grid gap-5 lg:grid-cols-[1.05fr_.95fr]">
+                                <div class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
+                                    <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
+                                        {{ t('installation.zone_step') }}
+                                    </p>
+                                    <h3 class="mt-2 text-xl font-semibold text-white">
+                                        {{ t('installation.zone_question') }}
+                                    </h3>
+                                    <p class="mt-2 text-sm leading-6 text-neutral-400">
+                                        {{ t('installation.zone_help') }}
+                                    </p>
+
+                                    <div class="relative mx-auto mt-5 max-w-sm overflow-hidden rounded-xl">
+                                        <img
+                                            src="/images/installation/gran-canaria-zones.png"
+                                            :alt="t('installation.map_label')"
+                                            class="h-auto w-full"
+                                        />
+                                        <button
+                                            type="button"
+                                            :aria-label="t('installation.zone_north')"
+                                            class="absolute inset-0 cursor-pointer transition hover:bg-amber-400/10"
+                                            :class="selectedServiceZone === 'north' ? 'bg-amber-400/20' : ''"
+                                            style="clip-path: polygon(6% 8%, 92% 8%, 64% 41%, 5% 43%);"
+                                            @click="selectedServiceZone = 'north'"
+                                        />
+                                        <button
+                                            type="button"
+                                            :aria-label="t('installation.zone_capital')"
+                                            class="absolute inset-0 cursor-pointer transition hover:bg-amber-400/10"
+                                            :class="selectedServiceZone === 'capital' ? 'bg-amber-400/20' : ''"
+                                            style="clip-path: polygon(64% 8%, 96% 15%, 96% 48%, 65% 43%, 45% 39%, 64% 28%);"
+                                            @click="selectedServiceZone = 'capital'"
+                                        />
+                                        <button
+                                            type="button"
+                                            :aria-label="t('installation.zone_south')"
+                                            class="absolute inset-0 cursor-pointer transition hover:bg-amber-400/10"
+                                            :class="selectedServiceZone === 'south' ? 'bg-amber-400/20' : ''"
+                                            style="clip-path: polygon(5% 41%, 45% 39%, 65% 43%, 96% 48%, 94% 91%, 9% 91%);"
+                                            @click="selectedServiceZone = 'south'"
+                                        />
+                                    </div>
+
+                                    <div class="mt-4 grid gap-2">
+                                        <button
+                                            v-for="zone in serviceZones"
+                                            :key="zone.key"
+                                            type="button"
+                                            class="rounded-lg border px-4 py-3 text-left text-sm font-medium transition"
+                                            :class="selectedServiceZone === zone.key ? 'border-amber-400 bg-amber-400 text-black' : 'border-neutral-700 bg-neutral-900 text-neutral-200 hover:border-amber-400'"
+                                            @click="selectedServiceZone = zone.key"
+                                        >
+                                            {{ zone.label }}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
+                                    <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
+                                        {{ t('installation.precheck_step') }}
+                                    </p>
+                                    <h3 class="mt-2 text-xl font-semibold text-white">
+                                        {{ t('installation.precheck_question') }}
+                                    </h3>
+                                    <p class="mt-2 text-sm leading-6 text-neutral-400">
+                                        {{ t('installation.precheck_help') }}
+                                    </p>
+
+                                    <div class="mt-5 grid gap-3">
+                                        <button
+                                            type="button"
+                                            :disabled="!selectedServiceZone"
+                                            class="rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-40"
+                                            :class="selectedPrecheckMethod === 'self' ? 'border-amber-400 bg-amber-400/10' : 'border-neutral-700 bg-neutral-900 hover:border-amber-400'"
+                                            @click="selectedPrecheckMethod = 'self'"
+                                        >
+                                            <span class="block font-semibold text-white">{{ t('installation.precheck_self_title') }}</span>
+                                            <span class="mt-1 block text-sm leading-5 text-neutral-400">{{ t('installation.precheck_self_description') }}</span>
+                                            <span class="mt-3 block text-sm font-semibold text-emerald-400">{{ t('installation.free') }}</span>
+                                        </button>
+                                        <button
+                                            type="button"
+                                            :disabled="!selectedServiceZone"
+                                            class="rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-40"
+                                            :class="selectedPrecheckMethod === 'installer' ? 'border-amber-400 bg-amber-400/10' : 'border-neutral-700 bg-neutral-900 hover:border-amber-400'"
+                                            @click="selectedPrecheckMethod = 'installer'"
+                                        >
+                                            <span class="block font-semibold text-white">{{ t('installation.precheck_installer_title') }}</span>
+                                            <span class="mt-1 block text-sm leading-5 text-neutral-400">{{ t('installation.precheck_installer_description') }}</span>
+                                            <span class="mt-3 block text-lg font-semibold text-amber-400">{{ (precheckProduct?.price ?? 40).toFixed(2) }} €</span>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-else-if="checkedPostalCode" class="mt-4 rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
+                                <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
+                                    {{ t('installation.precheck_step') }}
+                                </p>
+                                <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.precheck_self_title') }}</h3>
+                                <p class="mt-2 max-w-2xl text-sm leading-6 text-neutral-400">
+                                    {{ t('installation.remote_only_description') }}
+                                </p>
+                                <button
+                                    type="button"
+                                    class="mt-4 rounded-xl border p-4 text-left transition"
+                                    :class="selectedPrecheckMethod === 'self' ? 'border-amber-400 bg-amber-400/10' : 'border-neutral-700 bg-neutral-900 hover:border-amber-400'"
+                                    @click="selectedPrecheckMethod = 'self'"
+                                >
+                                    <span class="font-semibold text-white">{{ t('installation.choose_remote_precheck') }}</span>
+                                    <span class="ml-3 text-sm font-semibold text-emerald-400">{{ t('installation.free') }}</span>
+                                </button>
+                            </div>
+
+                            <div v-if="selectedServiceZone && selectedPrecheckMethod" class="mt-6">
+                                <h3 class="text-lg font-semibold text-white">{{ t('installation.final_installation') }}</h3>
+                                <p class="mt-1 text-sm text-neutral-400">{{ t('installation.final_installation_help') }}</p>
                             <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                                 <article
                                     v-for="installation in visibleInstallationOptions"
@@ -1542,9 +1819,13 @@ watch(
                                         rel="noopener noreferrer"
                                         class="absolute left-1/2 top-3 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-amber-400 bg-[#121212]/90 px-3 py-2 text-xs font-semibold text-amber-400 shadow-lg transition hover:bg-amber-400 hover:text-black"
                                     >
-                                        Dettagli scheda
+                                        {{ t('screen.product_details') }}
                                     </a>
                                 </article>
+                            </div>
+                                <p v-if="hasSelectedProducts && !visibleInstallationOptions.length" class="mt-4 text-sm text-amber-400">
+                                    {{ t('installation.contact_for_combination') }}
+                                </p>
                             </div>
                         </div>
                     </div>
@@ -1584,7 +1865,7 @@ watch(
                                     v-if="selectedVehicleImageUrl && failedVehicleImage !== selectedVehicleImageUrl"
                                     type="button"
                                     class="flex h-full w-full cursor-zoom-in items-center justify-center"
-                                    aria-label="Ingrandisci immagine veicolo"
+                                    :aria-label="t('vehicle.zoom')"
                                     @click="openImageZoom(selectedVehicleImageUrl, `${selectedBrand} ${selectedModel} ${selectedYear}`)"
                                 >
                                     <img
@@ -1601,7 +1882,7 @@ watch(
 
                     <div class="quote-scrollbar lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
                     <p class="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-amber-400">
-                        Preventivo
+                        {{ t('quote.title') }}
                     </p>
 
                     <div
@@ -1614,15 +1895,23 @@ watch(
                         "
                     >
                         <template v-if="!activeDiscount && nextDiscount">
-                            Ti mancano {{ amountUntilNextDiscount.toFixed(2) }} € per ottenere il
-                            {{ nextDiscount.percentage }}% di sconto con {{ nextDiscount.code }}.
+                            {{ t('quote.discount_remaining', {
+                                amount: amountUntilNextDiscount.toFixed(2),
+                                percentage: nextDiscount.percentage,
+                                code: nextDiscount.code,
+                            }) }}
                         </template>
                         <template v-else-if="activeDiscount">
-                            Sconto del {{ activeDiscount.percentage }}% applicato all’intero ordine con
-                            {{ activeDiscount.code }}.
+                            {{ t('quote.discount_applied', {
+                                percentage: activeDiscount.percentage,
+                                code: activeDiscount.code,
+                            }) }}
                             <span v-if="nextDiscount" class="mt-1 block text-emerald-200/80">
-                                Ti mancano {{ amountUntilNextDiscount.toFixed(2) }} € per ottenere il
-                                {{ nextDiscount.percentage }}% con {{ nextDiscount.code }}.
+                                {{ t('quote.discount_remaining', {
+                                    amount: amountUntilNextDiscount.toFixed(2),
+                                    percentage: nextDiscount.percentage,
+                                    code: nextDiscount.code,
+                                }) }}
                             </span>
                         </template>
                     </div>
@@ -1633,7 +1922,7 @@ watch(
                                     {{ selectedBrand }} {{ selectedModel }}
                                 </p>
                             <p class="text-sm text-neutral-400">
-                                {{ selectedYear ?? 'Tutti gli anni' }}
+                                {{ selectedYear ?? t('vehicle.all_years') }}
                             </p>
                                 <p class="mt-3 text-sm text-neutral-500">
                                     {{ selectedVehicle?.title }}
@@ -1646,7 +1935,7 @@ watch(
                                     <p class="font-medium text-neutral-100">
                                         {{ selectedScreen?.title }}
                                     </p>
-                                    <p class="text-sm text-neutral-500">Schermo</p>
+                                    <p class="text-sm text-neutral-500">{{ t('screen.label') }}</p>
                                 </div>
                                 <p class="font-semibold">
                                     {{ (selectedScreen?.price ?? 0).toFixed(2) }} €
@@ -1656,9 +1945,9 @@ watch(
                             <div v-if="selectedSpeaker" class="flex items-start justify-between gap-4">
                                 <div>
                                     <p class="font-medium text-neutral-100">
-                                        {{ selectedSpeaker?.productTitle ?? 'Nessun altoparlante' }}
+                                        {{ selectedSpeaker?.productTitle ?? t('speaker.none') }}
                                     </p>
-                                    <p class="text-sm text-neutral-500">Altoparlanti</p>
+                                    <p class="text-sm text-neutral-500">{{ t('speaker.label') }}</p>
                                 </div>
                                 <p class="font-semibold">
                                     {{ (selectedSpeaker?.price ?? 0).toFixed(2) }} €
@@ -1674,7 +1963,7 @@ watch(
                                     <p class="font-medium text-neutral-100">
                                         {{ camera.title }}
                                     </p>
-                                    <p class="text-sm text-neutral-500">Camera</p>
+                                    <p class="text-sm text-neutral-500">{{ t('camera.label') }}</p>
                                 </div>
                                 <p class="font-semibold">
                                     {{ camera.price.toFixed(2) }} €
@@ -1686,10 +1975,24 @@ watch(
                                     <p class="font-medium text-neutral-100">
                                         {{ selectedInstallation.title }}
                                     </p>
-                                    <p class="text-sm text-neutral-500">Installazione</p>
+                                    <p class="text-sm text-neutral-500">{{ t('installation.label') }}</p>
                                 </div>
                                 <p class="font-semibold">
                                     {{ selectedInstallation.price.toFixed(2) }} €
+                                </p>
+                            </div>
+
+                            <div v-if="selectedPrecheckMethod" class="flex items-start justify-between gap-4">
+                                <div>
+                                    <p class="font-medium text-neutral-100">
+                                        {{ selectedPrecheckMethod === 'installer' ? t('installation.precheck_installer_title') : t('installation.precheck_self_title') }}
+                                    </p>
+                                    <p class="text-sm text-neutral-500">
+                                        {{ serviceZones.find((zone) => zone.key === selectedServiceZone)?.label }}
+                                    </p>
+                                </div>
+                                <p class="font-semibold" :class="precheckPrice ? 'text-amber-400' : 'text-emerald-400'">
+                                    {{ precheckPrice ? `${precheckPrice.toFixed(2)} €` : t('installation.free') }}
                                 </p>
                             </div>
                         </div>
@@ -1699,22 +2002,26 @@ watch(
                     <div class="mt-4 shrink-0 space-y-4 border-t border-neutral-800 bg-[#121212] pt-4">
                         <div class="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
                             <div class="flex items-center justify-between text-sm text-neutral-400">
-                                <span>Subtotale prodotti</span>
+                                <span>{{ t('quote.subtotal') }}</span>
                                 <span>{{ productsSubtotal.toFixed(2) }} €</span>
                             </div>
                             <div v-if="selectedInstallation" class="mt-2 flex items-center justify-between text-sm text-neutral-400">
-                                <span>Installazione</span>
+                                <span>{{ t('installation.label') }}</span>
                                 <span>{{ selectedInstallation.price.toFixed(2) }} €</span>
+                            </div>
+                            <div v-if="selectedPrecheckMethod === 'installer'" class="mt-2 flex items-center justify-between text-sm text-neutral-400">
+                                <span>{{ t('installation.precheck_installer_title') }}</span>
+                                <span>{{ precheckPrice.toFixed(2) }} €</span>
                             </div>
                             <div
                                 v-if="discountAmount > 0"
                                 class="mt-2 flex items-center justify-between text-sm text-emerald-400"
                             >
-                                <span>Sconto {{ activeDiscount?.percentage }}%</span>
+                                <span>{{ t('quote.discount', { percentage: activeDiscount?.percentage ?? 0 }) }}</span>
                                 <span>−{{ discountAmount.toFixed(2) }} €</span>
                             </div>
                             <div class="mt-4 flex items-center justify-between border-t border-neutral-800 pt-4">
-                                <span class="text-lg font-semibold text-white">Totale</span>
+                                <span class="text-lg font-semibold text-white">{{ t('quote.total') }}</span>
                                 <span class="text-3xl font-semibold text-amber-400">
                                     {{ discountedTotal.toFixed(2) }} €
                                 </span>
@@ -1727,14 +2034,14 @@ watch(
                             class="w-full rounded-xl bg-red-600 px-5 py-4 text-base font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                             :disabled="!canCheckout"
                         >
-                            Aggiungi al carrello e paga
+                            {{ t('actions.add_to_cart') }}
                         </button>
                     </div>
                 </aside>
             </div>
         </div>
         <p class="pb-6 text-center text-xs text-neutral-700">
-            Dati geografici CAP forniti da
+            {{ t('attribution') }}
             <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer" class="underline hover:text-neutral-500">GeoNames</a>
             (CC BY 4.0).
         </p>
@@ -1763,15 +2070,15 @@ watch(
             <section class="w-full max-w-lg rounded-2xl border border-neutral-700 bg-[#121212] p-6 shadow-2xl">
                 <div class="flex items-start justify-between gap-4">
                     <div>
-                        <h2 class="text-xl font-semibold text-white">Crea preventivo</h2>
+                        <h2 class="text-xl font-semibold text-white">{{ t('actions.create_quote') }}</h2>
                         <p class="mt-1 text-sm text-neutral-400">
-                            Inserisci i dati del cliente. Potrai stampare o salvare il documento come PDF.
+                            {{ t('quote_form.description') }}
                         </p>
                     </div>
                     <button
                         type="button"
                         class="rounded-md px-2 py-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                        aria-label="Chiudi"
+                        :aria-label="t('actions.close')"
                         @click="showQuoteModal = false"
                     >
                         ✕
@@ -1780,16 +2087,16 @@ watch(
 
                 <div class="mt-6 grid gap-4">
                     <label class="grid gap-2 text-sm text-neutral-300">
-                        Cliente *
+                        {{ t('quote_form.client') }} *
                         <input
                             v-model="quoteClientName"
                             type="text"
                             class="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white"
-                            placeholder="Nome e cognome"
+                            :placeholder="t('quote_form.client_placeholder')"
                         />
                     </label>
                     <label class="grid gap-2 text-sm text-neutral-300">
-                        Telefono
+                        {{ t('quote_form.phone') }}
                         <input
                             v-model="quoteClientPhone"
                             type="tel"
@@ -1798,7 +2105,7 @@ watch(
                         />
                     </label>
                     <label class="grid gap-2 text-sm text-neutral-300">
-                        Email
+                        {{ t('quote_form.email') }}
                         <input
                             v-model="quoteClientEmail"
                             type="email"
@@ -1817,7 +2124,7 @@ watch(
                         class="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-900"
                         @click="showQuoteModal = false"
                     >
-                        Annulla
+                        {{ t('actions.cancel') }}
                     </button>
                     <button
                         type="button"
@@ -1825,7 +2132,7 @@ watch(
                         class="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
                         @click="generateQuote"
                     >
-                        Genera preventivo
+                        {{ t('actions.generate_quote') }}
                     </button>
                 </div>
             </section>

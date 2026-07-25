@@ -33,6 +33,8 @@ class ConfiguratorController extends Controller
             ->get();
 
         return Inertia::render('Configurator', [
+            'locale' => app()->getLocale(),
+            'translations' => trans('configurator'),
             'vehicles' => $screenProducts->map(fn (ConfiguratorProduct $product) => [
                 'id' => $product->id,
                 'handle' => $product->handle,
