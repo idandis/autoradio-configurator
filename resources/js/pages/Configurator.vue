@@ -124,11 +124,11 @@ const brands = computed(() => [
 const selectedBrand = ref<string | null>(null);
 const selectedModel = ref<string | null>(null);
 const selectedYear = ref<number | null>(null);
-const selectedScreenVariantId = ref<number | null>(null);
+const selectedScreenVariantIds = ref<number[]>([]);
 const selectedCameraKeys = ref<string[]>([]);
-const selectedSpeakerSize = ref<string>('');
-const selectedSpeakerCategory = ref<string>('');
-const selectedSpeakerKey = ref<string | null>(null);
+const selectedSpeakerSizes = ref<string[]>([]);
+const selectedSpeakerCategories = ref<string[]>([]);
+const selectedSpeakerKeys = ref<string[]>([]);
 const selectedInstallationKey = ref<string | null>(null);
 const installationRequested = ref(false);
 const openSteps = ref<string[]>([]);
@@ -292,29 +292,29 @@ const selectedVehicle = computed(
     () =>
         compatibleVehicles.value.find((vehicle) =>
             vehicle.variants.some(
-                (variant) => variant.id === selectedScreenVariantId.value,
+                (variant) => selectedScreenVariantIds.value.includes(variant.id),
             ),
         ) ?? null,
 );
 
-const selectedScreen = computed(() => {
-    for (const vehicle of compatibleVehicles.value) {
-        const variant = vehicle.variants.find(
-            (candidate) => candidate.id === selectedScreenVariantId.value,
-        );
-
-        if (variant) {
-            return variant;
-        }
-    }
-
-    return null;
-});
+const selectedScreens = computed(() =>
+    compatibleVehicles.value.flatMap((vehicle) =>
+        vehicle.variants.filter((variant) =>
+            selectedScreenVariantIds.value.includes(variant.id),
+        ),
+    ),
+);
 
 const toggleScreenVariant = (variantId: number) => {
-    selectedScreenVariantId.value =
-        selectedScreenVariantId.value === variantId ? null : variantId;
+    selectedScreenVariantIds.value = selectedScreenVariantIds.value.includes(variantId)
+        ? selectedScreenVariantIds.value.filter((selectedId) => selectedId !== variantId)
+        : [...selectedScreenVariantIds.value, variantId];
 };
+
+const vehicleForScreenVariant = (variantId: number) =>
+    compatibleVehicles.value.find((vehicle) =>
+        vehicle.variants.some((variant) => variant.id === variantId),
+    ) ?? null;
 
 const screenImage = (vehicle: Vehicle) =>
     vehicle.image ?? vehicle.variants.find((variant) => variant.image)?.image ?? null;
@@ -592,10 +592,24 @@ const speakerCategories = computed(() =>
 
 const speakerSizes = computed(() =>
     [...new Set(props.speakerOptions
-        .filter((speaker) => speaker.categories.includes(selectedSpeakerCategory.value))
+        .filter((speaker) => speaker.categories.some((category) =>
+            selectedSpeakerCategories.value.includes(category),
+        ))
         .flatMap((speaker) => speaker.sizes))]
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
 );
+
+const toggleSpeakerCategory = (category: string) => {
+    selectedSpeakerCategories.value = selectedSpeakerCategories.value.includes(category)
+        ? selectedSpeakerCategories.value.filter((selectedCategory) => selectedCategory !== category)
+        : [...selectedSpeakerCategories.value, category];
+};
+
+const toggleSpeakerSize = (size: string) => {
+    selectedSpeakerSizes.value = selectedSpeakerSizes.value.includes(size)
+        ? selectedSpeakerSizes.value.filter((selectedSize) => selectedSize !== size)
+        : [...selectedSpeakerSizes.value, size];
+};
 
 const formatSpeakerSize = (value: string) => {
     const slug = value
@@ -632,19 +646,25 @@ const formatSpeakerCategory = (category: string) => {
 };
 
 const visibleSpeakerOptions = computed(() =>
-    selectedSpeakerCategory.value === '' || selectedSpeakerSize.value === ''
+    selectedSpeakerCategories.value.length === 0 || selectedSpeakerSizes.value.length === 0
         ? []
         : props.speakerOptions.filter((speaker) =>
-            speaker.categories.includes(selectedSpeakerCategory.value) &&
-            speaker.sizes.includes(selectedSpeakerSize.value),
+            speaker.categories.some((category) => selectedSpeakerCategories.value.includes(category)) &&
+            speaker.sizes.some((size) => selectedSpeakerSizes.value.includes(size)),
         ),
 );
 
-const selectedSpeaker = computed(() =>
-    visibleSpeakerOptions.value.find(
-        (speaker) => speaker.key === selectedSpeakerKey.value,
-    ) ?? null,
+const selectedSpeakers = computed(() =>
+    visibleSpeakerOptions.value.filter((speaker) =>
+        selectedSpeakerKeys.value.includes(speaker.key),
+    ),
 );
+
+const toggleSpeaker = (key: string) => {
+    selectedSpeakerKeys.value = selectedSpeakerKeys.value.includes(key)
+        ? selectedSpeakerKeys.value.filter((selectedKey) => selectedKey !== key)
+        : [...selectedSpeakerKeys.value, key];
+};
 
 const matchedInstallationZone = computed(() => {
     if (resolvedInstallationArea.value) {
@@ -695,16 +715,16 @@ const serviceZones = computed(() => [
 ]);
 
 const hasSelectedProducts = computed(
-    () => Boolean(selectedScreen.value || selectedCameras.value.length || selectedSpeaker.value),
+    () => Boolean(selectedScreens.value.length || selectedCameras.value.length || selectedSpeakers.value.length),
 );
 const requiresPrecheck = computed(
-    () => selectedCameras.value.length > 0 || Boolean(selectedSpeaker.value),
+    () => selectedCameras.value.length > 0 || selectedSpeakers.value.length > 0,
 );
 
 const requiredInstallationSubtype = computed(() => {
-    const hasScreen = Boolean(selectedScreen.value);
+    const hasScreen = selectedScreens.value.length > 0;
     const hasCamera = selectedCameras.value.length > 0;
-    const hasSpeaker = Boolean(selectedSpeaker.value);
+    const hasSpeaker = selectedSpeakers.value.length > 0;
 
     if (hasScreen && hasCamera && !hasSpeaker) return 'screen_camera';
     if (hasScreen && !hasCamera && hasSpeaker) return 'speaker_screen';
@@ -788,9 +808,9 @@ const selectedInstallation = computed(
 
 const productsSubtotal = computed(
     () =>
-        (selectedScreen.value?.price ?? 0) +
+        selectedScreens.value.reduce((sum, screen) => sum + screen.price, 0) +
         selectedCameras.value.reduce((sum, camera) => sum + camera.price, 0) +
-        (selectedSpeaker.value?.price ?? 0),
+        selectedSpeakers.value.reduce((sum, speaker) => sum + speaker.price, 0),
 );
 
 const total = computed(
@@ -828,12 +848,14 @@ const discountedTotal = computed(() => total.value - discountAmount.value);
 const checkoutLineItems = computed(() => {
     const items: Array<{ variantId: string; quantity: number }> = [];
 
-    if (selectedScreen.value?.shopifyVariantId) {
-        items.push({
-            variantId: selectedScreen.value.shopifyVariantId,
-            quantity: 1,
-        });
-    }
+    selectedScreens.value.forEach((screen) => {
+        if (screen.shopifyVariantId) {
+            items.push({
+                variantId: screen.shopifyVariantId,
+                quantity: 1,
+            });
+        }
+    });
 
     selectedCameras.value.forEach((camera) => {
         if (camera.shopifyVariantId) {
@@ -844,12 +866,14 @@ const checkoutLineItems = computed(() => {
         }
     });
 
-    if (selectedSpeaker.value?.shopifyVariantId) {
-        items.push({
-            variantId: selectedSpeaker.value.shopifyVariantId,
-            quantity: 1,
-        });
-    }
+    selectedSpeakers.value.forEach((speaker) => {
+        if (speaker.shopifyVariantId) {
+            items.push({
+                variantId: speaker.shopifyVariantId,
+                quantity: 1,
+            });
+        }
+    });
 
     if (
         selectedInstallation.value?.shopifyVariantId
@@ -879,7 +903,7 @@ const canCheckout = computed(() => {
         return false;
     }
 
-    if (selectedScreen.value && !selectedScreen.value.shopifyVariantId) {
+    if (selectedScreens.value.some((screen) => !screen.shopifyVariantId)) {
         return false;
     }
 
@@ -887,7 +911,7 @@ const canCheckout = computed(() => {
         return false;
     }
 
-    if (selectedSpeaker.value && !selectedSpeaker.value.shopifyVariantId) {
+    if (selectedSpeakers.value.some((speaker) => !speaker.shopifyVariantId)) {
         return false;
     }
 
@@ -906,7 +930,7 @@ const canCheckout = computed(() => {
     }
 
     return (
-        (selectedScreen.value !== null || selectedCameras.value.length > 0 || selectedSpeaker.value !== null || selectedInstallation.value !== null) &&
+        (selectedScreens.value.length > 0 || selectedCameras.value.length > 0 || selectedSpeakers.value.length > 0 || selectedInstallation.value !== null) &&
         checkoutLineItems.value.length > 0
     );
 });
@@ -1042,18 +1066,19 @@ const generateQuote = async () => {
         price: number;
     }> = [];
 
-    if (selectedScreen.value) {
+    selectedScreens.value.forEach((screen) => {
+        const vehicle = vehicleForScreenVariant(screen.id);
         items.push({
             code:
-                selectedScreen.value.shopifyVariantId ||
-                selectedScreen.value.sku ||
-                selectedVehicle.value?.handle ||
+                screen.shopifyVariantId ||
+                screen.sku ||
+                vehicle?.handle ||
                 'PANTALLA',
-            description: `${selectedVehicle.value?.title ?? t('print.screen')} — ${t('print.variant', { variant: selectedScreen.value.title })}`,
+            description: `${vehicle?.title ?? t('print.screen')} — ${t('print.variant', { variant: screen.title })}`,
             quantity: 1,
-            price: selectedScreen.value.price,
+            price: screen.price,
         });
-    }
+    });
 
     selectedCameras.value.forEach((camera) => {
         items.push({
@@ -1064,14 +1089,14 @@ const generateQuote = async () => {
         });
     });
 
-    if (selectedSpeaker.value) {
+    selectedSpeakers.value.forEach((speaker) => {
         items.push({
-            code: selectedSpeaker.value.sku || selectedSpeaker.value.handle,
-            description: selectedSpeaker.value.productTitle,
+            code: speaker.sku || speaker.handle,
+            description: speaker.productTitle,
             quantity: 1,
-            price: selectedSpeaker.value.price,
+            price: speaker.price,
         });
-    }
+    });
 
     if (selectedInstallation.value) {
         items.push({
@@ -1299,13 +1324,18 @@ watch(
     { immediate: true },
 );
 
-watch(selectedSpeakerSize, () => {
-    selectedSpeakerKey.value = null;
+watch(speakerSizes, (nextSizes) => {
+    const availableSizes = new Set(nextSizes);
+    selectedSpeakerSizes.value = selectedSpeakerSizes.value.filter((size) =>
+        availableSizes.has(size),
+    );
 });
 
-watch(selectedSpeakerCategory, () => {
-    selectedSpeakerSize.value = '';
-    selectedSpeakerKey.value = null;
+watch(visibleSpeakerOptions, (nextOptions) => {
+    const visibleKeys = new Set(nextOptions.map((option) => option.key));
+    selectedSpeakerKeys.value = selectedSpeakerKeys.value.filter((key) =>
+        visibleKeys.has(key),
+    );
 });
 
 watch(
@@ -1321,15 +1351,12 @@ watch(
 watch(
     compatibleVehicles,
     (vehicles) => {
-        const selectionIsStillAvailable = vehicles.some((vehicle) =>
-            vehicle.variants.some(
-                (variant) => variant.id === selectedScreenVariantId.value,
-            ),
+        const availableVariantIds = new Set(
+            vehicles.flatMap((vehicle) => vehicle.variants.map((variant) => variant.id)),
         );
-
-        if (!selectionIsStillAvailable) {
-            selectedScreenVariantId.value = null;
-        }
+        selectedScreenVariantIds.value = selectedScreenVariantIds.value.filter((variantId) =>
+            availableVariantIds.has(variantId),
+        );
     },
     { immediate: true },
 );
@@ -1529,7 +1556,7 @@ watch(
                                                     @click="toggleScreenVariant(variant.id)"
                                                     class="group flex min-h-10 w-full items-center justify-between gap-4 rounded-lg border px-3 py-2 text-left text-sm font-medium leading-tight transition"
                                                     :class="
-                                                        selectedScreenVariantId === variant.id
+                                                        selectedScreenVariantIds.includes(variant.id)
                                                             ? 'border-amber-400 bg-amber-400 text-black'
                                                             : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'
                                                     "
@@ -1538,7 +1565,7 @@ watch(
                                                     <span
                                                         class="shrink-0 whitespace-nowrap text-xs"
                                                         :class="
-                                                            selectedScreenVariantId === variant.id
+                                                            selectedScreenVariantIds.includes(variant.id)
                                                                 ? 'text-black/70'
                                                                 : 'text-amber-400 group-hover:text-black'
                                                         "
@@ -1641,20 +1668,17 @@ watch(
                                             type="button"
                                             class="rounded-lg border px-4 py-3 text-sm transition"
                                             :class="
-                                                selectedSpeakerCategory === category
+                                                selectedSpeakerCategories.includes(category)
                                                     ? 'border-amber-400 bg-amber-400 text-black'
                                                     : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'
                                             "
-                                            @click="
-                                                selectedSpeakerCategory =
-                                                    selectedSpeakerCategory === category ? '' : category
-                                            "
+                                            @click="toggleSpeakerCategory(category)"
                                         >
                                             {{ formatSpeakerCategory(category) }}
                                         </button>
                                     </div>
                                 </div>
-                                <div v-if="selectedSpeakerCategory">
+                                <div v-if="selectedSpeakerCategories.length">
                                 <p class="mb-2 block text-sm font-medium text-neutral-300">
                                     {{ t('speaker.size') }}
                                 </p>
@@ -1664,8 +1688,8 @@ watch(
                                         :key="size"
                                         type="button"
                                         class="rounded-lg border px-4 py-3 text-sm transition"
-                                        :class="selectedSpeakerSize === size ? 'border-amber-400 bg-amber-400 text-black' : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'"
-                                        @click="selectedSpeakerSize = selectedSpeakerSize === size ? '' : size"
+                                        :class="selectedSpeakerSizes.includes(size) ? 'border-amber-400 bg-amber-400 text-black' : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'"
+                                        @click="toggleSpeakerSize(size)"
                                     >
                                         {{ formatSpeakerSize(size) }}
                                     </button>
@@ -1678,12 +1702,12 @@ watch(
                                     v-for="speaker in visibleSpeakerOptions"
                                     :key="speaker.key"
                                     class="group relative overflow-hidden rounded-xl border transition"
-                                    :class="selectedSpeakerKey === speaker.key ? 'border-amber-400 bg-neutral-900' : 'border-neutral-800 bg-[#121212] hover:border-neutral-700'"
+                                    :class="selectedSpeakerKeys.includes(speaker.key) ? 'border-amber-400 bg-neutral-900' : 'border-neutral-800 bg-[#121212] hover:border-neutral-700'"
                                 >
                                     <button
                                         type="button"
                                         class="grid h-full w-full gap-3 p-4 pt-16 text-left"
-                                        @click="selectedSpeakerKey = selectedSpeakerKey === speaker.key ? null : speaker.key"
+                                        @click="toggleSpeaker(speaker.key)"
                                     >
                                         <img
                                             v-if="speaker.image"
@@ -1707,7 +1731,7 @@ watch(
                                     </a>
                                 </article>
                             </div>
-                            <p v-else-if="selectedSpeakerCategory && selectedSpeakerSize" class="mt-4 text-sm text-neutral-500">
+                            <p v-else-if="selectedSpeakerCategories.length && selectedSpeakerSizes.length" class="mt-4 text-sm text-neutral-500">
                                 {{ t('speaker.no_options') }}
                             </p>
                             </div>
@@ -1977,7 +2001,7 @@ watch(
                     </p>
 
                     <div
-                        v-if="selectedScreen || selectedCameras.length || selectedSpeaker"
+                        v-if="selectedScreens.length || selectedCameras.length || selectedSpeakers.length"
                         class="mt-4 rounded-xl border px-4 py-3 text-sm"
                         :class="
                             activeDiscount
@@ -2021,27 +2045,35 @@ watch(
                             </div>
 
                         <div class="space-y-3 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-                            <div v-if="selectedScreen" class="flex items-start justify-between gap-4">
+                            <div
+                                v-for="screen in selectedScreens"
+                                :key="screen.id"
+                                class="flex items-start justify-between gap-4"
+                            >
                                 <div>
                                     <p class="font-medium text-neutral-100">
-                                        {{ selectedScreen?.title }}
+                                        {{ screen.title }}
                                     </p>
                                     <p class="text-sm text-neutral-500">{{ t('screen.label') }}</p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
-                                    {{ (selectedScreen?.price ?? 0).toFixed(2) }} €
+                                    {{ screen.price.toFixed(2) }} €
                                 </p>
                             </div>
 
-                            <div v-if="selectedSpeaker" class="flex items-start justify-between gap-4">
+                            <div
+                                v-for="speaker in selectedSpeakers"
+                                :key="speaker.key"
+                                class="flex items-start justify-between gap-4"
+                            >
                                 <div>
                                     <p class="font-medium text-neutral-100">
-                                        {{ selectedSpeaker?.productTitle ?? t('speaker.none') }}
+                                        {{ speaker.productTitle }}
                                     </p>
                                     <p class="text-sm text-neutral-500">{{ t('speaker.label') }}</p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
-                                    {{ (selectedSpeaker?.price ?? 0).toFixed(2) }} €
+                                    {{ speaker.price.toFixed(2) }} €
                                 </p>
                             </div>
 
