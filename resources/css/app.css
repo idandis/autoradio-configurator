@@ -2,6 +2,18 @@
 
 @import 'tw-animate-css';
 
+/* Autoradio Canario brand palette */
+@layer utilities {
+    .bg-\[\#121212\], .bg-neutral-900, .bg-neutral-900\/80 { background-color: #121212 !important; }
+    .text-amber-400, .text-amber-300 { color: #D8AE2D !important; }
+    .border-amber-400, .border-amber-400\/70, .border-amber-400\/40 { border-color: #D8AE2D !important; }
+    .bg-amber-400 { background-color: #D8AE2D !important; }
+    .hover\:bg-amber-400:hover, .hover\:bg-amber-300:hover { background-color: #D8AE2D !important; }
+    .hover\:text-black:hover { color: #000 !important; }
+    .bg-red-600 { background-color: #CF3B1B !important; }
+    .hover\:bg-red-500:hover { background-color: #CF3B1B !important; }
+}
+
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 

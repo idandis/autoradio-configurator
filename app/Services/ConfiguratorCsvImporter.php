@@ -11,6 +11,28 @@ use RuntimeException;
 
 class ConfiguratorCsvImporter
 {
+    private const REQUIRED_HEADERS = [
+        'Title',
+        'Image Src',
+        'Option1 Value',
+        'Handle',
+        'ID',
+        'Variant ID',
+        'Type',
+        'Variant Price',
+        'Variant SKU',
+        'Price / Italia',
+        'Price / Resto del Mondo',
+        'Price / USA-CANADA',
+        'Price / spagna',
+        'Metafield: custom.radio_type [single_line_text_field]',
+        'Metafield: custom.altavoces [single_line_text_field]',
+        'Metafield: custom.modello_auto [single_line_text_field]',
+        'Metafield: custom.installazione [single_line_text_field]',
+        'Metafield: custom.anno [single_line_text_field]',
+        'Metafield: shopify.vehicle-coaxial-speaker-nominal-size [list.metaobject_reference]',
+    ];
+
     private const CAMERA_STANDARD_HANDLE = 'camara-trasera-estandar';
 
     private const CAMERA_SPECIFIC_HANDLE = 'camara-trasera-especifica';
@@ -54,6 +76,8 @@ class ConfiguratorCsvImporter
         if (! is_array($headers)) {
             throw new RuntimeException('Invalid file header.');
         }
+
+        $this->validateRequiredHeaders($headers);
 
         $grouped = [];
 
@@ -155,6 +179,34 @@ class ConfiguratorCsvImporter
         }
 
         return $mapped;
+    }
+
+    private function validateRequiredHeaders(array $headers): void
+    {
+        $normalizedHeaders = array_map(
+            fn ($header) => mb_strtolower($this->normalizeHeader($header)),
+            $headers,
+        );
+        $missing = [];
+
+        foreach (self::REQUIRED_HEADERS as $requiredHeader) {
+            if (! in_array(mb_strtolower($requiredHeader), $normalizedHeaders, true)) {
+                $missing[] = $requiredHeader;
+            }
+        }
+
+        if ($missing !== []) {
+            throw new RuntimeException(
+                'Import non eseguito. Mancano i campi essenziali: '.implode(', ', $missing).'.'
+            );
+        }
+    }
+
+    private function normalizeHeader(mixed $header): string
+    {
+        $header = str_replace("\u{FEFF}", '', (string) $this->sanitizeCsvValue($header));
+
+        return trim($header, " \t\n\r\0\x0B\"'");
     }
 
     private function buildProduct(string $handle, array $rows): ?array

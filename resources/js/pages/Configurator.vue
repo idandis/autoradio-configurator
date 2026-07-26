@@ -130,6 +130,54 @@ const selectedSpeakerSize = ref<string>('');
 const selectedSpeakerCategory = ref<string>('');
 const selectedSpeakerKey = ref<string | null>(null);
 const selectedInstallationKey = ref<string | null>(null);
+const installationRequested = ref(false);
+const openSteps = ref<string[]>([]);
+const toggleStep = (step: string) => {
+    openSteps.value = openSteps.value.includes(step)
+        ? openSteps.value.filter((openStep) => openStep !== step)
+        : [...openSteps.value, step];
+};
+const showMissingVehicleForm = ref(false);
+const missingVehicleSending = ref(false);
+const missingVehicleSent = ref(false);
+const missingVehicleError = ref('');
+const missingVehicleForm = ref({ first_name: '', last_name: '', email: '', phone: '', province: '', brand: '', model: '', year: '', comment: '', photo: null as File | null });
+
+const openMissingVehicleForm = () => {
+    missingVehicleSent.value = false;
+    missingVehicleError.value = '';
+    showMissingVehicleForm.value = true;
+};
+
+const submitMissingVehicleForm = async () => {
+    const requiredFields = ['first_name', 'last_name', 'email', 'phone', 'province', 'brand', 'model', 'year'] as const;
+    if (requiredFields.some((field) => !missingVehicleForm.value[field]) || !missingVehicleForm.value.photo) {
+        missingVehicleError.value = t('vehicle.form_required');
+        return;
+    }
+    missingVehicleSending.value = true;
+    missingVehicleError.value = '';
+    const payload = new FormData();
+    Object.entries(missingVehicleForm.value).forEach(([key, value]) => {
+        if (value) payload.append(key, value as string | Blob);
+    });
+    try {
+        const response = await fetch('/configurator/missing-vehicle', {
+            method: 'POST',
+            headers: { 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ?? '' },
+            body: payload,
+        });
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({}));
+            throw new Error(errorBody.message || `HTTP ${response.status}`);
+        }
+        missingVehicleSent.value = true;
+    } catch (error) {
+        missingVehicleError.value = error instanceof Error && error.message !== 'send' ? error.message : t('vehicle.form_error');
+    } finally {
+        missingVehicleSending.value = false;
+    }
+};
 const selectedPrecheckMethod = ref<'self' | 'installer' | null>(null);
 const selectedServiceZone = ref<'north' | 'capital' | 'south' | null>(null);
 const postalCode = ref('');
@@ -203,6 +251,10 @@ const compatibleVehicles = computed(() => {
     }
 
     return matchingVehicles.value.filter((vehicle) => {
+            // Never treat rear-camera products accidentally imported as screens as compatible screens.
+            if (/c[aá]mara|camera|telecamera/i.test(`${vehicle.title} ${vehicle.handle}`)) {
+                return false;
+            }
             if (vehicle.yearFrom === null || vehicle.yearTo === null) {
                 return false;
             }
@@ -268,7 +320,10 @@ const screenImage = (vehicle: Vehicle) =>
     vehicle.image ?? vehicle.variants.find((variant) => variant.image)?.image ?? null;
 
 const screenProductUrl = (vehicle: Vehicle) =>
-    `https://www.autoradiocanario.com/products/${encodeURIComponent(vehicle.handle)}`;
+    storefrontUrl(`/products/${encodeURIComponent(vehicle.handle)}`);
+
+const productUrl = (handle: string) =>
+    storefrontUrl(`/products/${encodeURIComponent(handle)}`);
 
 const failedVehicleImage = ref<string | null>(null);
 const zoomedImage = ref<{ src: string; alt: string } | null>(null);
@@ -475,17 +530,17 @@ watch(selectedBrandImageUrl, () => {
 });
 
 const visibleCameraOptions = computed(() => {
-    if (
-        selectedBrand.value === null ||
-        selectedModel.value === null ||
-        selectedYear.value === null
-    ) {
-        return [];
-    }
-
     return props.cameraOptions.filter((option) => {
         if (option.isStandard) {
             return true;
+        }
+
+        if (
+            selectedBrand.value === null ||
+            selectedModel.value === null ||
+            selectedYear.value === null
+        ) {
+            return false;
         }
 
         if (
@@ -554,6 +609,28 @@ const formatSpeakerSize = (value: string) => {
     return `${size}\u2033`;
 };
 
+const formatSpeakerCategory = (category: string) => {
+    const normalized = category
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .trim()
+        .toLocaleLowerCase();
+
+    const translationKeys: Record<string, string> = {
+        'rango completo': 'speaker.categories.full_range',
+        'full range': 'speaker.categories.full_range',
+        'gamma completa': 'speaker.categories.full_range',
+        'rango medio': 'speaker.categories.midrange',
+        midrange: 'speaker.categories.midrange',
+        'gamma media': 'speaker.categories.midrange',
+        subwoofer: 'speaker.categories.subwoofer',
+        tweeter: 'speaker.categories.tweeter',
+        woofer: 'speaker.categories.woofer',
+    };
+
+    return translationKeys[normalized] ? t(translationKeys[normalized]) : category;
+};
+
 const visibleSpeakerOptions = computed(() =>
     selectedSpeakerCategory.value === '' || selectedSpeakerSize.value === ''
         ? []
@@ -620,6 +697,9 @@ const serviceZones = computed(() => [
 const hasSelectedProducts = computed(
     () => Boolean(selectedScreen.value || selectedCameras.value.length || selectedSpeaker.value),
 );
+const requiresPrecheck = computed(
+    () => selectedCameras.value.length > 0 || Boolean(selectedSpeaker.value),
+);
 
 const requiredInstallationSubtype = computed(() => {
     const hasScreen = Boolean(selectedScreen.value);
@@ -638,9 +718,9 @@ const requiredInstallationSubtype = computed(() => {
 const visibleInstallationOptions = computed(() => {
     if (
         !matchedInstallationZone.value ||
-        !requiredInstallationSubtype.value ||
-        !selectedServiceZone.value ||
-        !selectedPrecheckMethod.value
+        (hasSelectedProducts.value && !requiredInstallationSubtype.value) ||
+        (hasSelectedProducts.value && !selectedServiceZone.value) ||
+        (requiresPrecheck.value && !selectedPrecheckMethod.value)
     ) {
         return [];
     }
@@ -649,7 +729,7 @@ const visibleInstallationOptions = computed(() => {
         (option) =>
             matchedInstallationZone.value!.productHandles.includes(option.key) &&
             option !== precheckProduct.value &&
-            option.subtype === requiredInstallationSubtype.value,
+            (!hasSelectedProducts.value || option.subtype === requiredInstallationSubtype.value),
     );
 });
 
@@ -794,11 +874,8 @@ const checkoutLineItems = computed(() => {
 });
 
 const canCheckout = computed(() => {
-    if (!selectedPrecheckMethod.value) {
-        return false;
-    }
-
-    if (isGranCanaria.value && !selectedServiceZone.value) {
+    // Installation and its pre-check are optional: products can be purchased alone.
+    if (hasSelectedProducts.value && (selectedInstallation.value || selectedPrecheckMethod.value) && isGranCanaria.value && !selectedServiceZone.value) {
         return false;
     }
 
@@ -829,7 +906,7 @@ const canCheckout = computed(() => {
     }
 
     return (
-        (selectedScreen.value !== null || selectedCameras.value.length > 0 || selectedSpeaker.value !== null) &&
+        (selectedScreen.value !== null || selectedCameras.value.length > 0 || selectedSpeaker.value !== null || selectedInstallation.value !== null) &&
         checkoutLineItems.value.length > 0
     );
 });
@@ -1274,6 +1351,13 @@ watch(
                     <p class="mt-3 max-w-3xl text-base text-neutral-400">
                         {{ t('intro.description') }}
                     </p>
+                    <button
+                        type="button"
+                        @click="openMissingVehicleForm"
+                        class="mt-4 inline-flex items-center justify-center rounded-lg border border-amber-400 px-4 py-3 text-center text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black"
+                    >
+                        {{ t('vehicle.missing') }}
+                    </button>
                 </div>
                 <div v-if="isAdmin" class="flex shrink-0 flex-col gap-2 sm:flex-row">
                     <button
@@ -1310,9 +1394,11 @@ watch(
             <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <section class="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
                     <div class="grid gap-6">
-                        <h2 class="text-2xl font-semibold text-amber-400">
+                        <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('vehicle')">{{ t('steps.vehicle') }}</button>
+                        <h2 v-if="openSteps.includes('vehicle')" class="text-2xl font-semibold text-amber-400">
                             {{ t('steps.vehicle') }}
                         </h2>
+                        <div v-if="openSteps.includes('vehicle')">
 
                         <div
                             class="grid gap-4"
@@ -1372,24 +1458,19 @@ watch(
                                         :class="
                                             selectedModel === model
                                                 ? 'border-amber-400 bg-amber-400 text-black'
-                                                : 'border-neutral-800 bg-[#121212] text-neutral-200 hover:border-neutral-700'
+                                                : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'
                                         "
                                     >
                                         {{ model }}
                                     </button>
                                 </div>
                             </div>
-                            <a
-                                :href="storefrontUrl('/pages/configura-tu-sistema-de-sonido-perfecto')"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="inline-flex min-h-12 items-center justify-center rounded-lg border border-amber-400 px-4 py-3 text-center text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black"
-                            >
-                                {{ t('vehicle.missing_model') }}
-                            </a>
                         </div>
 
+                        </div>
                         <div class="border-t border-neutral-800 pt-6">
+                            <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('screen')">{{ t('steps.screen') }}</button>
+                            <div v-if="openSteps.includes('screen')" class="mt-6">
                             <h2 class="text-2xl font-semibold text-amber-400">
                                 {{ t('steps.screen') }}
                             </h2>
@@ -1474,19 +1555,21 @@ watch(
                                 v-else-if="selectedBrand && selectedModel && selectedYear"
                                 class="mt-4 text-sm text-neutral-300"
                             >
-                                <a
-                                    :href="storefrontUrl('/pages/configura-tu-sistema-de-sonido-perfecto')"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                <button
+                                    type="button"
                                     class="font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
-                                >{{ t('screen.missing') }}</a>
+                                    @click="openMissingVehicleForm"
+                                >{{ t('screen.missing') }}</button>
                             </p>
                             <p v-else class="mt-4 text-sm text-neutral-500">
                                 {{ t('screen.select_vehicle') }}
                             </p>
+                            </div>
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
+                            <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('camera')">{{ t('steps.camera') }}</button>
+                            <div v-if="openSteps.includes('camera')" class="mt-6">
                             <h2 class="text-2xl font-semibold text-amber-400">
                                 {{ t('steps.camera') }}
                             </h2>
@@ -1521,7 +1604,7 @@ watch(
                                     </button>
 
                                     <a
-                                        :href="`https://www.autoradiocanario.com/products/${encodeURIComponent(camera.key)}`"
+                                        :href="productUrl(camera.key)"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         class="absolute left-1/2 top-3 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-amber-400 bg-[#121212]/90 px-3 py-2 text-xs font-semibold text-amber-400 shadow-lg backdrop-blur transition hover:bg-amber-400 hover:text-black"
@@ -1534,24 +1617,23 @@ watch(
                                 v-if="selectedBrand && selectedModel && selectedYear && !hasSpecificCameraOption"
                                 class="mt-4 text-sm text-neutral-300"
                             >
-                                <a
-                                    :href="storefrontUrl('/pages/configura-tu-sistema-de-sonido-perfecto')"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
+                                <button
+                                    type="button"
                                     class="font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
-                                >{{ t('camera.missing') }}</a>
+                                    @click="openMissingVehicleForm"
+                                >{{ t('camera.missing') }}</button>
                             </p>
+                            </div>
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
+                            <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('speaker')">{{ t('steps.speaker') }}</button>
+                            <div v-if="openSteps.includes('speaker')" class="mt-6">
                             <h2 class="text-2xl font-semibold text-amber-400">
                                 {{ t('steps.speaker') }}
                             </h2>
                             <div class="mt-4 grid max-w-2xl gap-4">
                                 <div>
-                                    <p class="mb-3 block text-sm font-medium text-neutral-300">
-                                        {{ t('speaker.type') }}
-                                    </p>
                                     <div class="flex flex-wrap gap-2">
                                         <button
                                             v-for="category in speakerCategories"
@@ -1561,31 +1643,33 @@ watch(
                                             :class="
                                                 selectedSpeakerCategory === category
                                                     ? 'border-amber-400 bg-amber-400 text-black'
-                                                    : 'border-neutral-800 bg-[#121212] text-neutral-200 hover:border-neutral-700'
+                                                    : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'
                                             "
                                             @click="
                                                 selectedSpeakerCategory =
                                                     selectedSpeakerCategory === category ? '' : category
                                             "
                                         >
-                                            {{ category }}
+                                            {{ formatSpeakerCategory(category) }}
                                         </button>
                                     </div>
                                 </div>
-                                <div v-if="selectedSpeakerCategory" class="max-w-sm">
-                                <label for="speaker-size" class="mb-2 block text-sm font-medium text-neutral-300">
+                                <div v-if="selectedSpeakerCategory">
+                                <p class="mb-2 block text-sm font-medium text-neutral-300">
                                     {{ t('speaker.size') }}
-                                </label>
-                                <select
-                                    id="speaker-size"
-                                    v-model="selectedSpeakerSize"
-                                    class="w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-sm text-white"
-                                >
-                                    <option value="">{{ t('speaker.select_size') }}</option>
-                                    <option v-for="size in speakerSizes" :key="size" :value="size">
+                                </p>
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        v-for="size in speakerSizes"
+                                        :key="size"
+                                        type="button"
+                                        class="rounded-lg border px-4 py-3 text-sm transition"
+                                        :class="selectedSpeakerSize === size ? 'border-amber-400 bg-amber-400 text-black' : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'"
+                                        @click="selectedSpeakerSize = selectedSpeakerSize === size ? '' : size"
+                                    >
                                         {{ formatSpeakerSize(size) }}
-                                    </option>
-                                </select>
+                                    </button>
+                                </div>
                                 </div>
                             </div>
 
@@ -1614,7 +1698,7 @@ watch(
                                         </div>
                                     </button>
                                     <a
-                                        :href="`https://www.autoradiocanario.com/products/${encodeURIComponent(speaker.handle)}`"
+                                        :href="productUrl(speaker.handle)"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         class="absolute left-1/2 top-3 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-amber-400 bg-[#121212]/90 px-3 py-2 text-xs font-semibold text-amber-400 shadow-lg transition hover:bg-amber-400 hover:text-black"
@@ -1626,16 +1710,22 @@ watch(
                             <p v-else-if="selectedSpeakerCategory && selectedSpeakerSize" class="mt-4 text-sm text-neutral-500">
                                 {{ t('speaker.no_options') }}
                             </p>
+                            </div>
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
-                            <h2 class="text-2xl font-semibold text-amber-400">
+                            <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('installation'); if (!hasSelectedProducts) installationRequested = true">{{ t('steps.installation') }}</button>
+                            <div v-if="openSteps.includes('installation')" class="mt-6">
+                            <h2 v-if="hasSelectedProducts" class="text-2xl font-semibold text-amber-400">
                                 {{ t('steps.installation') }}
                             </h2>
-                            <p class="mt-2 max-w-3xl text-sm leading-6 text-neutral-400">
+                            <p v-if="hasSelectedProducts" class="mt-2 max-w-3xl text-sm leading-6 text-neutral-400">
                                 {{ t('installation.intro') }}
                             </p>
-                            <div class="mt-4 rounded-xl border border-neutral-800 bg-[#121212] p-4">
+                            <button v-if="hasSelectedProducts && !installationRequested" type="button" class="mt-4 rounded-lg bg-amber-400 px-5 py-3 font-semibold text-black transition hover:bg-amber-300" @click="installationRequested = true">
+                                {{ t('installation.request_button') }}
+                            </button>
+                            <div v-if="installationRequested" class="mt-4 rounded-xl border border-neutral-800 bg-[#121212] p-4">
                                 <label for="postal-code" class="block text-sm font-medium text-neutral-200">
                                     {{ t('installation.question') }}
                                 </label>
@@ -1672,8 +1762,8 @@ watch(
                                 </p>
                             </div>
 
-                            <div v-if="checkedPostalCode && isGranCanaria" class="mt-4 grid gap-5 lg:grid-cols-[1.05fr_.95fr]">
-                                <div class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
+                            <div v-if="checkedPostalCode && isGranCanaria && hasSelectedProducts" class="mt-4 grid gap-5 lg:grid-cols-[1.05fr_.95fr]">
+                                <div v-if="hasSelectedProducts" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
                                     <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
                                         {{ t('installation.zone_step') }}
                                     </p>
@@ -1730,7 +1820,7 @@ watch(
                                     </div>
                                 </div>
 
-                                <div class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
+                                <div v-if="requiresPrecheck" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
                                     <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
                                         {{ t('installation.precheck_step') }}
                                     </p>
@@ -1768,7 +1858,7 @@ watch(
                                 </div>
                             </div>
 
-                            <div v-else-if="checkedPostalCode" class="mt-4 rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
+                            <div v-else-if="checkedPostalCode && requiresPrecheck" class="mt-4 rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
                                 <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
                                     {{ t('installation.precheck_step') }}
                                 </p>
@@ -1787,9 +1877,9 @@ watch(
                                 </button>
                             </div>
 
-                            <div v-if="selectedServiceZone && selectedPrecheckMethod" class="mt-6">
-                                <h3 class="text-lg font-semibold text-white">{{ t('installation.final_installation') }}</h3>
-                                <p class="mt-1 text-sm text-neutral-400">{{ t('installation.final_installation_help') }}</p>
+                            <div v-if="(!hasSelectedProducts && checkedPostalCode && isGranCanaria) || (selectedServiceZone && (selectedPrecheckMethod || !requiresPrecheck))" class="mt-6">
+                                <h3 class="text-lg font-semibold text-white">{{ t(hasSelectedProducts ? 'installation.final_installation' : 'installation.standalone_installation') }}</h3>
+                                <p class="mt-1 text-sm text-neutral-400">{{ t(hasSelectedProducts ? 'installation.final_installation_help' : 'installation.standalone_installation_help') }}</p>
                             <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                                 <article
                                     v-for="installation in visibleInstallationOptions"
@@ -1814,7 +1904,7 @@ watch(
                                         </p>
                                     </button>
                                     <a
-                                        :href="`https://www.autoradiocanario.com/products/${encodeURIComponent(installation.key)}`"
+                                        :href="productUrl(installation.key)"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         class="absolute left-1/2 top-3 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-amber-400 bg-[#121212]/90 px-3 py-2 text-xs font-semibold text-amber-400 shadow-lg transition hover:bg-amber-400 hover:text-black"
@@ -1826,6 +1916,7 @@ watch(
                                 <p v-if="hasSelectedProducts && !visibleInstallationOptions.length" class="mt-4 text-sm text-amber-400">
                                     {{ t('installation.contact_for_combination') }}
                                 </p>
+                            </div>
                             </div>
                         </div>
                     </div>
@@ -1937,7 +2028,7 @@ watch(
                                     </p>
                                     <p class="text-sm text-neutral-500">{{ t('screen.label') }}</p>
                                 </div>
-                                <p class="font-semibold">
+                                <p class="shrink-0 whitespace-nowrap font-semibold">
                                     {{ (selectedScreen?.price ?? 0).toFixed(2) }} €
                                 </p>
                             </div>
@@ -1949,7 +2040,7 @@ watch(
                                     </p>
                                     <p class="text-sm text-neutral-500">{{ t('speaker.label') }}</p>
                                 </div>
-                                <p class="font-semibold">
+                                <p class="shrink-0 whitespace-nowrap font-semibold">
                                     {{ (selectedSpeaker?.price ?? 0).toFixed(2) }} €
                                 </p>
                             </div>
@@ -1965,7 +2056,7 @@ watch(
                                     </p>
                                     <p class="text-sm text-neutral-500">{{ t('camera.label') }}</p>
                                 </div>
-                                <p class="font-semibold">
+                                <p class="shrink-0 whitespace-nowrap font-semibold">
                                     {{ camera.price.toFixed(2) }} €
                                 </p>
                             </div>
@@ -1977,7 +2068,7 @@ watch(
                                     </p>
                                     <p class="text-sm text-neutral-500">{{ t('installation.label') }}</p>
                                 </div>
-                                <p class="font-semibold">
+                                <p class="shrink-0 whitespace-nowrap font-semibold">
                                     {{ selectedInstallation.price.toFixed(2) }} €
                                 </p>
                             </div>
@@ -2138,6 +2229,20 @@ watch(
             </section>
         </div>
     </div>
+    <div v-if="showMissingVehicleForm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" @click.self="showMissingVehicleForm = false">
+        <div class="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-neutral-700 bg-neutral-900 p-6 shadow-2xl">
+            <div class="mb-6 flex items-start justify-between"><div><h2 class="text-2xl font-semibold text-amber-400">{{ t('vehicle.form_title') }}</h2><p class="mt-2 text-sm text-neutral-400">{{ t('vehicle.form_description') }}</p></div><button type="button" class="text-2xl text-neutral-400" @click="showMissingVehicleForm = false">×</button></div>
+            <div v-if="missingVehicleSent" class="rounded-lg border border-green-500/40 bg-green-500/10 p-4 text-green-300">{{ t('vehicle.form_success') }}</div>
+            <form v-else novalidate class="grid gap-4" @submit.prevent="submitMissingVehicleForm">
+                <div class="grid gap-4 sm:grid-cols-2"><input v-model="missingVehicleForm.first_name" required :placeholder="t('vehicle.first_name')" class="form-input" /><input v-model="missingVehicleForm.last_name" required :placeholder="t('vehicle.last_name')" class="form-input" /></div>
+                <input v-model="missingVehicleForm.email" required type="email" :placeholder="t('vehicle.email')" class="form-input" /><input v-model="missingVehicleForm.phone" required :placeholder="t('vehicle.phone')" class="form-input" /><input v-model="missingVehicleForm.province" required :placeholder="t('vehicle.province')" class="form-input" />
+                <div class="grid gap-4 sm:grid-cols-2"><input v-model="missingVehicleForm.brand" required :placeholder="t('fields.brand')" class="form-input" /><input v-model="missingVehicleForm.model" required :placeholder="t('fields.model')" class="form-input" /></div>
+                <input v-model="missingVehicleForm.year" required type="number" min="1900" max="2100" :placeholder="t('vehicle.year')" class="form-input" /><textarea v-model="missingVehicleForm.comment" rows="3" :placeholder="t('vehicle.comment')" class="form-input"></textarea>
+                <label class="upload-photo-button" :class="{ 'upload-photo-selected': missingVehicleForm.photo }"><span>{{ missingVehicleForm.photo ? missingVehicleForm.photo.name : t('vehicle.upload_photo') }}</span><input required type="file" accept="image/*" @change="missingVehicleForm.photo = ($event.target as HTMLInputElement).files?.[0] ?? null" /></label>
+                <p v-if="missingVehicleError" class="text-sm text-red-400">{{ missingVehicleError }}</p><button type="submit" :disabled="missingVehicleSending" class="rounded-lg bg-amber-400 px-4 py-3 font-semibold text-black">{{ missingVehicleSending ? t('vehicle.form_sending') : t('vehicle.form_submit') }}</button>
+            </form>
+        </div>
+    </div>
 </template>
 
 <style scoped>
@@ -2145,6 +2250,11 @@ watch(
     scrollbar-color: #525252 #171717;
     scrollbar-width: thin;
 }
+.form-input { width: 100%; border: 1px solid #404040; border-radius: 0.5rem; background: #121212; padding: 0.75rem 1rem; color: white; }
+.form-input::placeholder { color: #737373; }
+.upload-photo-button { position: relative; display: flex; min-height: 3.5rem; cursor: pointer; align-items: center; justify-content: center; border: 1px dashed #737373; border-radius: 0.5rem; padding: 0.75rem 1rem; color: #d4d4d4; text-align: center; }
+.upload-photo-button:hover, .upload-photo-selected { border-color: #fbbf24; background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
+.upload-photo-button input { position: absolute; inset: 0; height: 100%; width: 100%; cursor: pointer; opacity: 0; }
 
 .quote-scrollbar::-webkit-scrollbar {
     width: 8px;

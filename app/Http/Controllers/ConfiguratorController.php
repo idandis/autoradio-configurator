@@ -4,11 +4,48 @@ namespace App\Http\Controllers;
 
 use App\Models\ConfiguratorProduct;
 use App\Models\InstallationZone;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ConfiguratorController extends Controller
 {
+    public function missingVehicle(Request $request)
+    {
+        $data = $request->validate([
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'email', 'max:255'],
+            'phone' => ['required', 'string', 'max:50'],
+            'province' => ['required', 'string', 'max:100'],
+            'brand' => ['required', 'string', 'max:100'],
+            'model' => ['required', 'string', 'max:100'],
+            'year' => ['required', 'integer', 'between:1900,2100'],
+            'comment' => ['nullable', 'string', 'max:5000'],
+            'photo' => ['required', 'image', 'max:10240'],
+        ]);
+
+        $photo = $request->file('photo');
+        unset($data['photo']);
+        $body = "Nuovo form configuratore compilato\n\n";
+        foreach ($data as $key => $value) {
+            $body .= ucfirst(str_replace('_', ' ', $key)).": ".($value ?: '-')."\n";
+        }
+
+        try {
+            Mail::raw($body, function ($message) use ($photo) {
+                $message->to('info@autoradiocanario.com')->subject('Nuovo form configuratore compilato');
+                $message->attach($photo->getRealPath(), ['as' => $photo->getClientOriginalName(), 'mime' => $photo->getMimeType()]);
+            });
+        } catch (\Throwable $exception) {
+            report($exception);
+            return response()->json(['message' => 'Errore SMTP: '.$exception->getMessage()], 500);
+        }
+
+        return response()->json(['message' => 'ok']);
+    }
+
     public function __invoke(): Response
     {
         $screenProducts = ConfiguratorProduct::with('variants')

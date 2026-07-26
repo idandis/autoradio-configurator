@@ -30,6 +30,7 @@ Route::get('/', function () {
 });
 
 Route::get('/configurator', ConfiguratorController::class)->name('configurator.show');
+Route::post('/configurator/missing-vehicle', [ConfiguratorController::class, 'missingVehicle'])->name('configurator.missing-vehicle');
 Route::get('/configurator/postal-code/{postalCode}', ConfiguratorPostalCodeController::class)
     ->where('postalCode', '\\d{5}')
     ->name('configurator.postal-code');

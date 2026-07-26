@@ -17,6 +17,31 @@ class ConfiguratorImportTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_import_reports_all_missing_essential_headers_without_changing_the_catalog(): void
+    {
+        ConfiguratorProduct::create([
+            'handle' => 'existing-product',
+            'category' => 'screen',
+            'title' => 'Prodotto esistente',
+        ]);
+
+        $csv = <<<'CSV'
+Product Title,Variant Price
+Prodotto senza campi,99.00
+CSV;
+
+        $this->actingAs(User::factory()->create())
+            ->from(route('dashboard'))
+            ->post(route('dashboard.import'), [
+                'catalog' => UploadedFile::fake()->createWithContent('invalid.csv', $csv),
+                'mode' => 'replace',
+            ])
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHasErrors('catalog');
+
+        $this->assertDatabaseHas('configurator_products', ['handle' => 'existing-product']);
+    }
+
     public function test_csv_import_creates_configurator_products(): void
     {
         $csv = <<<'CSV'

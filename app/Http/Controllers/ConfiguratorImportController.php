@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\ConfiguratorCsvImporter;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use RuntimeException;
 
 class ConfiguratorImportController extends Controller
 {
@@ -17,10 +18,16 @@ class ConfiguratorImportController extends Controller
 
         $mode = $validated['mode'] ?? 'replace';
 
-        $stats = $importer->import(
-            $validated['catalog'],
-            replaceExistingDataset: $mode === 'replace',
-        );
+        try {
+            $stats = $importer->import(
+                $validated['catalog'],
+                replaceExistingDataset: $mode === 'replace',
+            );
+        } catch (RuntimeException $exception) {
+            return back()
+                ->withErrors(['catalog' => $exception->getMessage()])
+                ->withInput();
+        }
 
         return back()->with('status', sprintf(
             'Import %s completato: %d schermi, %d camere, %d altoparlanti, %d installazioni, %d varianti.',
