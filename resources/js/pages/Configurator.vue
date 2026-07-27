@@ -33,6 +33,9 @@ type SimpleOption = {
     subtype?: string | null;
     location?: string | null;
     isStandard?: boolean;
+    isStandardFront?: boolean;
+    isFront?: boolean;
+    isRear?: boolean;
     brand?: string | null;
     model?: string | null;
     yearFrom?: number | null;
@@ -126,8 +129,8 @@ const selectedModel = ref<string | null>(null);
 const selectedYear = ref<number | null>(null);
 const selectedScreenVariantIds = ref<number[]>([]);
 const selectedCameraKeys = ref<string[]>([]);
-const selectedSpeakerSizes = ref<string[]>([]);
-const selectedSpeakerCategories = ref<string[]>([]);
+const selectedSpeakerCategory = ref<string>('');
+const selectedSpeakerSizeByCategory = ref<Record<string, string>>({});
 const selectedSpeakerKeys = ref<string[]>([]);
 const selectedInstallationKey = ref<string | null>(null);
 const installationRequested = ref(false);
@@ -574,9 +577,20 @@ const selectedCameras = computed(() =>
 );
 
 const toggleCamera = (key: string) => {
-    selectedCameraKeys.value = selectedCameraKeys.value.includes(key)
-        ? selectedCameraKeys.value.filter((selectedKey) => selectedKey !== key)
-        : [...selectedCameraKeys.value, key];
+    const is360 = key === 'camara-360-para-radios-de-coche-android-con-vista-de-ave';
+    const has360 = selectedCameraKeys.value.includes('camara-360-para-radios-de-coche-android-con-vista-de-ave');
+
+    if (is360) {
+        selectedCameraKeys.value = has360 ? [] : [key];
+        return;
+    }
+
+    const without360 = selectedCameraKeys.value.filter(
+        (selectedKey) => selectedKey !== 'camara-360-para-radios-de-coche-android-con-vista-de-ave',
+    );
+    selectedCameraKeys.value = without360.includes(key)
+        ? without360.filter((selectedKey) => selectedKey !== key)
+        : [...without360, key];
 };
 
 const speakerCategories = computed(() =>
@@ -593,22 +607,25 @@ const speakerCategories = computed(() =>
 const speakerSizes = computed(() =>
     [...new Set(props.speakerOptions
         .filter((speaker) => speaker.categories.some((category) =>
-            selectedSpeakerCategories.value.includes(category),
+            category === selectedSpeakerCategory.value,
         ))
         .flatMap((speaker) => speaker.sizes))]
         .sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
 );
 
+const selectedSpeakerSizes = computed(() =>
+    selectedSpeakerSizeByCategory.value[selectedSpeakerCategory.value] ?? '',
+);
+
 const toggleSpeakerCategory = (category: string) => {
-    selectedSpeakerCategories.value = selectedSpeakerCategories.value.includes(category)
-        ? selectedSpeakerCategories.value.filter((selectedCategory) => selectedCategory !== category)
-        : [...selectedSpeakerCategories.value, category];
+    selectedSpeakerCategory.value = selectedSpeakerCategory.value === category ? '' : category;
 };
 
 const toggleSpeakerSize = (size: string) => {
-    selectedSpeakerSizes.value = selectedSpeakerSizes.value.includes(size)
-        ? selectedSpeakerSizes.value.filter((selectedSize) => selectedSize !== size)
-        : [...selectedSpeakerSizes.value, size];
+    selectedSpeakerSizeByCategory.value = {
+        ...selectedSpeakerSizeByCategory.value,
+        [selectedSpeakerCategory.value]: selectedSpeakerSizes.value === size ? '' : size,
+    };
 };
 
 const formatSpeakerSize = (value: string) => {
@@ -646,16 +663,16 @@ const formatSpeakerCategory = (category: string) => {
 };
 
 const visibleSpeakerOptions = computed(() =>
-    selectedSpeakerCategories.value.length === 0 || selectedSpeakerSizes.value.length === 0
+    selectedSpeakerCategory.value === '' || selectedSpeakerSizes.value === ''
         ? []
         : props.speakerOptions.filter((speaker) =>
-            speaker.categories.some((category) => selectedSpeakerCategories.value.includes(category)) &&
-            speaker.sizes.some((size) => selectedSpeakerSizes.value.includes(size)),
+            speaker.categories.includes(selectedSpeakerCategory.value) &&
+            speaker.sizes.includes(selectedSpeakerSizes.value),
         ),
 );
 
 const selectedSpeakers = computed(() =>
-    visibleSpeakerOptions.value.filter((speaker) =>
+    props.speakerOptions.filter((speaker) =>
         selectedSpeakerKeys.value.includes(speaker.key),
     ),
 );
@@ -718,18 +735,29 @@ const hasSelectedProducts = computed(
     () => Boolean(selectedScreens.value.length || selectedCameras.value.length || selectedSpeakers.value.length),
 );
 const requiresPrecheck = computed(
-    () => selectedCameras.value.length > 0 || selectedSpeakers.value.length > 0,
+    () => selectedScreens.value.length > 0,
 );
 
 const requiredInstallationSubtype = computed(() => {
     const hasScreen = selectedScreens.value.length > 0;
     const hasCamera = selectedCameras.value.length > 0;
     const hasSpeaker = selectedSpeakers.value.length > 0;
+    const hasCamera360 = selectedCameras.value.some(
+        (camera) => camera.key === 'camara-360-para-radios-de-coche-android-con-vista-de-ave',
+    );
+    const hasFrontCamera = selectedCameras.value.some((camera) => camera.isFront);
+    const hasRearCamera = selectedCameras.value.some((camera) => camera.isRear);
 
+    if (hasScreen && hasFrontCamera && hasRearCamera && !hasSpeaker) return 'screen_camera_front_rear';
+    if (hasScreen && hasCamera360 && selectedCameras.value.length === 1 && !hasSpeaker) return 'screen_camera_360';
+    if (hasCamera360 && selectedCameras.value.length === 1 && !hasScreen && !hasSpeaker) return 'camera_360';
+    if (!hasScreen && hasFrontCamera && hasRearCamera && !hasSpeaker) return 'camera_front_rear';
     if (hasScreen && hasCamera && !hasSpeaker) return 'screen_camera';
+    if (hasScreen && hasCamera && hasSpeaker) return 'screen_camera_speaker';
     if (hasScreen && !hasCamera && hasSpeaker) return 'speaker_screen';
     if (hasScreen && !hasCamera && !hasSpeaker) return 'screen_only';
     if (!hasScreen && hasCamera && !hasSpeaker) return 'camera_only';
+    if (!hasScreen && hasCamera && hasSpeaker) return 'camera_speaker';
     if (!hasScreen && !hasCamera && hasSpeaker) return 'speaker_only';
 
     return null;
@@ -745,12 +773,54 @@ const visibleInstallationOptions = computed(() => {
         return [];
     }
 
-    return props.installationOptions.filter(
-        (option) =>
-            matchedInstallationZone.value!.productHandles.includes(option.key) &&
+    const zoneName = matchedInstallationZone.value!.name.toLocaleLowerCase();
+
+    return props.installationOptions.filter((option) => {
+        const belongsToStandaloneZone =
+            !hasSelectedProducts.value &&
+            `${option.location ?? ''} ${option.title}`.toLocaleLowerCase().includes(zoneName);
+        const belongsToConfiguredCombination =
+            hasSelectedProducts.value &&
+            (matchedInstallationZone.value!.productHandles.includes(option.key) ||
+                `${option.location ?? ''} ${option.title}`.toLocaleLowerCase().includes(zoneName));
+        const optionText = option.title.toLocaleLowerCase();
+        const subtypeMatches = (option.subtype === requiredInstallationSubtype.value &&
+            !(['camera_only', 'screen_camera'].includes(requiredInstallationSubtype.value ?? '') &&
+                (optionText.includes('360') || optionText.includes('2 cam'))) &&
+            !(requiredInstallationSubtype.value === 'camera_only' &&
+                (optionText.includes('pantalla') || optionText.includes('screen') || optionText.includes('delantera') || optionText.includes('frontal'))) || (
+            ['camera_front_rear', 'screen_camera_front_rear'].includes(requiredInstallationSubtype.value ?? '') &&
+            (optionText.includes('trasera') || optionText.includes('rear')) &&
+            (optionText.includes('delantera') || optionText.includes('frontal') || optionText.includes('front')) &&
+            (requiredInstallationSubtype.value !== 'screen_camera_front_rear' || optionText.includes('pantalla') || optionText.includes('screen'))
+        ));
+        const multipleCameraScreenMatch =
+            requiredInstallationSubtype.value === 'screen_camera_front_rear' &&
+            (optionText.includes('pantalla') || optionText.includes('screen')) &&
+            /(?:2|dos)\s*(?:c[aá]maras?|cameras?)/.test(optionText);
+        const camera360Match =
+            requiredInstallationSubtype.value === 'camera_360' &&
+            optionText.includes('360');
+        const screenCamera360Match =
+            requiredInstallationSubtype.value === 'screen_camera_360' &&
+            (optionText.includes('pantalla') || optionText.includes('screen')) &&
+            optionText.includes('360');
+        const singleCameraMatch =
+            requiredInstallationSubtype.value === 'camera_only' &&
+            (optionText.includes('cámara') || optionText.includes('camara') || optionText.includes('camera')) &&
+            !optionText.includes('360') &&
+            !optionText.includes('pantalla') &&
+            !optionText.includes('screen') &&
+            !optionText.includes('delantera') &&
+            !optionText.includes('frontal') &&
+            !optionText.includes('2 cam');
+
+        return (
+            (belongsToStandaloneZone || belongsToConfiguredCombination) &&
             option !== precheckProduct.value &&
-            (!hasSelectedProducts.value || option.subtype === requiredInstallationSubtype.value),
-    );
+            (!hasSelectedProducts.value || subtypeMatches || multipleCameraScreenMatch || camera360Match || screenCamera360Match || singleCameraMatch)
+        );
+    });
 });
 
 const checkPostalCode = async () => {
@@ -898,41 +968,7 @@ const checkoutLineItems = computed(() => {
 });
 
 const canCheckout = computed(() => {
-    // Installation and its pre-check are optional: products can be purchased alone.
-    if (hasSelectedProducts.value && (selectedInstallation.value || selectedPrecheckMethod.value) && isGranCanaria.value && !selectedServiceZone.value) {
-        return false;
-    }
-
-    if (selectedScreens.value.some((screen) => !screen.shopifyVariantId)) {
-        return false;
-    }
-
-    if (selectedCameras.value.some((camera) => !camera.shopifyVariantId)) {
-        return false;
-    }
-
-    if (selectedSpeakers.value.some((speaker) => !speaker.shopifyVariantId)) {
-        return false;
-    }
-
-    if (
-        selectedInstallation.value &&
-        !selectedInstallation.value.shopifyVariantId
-    ) {
-        return false;
-    }
-
-    if (
-        selectedPrecheckMethod.value === 'installer' &&
-        !precheckProduct.value?.shopifyVariantId
-    ) {
-        return false;
-    }
-
-    return (
-        (selectedScreens.value.length > 0 || selectedCameras.value.length > 0 || selectedSpeakers.value.length > 0 || selectedInstallation.value !== null) &&
-        checkoutLineItems.value.length > 0
-    );
+    return checkoutLineItems.value.length > 0;
 });
 
 const checkoutUrl = computed(() => {
@@ -1324,20 +1360,6 @@ watch(
     { immediate: true },
 );
 
-watch(speakerSizes, (nextSizes) => {
-    const availableSizes = new Set(nextSizes);
-    selectedSpeakerSizes.value = selectedSpeakerSizes.value.filter((size) =>
-        availableSizes.has(size),
-    );
-});
-
-watch(visibleSpeakerOptions, (nextOptions) => {
-    const visibleKeys = new Set(nextOptions.map((option) => option.key));
-    selectedSpeakerKeys.value = selectedSpeakerKeys.value.filter((key) =>
-        visibleKeys.has(key),
-    );
-});
-
 watch(
     visibleInstallationOptions,
     (nextOptions) => {
@@ -1351,12 +1373,30 @@ watch(
 watch(
     compatibleVehicles,
     (vehicles) => {
+        if (
+            selectedModel.value !== null &&
+            vehicles.length > 0 &&
+            !openSteps.value.includes('screen')
+        ) {
+            openSteps.value = [...openSteps.value, 'screen'];
+        }
+
         const availableVariantIds = new Set(
             vehicles.flatMap((vehicle) => vehicle.variants.map((variant) => variant.id)),
         );
         selectedScreenVariantIds.value = selectedScreenVariantIds.value.filter((variantId) =>
             availableVariantIds.has(variantId),
         );
+    },
+    { immediate: true },
+);
+
+watch(
+    selectedScreens,
+    (screens) => {
+        if (screens.length > 0 && !openSteps.value.includes('screen')) {
+            openSteps.value = [...openSteps.value, 'screen'];
+        }
     },
     { immediate: true },
 );
@@ -1497,10 +1537,7 @@ watch(
                         </div>
                         <div class="border-t border-neutral-800 pt-6">
                             <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('screen')">{{ t('steps.screen') }}</button>
-                            <div v-if="openSteps.includes('screen')" class="mt-6">
-                            <h2 class="text-2xl font-semibold text-amber-400">
-                                {{ t('steps.screen') }}
-                            </h2>
+                            <div v-if="openSteps.includes('screen') || (selectedModel && compatibleVehicles.length)" class="mt-6">
                             <div v-if="selectedYear !== null && compatibleVehicles.length" class="mt-4 grid gap-5">
                                 <article
                                     v-for="vehicle in compatibleVehicles"
@@ -1623,7 +1660,7 @@ watch(
                                             class="h-24 w-full rounded-lg bg-[#121212] p-2 object-contain object-center sm:h-32 lg:h-28 xl:h-32"
                                         />
                                         <div>
-                                            <p class="font-medium">{{ camera.title }}</p>
+                                            <p class="font-medium">{{ camera.isStandardFront ? t('camera.standard_front') : camera.title }}</p>
                                             <p class="mt-1 text-lg font-semibold">
                                                 {{ camera.price.toFixed(2) }} €
                                             </p>
@@ -1668,7 +1705,7 @@ watch(
                                             type="button"
                                             class="rounded-lg border px-4 py-3 text-sm transition"
                                             :class="
-                                                selectedSpeakerCategories.includes(category)
+                                                selectedSpeakerCategory === category
                                                     ? 'border-amber-400 bg-amber-400 text-black'
                                                     : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'
                                             "
@@ -1678,7 +1715,7 @@ watch(
                                         </button>
                                     </div>
                                 </div>
-                                <div v-if="selectedSpeakerCategories.length">
+                                <div v-if="selectedSpeakerCategory">
                                 <p class="mb-2 block text-sm font-medium text-neutral-300">
                                     {{ t('speaker.size') }}
                                 </p>
@@ -1688,7 +1725,7 @@ watch(
                                         :key="size"
                                         type="button"
                                         class="rounded-lg border px-4 py-3 text-sm transition"
-                                        :class="selectedSpeakerSizes.includes(size) ? 'border-amber-400 bg-amber-400 text-black' : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'"
+                                        :class="selectedSpeakerSizes === size ? 'border-amber-400 bg-amber-400 text-black' : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'"
                                         @click="toggleSpeakerSize(size)"
                                     >
                                         {{ formatSpeakerSize(size) }}
@@ -1731,14 +1768,14 @@ watch(
                                     </a>
                                 </article>
                             </div>
-                            <p v-else-if="selectedSpeakerCategories.length && selectedSpeakerSizes.length" class="mt-4 text-sm text-neutral-500">
+                            <p v-else-if="selectedSpeakerCategory && selectedSpeakerSizes" class="mt-4 text-sm text-neutral-500">
                                 {{ t('speaker.no_options') }}
                             </p>
                             </div>
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
-                            <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('installation'); if (!hasSelectedProducts) installationRequested = true">{{ t('steps.installation') }}</button>
+                            <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('installation'); installationRequested = true">{{ t('steps.installation') }}</button>
                             <div v-if="openSteps.includes('installation')" class="mt-6">
                             <h2 v-if="hasSelectedProducts" class="text-2xl font-semibold text-amber-400">
                                 {{ t('steps.installation') }}
@@ -1746,9 +1783,6 @@ watch(
                             <p v-if="hasSelectedProducts" class="mt-2 max-w-3xl text-sm leading-6 text-neutral-400">
                                 {{ t('installation.intro') }}
                             </p>
-                            <button v-if="hasSelectedProducts && !installationRequested" type="button" class="mt-4 rounded-lg bg-amber-400 px-5 py-3 font-semibold text-black transition hover:bg-amber-300" @click="installationRequested = true">
-                                {{ t('installation.request_button') }}
-                            </button>
                             <div v-if="installationRequested" class="mt-4 rounded-xl border border-neutral-800 bg-[#121212] p-4">
                                 <label for="postal-code" class="block text-sm font-medium text-neutral-200">
                                     {{ t('installation.question') }}
@@ -1786,7 +1820,8 @@ watch(
                                 </p>
                             </div>
 
-                            <div v-if="checkedPostalCode && isGranCanaria && hasSelectedProducts" class="mt-4 grid gap-5 lg:grid-cols-[1.05fr_.95fr]">
+                            <div class="mt-4 grid gap-5 lg:grid-cols-[1.05fr_.95fr]">
+                            <div v-if="checkedPostalCode && isGranCanaria && hasSelectedProducts" class="contents">
                                 <div v-if="hasSelectedProducts" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
                                     <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
                                         {{ t('installation.zone_step') }}
@@ -1876,13 +1911,13 @@ watch(
                                         >
                                             <span class="block font-semibold text-white">{{ t('installation.precheck_installer_title') }}</span>
                                             <span class="mt-1 block text-sm leading-5 text-neutral-400">{{ t('installation.precheck_installer_description') }}</span>
-                                            <span class="mt-3 block text-lg font-semibold text-amber-400">{{ (precheckProduct?.price ?? 40).toFixed(2) }} €</span>
+                                            <span class="mt-3 block whitespace-nowrap text-lg font-semibold text-white">{{ (precheckProduct?.price ?? 40).toFixed(2) }} €</span>
                                         </button>
                                     </div>
                                 </div>
                             </div>
 
-                            <div v-else-if="checkedPostalCode && requiresPrecheck" class="mt-4 rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
+                            <div v-else-if="checkedPostalCode && requiresPrecheck" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
                                 <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
                                     {{ t('installation.precheck_step') }}
                                 </p>
@@ -1901,37 +1936,46 @@ watch(
                                 </button>
                             </div>
 
-                            <div v-if="(!hasSelectedProducts && checkedPostalCode && isGranCanaria) || (selectedServiceZone && (selectedPrecheckMethod || !requiresPrecheck))" class="mt-6">
-                                <h3 class="text-lg font-semibold text-white">{{ t(hasSelectedProducts ? 'installation.final_installation' : 'installation.standalone_installation') }}</h3>
+                            <div
+                                v-if="(!hasSelectedProducts && checkedPostalCode && isGranCanaria) || (selectedServiceZone && (selectedPrecheckMethod || !requiresPrecheck))"
+                                class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6"
+                                :class="requiresPrecheck ? 'lg:col-span-2' : ''"
+                            >
+                                <h3 class="text-sm font-semibold uppercase tracking-[0.24em] text-amber-400">{{ t(hasSelectedProducts ? 'installation.final_installation' : 'installation.standalone_installation') }}</h3>
                                 <p class="mt-1 text-sm text-neutral-400">{{ t(hasSelectedProducts ? 'installation.final_installation_help' : 'installation.standalone_installation_help') }}</p>
-                            <div class="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                            <div
+                                class="mt-4 grid gap-4"
+                                :class="requiresPrecheck ? 'md:grid-cols-2 xl:grid-cols-4' : 'grid-cols-1'"
+                            >
                                 <article
                                     v-for="installation in visibleInstallationOptions"
                                     :key="installation.key"
-                                    class="relative overflow-hidden rounded-xl border transition"
+                                    role="button"
+                                    tabindex="0"
+                                    class="relative cursor-pointer overflow-hidden rounded-xl border transition"
                                     :class="
                                         selectedInstallationKey === installation.key
-                                            ? 'border-amber-400 bg-neutral-900'
-                                            : 'border-neutral-800 bg-[#121212] hover:border-neutral-700'
+                                            ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400'
+                                            : 'border-neutral-700 bg-neutral-900 hover:border-amber-400'
                                     "
+                                    @click="selectedInstallationKey = selectedInstallationKey === installation.key ? null : installation.key"
+                                    @keydown.enter.prevent="selectedInstallationKey = selectedInstallationKey === installation.key ? null : installation.key"
+                                    @keydown.space.prevent="selectedInstallationKey = selectedInstallationKey === installation.key ? null : installation.key"
                                 >
-                                    <button
-                                        type="button"
-                                        class="grid h-full w-full gap-2 p-4 pt-16 text-left"
-                                        @click="selectedInstallationKey = selectedInstallationKey === installation.key ? null : installation.key"
-                                    >
+                                    <div class="grid min-h-40 w-full content-end gap-2 p-4 pt-16 text-left">
                                         <p class="text-sm font-medium text-neutral-100">
                                             {{ installation.title }}
                                         </p>
                                         <p class="text-lg font-semibold text-white">
                                             {{ installation.price.toFixed(2) }} €
                                         </p>
-                                    </button>
+                                    </div>
                                     <a
                                         :href="productUrl(installation.key)"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         class="absolute left-1/2 top-3 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-amber-400 bg-[#121212]/90 px-3 py-2 text-xs font-semibold text-amber-400 shadow-lg transition hover:bg-amber-400 hover:text-black"
+                                        @click.stop
                                     >
                                         {{ t('screen.product_details') }}
                                     </a>
@@ -1940,6 +1984,19 @@ watch(
                                 <p v-if="hasSelectedProducts && !visibleInstallationOptions.length" class="mt-4 text-sm text-amber-400">
                                     {{ t('installation.contact_for_combination') }}
                                 </p>
+                                <div v-if="hasSelectedProducts && !visibleInstallationOptions.length" class="mt-3 flex flex-wrap gap-3 text-sm">
+                                    <a
+                                        href="mailto:info@autoradiocanario.com"
+                                        class="font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
+                                    >{{ t('installation.contact_email') }}: info@autoradiocanario.com</a>
+                                    <a
+                                        href="https://wa.me/34694259117"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        class="font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
+                                    >{{ t('installation.contact_whatsapp') }}: +34 694 259 117</a>
+                                </div>
+                            </div>
                             </div>
                             </div>
                         </div>
@@ -2114,7 +2171,7 @@ watch(
                                         {{ serviceZones.find((zone) => zone.key === selectedServiceZone)?.label }}
                                     </p>
                                 </div>
-                                <p class="font-semibold" :class="precheckPrice ? 'text-amber-400' : 'text-emerald-400'">
+                                <p class="shrink-0 whitespace-nowrap font-semibold text-white">
                                     {{ precheckPrice ? `${precheckPrice.toFixed(2)} €` : t('installation.free') }}
                                 </p>
                             </div>

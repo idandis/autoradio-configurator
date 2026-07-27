@@ -4,11 +4,25 @@ namespace App\Http\Controllers;
 
 use App\Models\ConfiguratorProduct;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ImportedProductsController extends Controller
 {
+    public function updatePrice(Request $request, ConfiguratorProduct $product): RedirectResponse
+    {
+        $validated = $request->validate(['price' => ['required', 'numeric', 'min:0', 'max:999999.99']]);
+        $price = number_format((float) $validated['price'], 2, '.', '');
+        $product->update(['price_min' => $price]);
+
+        if ($product->variants()->count() === 1) {
+            $product->variants()->first()->update(['price' => $price]);
+        }
+
+        return back()->with('status', 'Prezzo aggiornato.');
+    }
+
     public function __invoke(Request $request): Response
     {
         $category = $request->string('category')->toString();

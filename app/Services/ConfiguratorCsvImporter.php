@@ -503,6 +503,19 @@ class ConfiguratorCsvImporter
                 return 'screen_camera';
             }
 
+            if (
+                (str_contains($needle, 'camara') || str_contains($needle, 'camera')) &&
+                (str_contains($needle, 'altavoz') || str_contains($needle, 'altoparl') || str_contains($needle, 'speaker'))
+            ) {
+                return str_contains($needle, 'pantalla') || str_contains($needle, 'screen')
+                    ? 'screen_camera_speaker'
+                    : 'camera_speaker';
+            }
+
+            if (str_contains($needle, 'pantalla') && (str_contains($needle, 'altavoz') || str_contains($needle, 'altoparl') || str_contains($needle, 'speaker'))) {
+                return 'speaker_screen';
+            }
+
             if (str_contains($needle, 'camara')) {
                 return 'camera_only';
             }
@@ -523,16 +536,36 @@ class ConfiguratorCsvImporter
 
         [$location, $type] = array_pad(array_map('trim', explode(',', $value, 2)), 2, '');
         $normalizedType = mb_strtolower($type);
-        $normalizedType = str_replace(['á', 'à', 'ä'], 'a', $normalizedType);
+        $normalizedType = strtr($normalizedType, ['á' => 'a', 'à' => 'a', 'ä' => 'a']);
         $normalizedType = preg_replace('/\s+/u', ' ', $normalizedType) ?? $normalizedType;
+        $compactType = preg_replace('/\s*\+\s*/', '+', $normalizedType) ?? $normalizedType;
 
-        $subtype = match ($normalizedType) {
-            'precheck', 'pre-check' => 'precheck',
-            'pantalla' => 'screen_only',
-            'pantalla+camara', 'pantalla + camara', 'pantalla+camera', 'pantalla + camera' => 'screen_camera',
-            'solo camara', 'camara', 'solo camera', 'camera' => 'camera_only',
-            'altavoces', 'altavoz', 'altoparlanti', 'speaker', 'speakers' => 'speaker_only',
-            'altavoces+pantalla', 'altavoces + pantalla', 'pantalla+altavoces', 'pantalla + altavoces' => 'speaker_screen',
+        $subtype = match (true) {
+            in_array($compactType, ['precheck', 'pre-check'], true) => 'precheck',
+            preg_match('/pantalla|screen/', $compactType) === 1 &&
+            preg_match('/camara|camera/', $compactType) === 1 &&
+            preg_match('/360/', $compactType) === 1 => 'screen_camera_360',
+            preg_match('/camara|camera/', $compactType) === 1 && preg_match('/360/', $compactType) === 1 => 'camera_360',
+            preg_match('/pantalla|screen/', $compactType) === 1 &&
+            preg_match('/camara|camera/', $compactType) === 1 &&
+            ((preg_match('/delantera|frontal|front/', $compactType) === 1 &&
+                preg_match('/trasera|rear/', $compactType) === 1) ||
+                preg_match('/(?:2|dos)\s*(?:camara|camera)/', $compactType) === 1) => 'screen_camera_front_rear',
+            preg_match('/pantalla|screen/', $compactType) === 1 &&
+                preg_match('/camara|camera/', $compactType) === 1 &&
+                preg_match('/altavoz|altoparl|speaker/', $compactType) === 1 => 'screen_camera_speaker',
+            preg_match('/camara|camera/', $compactType) === 1 &&
+                preg_match('/delantera|frontal|front/', $compactType) === 1 &&
+                preg_match('/trasera|rear/', $compactType) === 1 => 'camera_front_rear',
+            preg_match('/pantalla|screen/', $compactType) === 1 &&
+                preg_match('/camara|camera/', $compactType) === 1 => 'screen_camera',
+            preg_match('/pantalla|screen/', $compactType) === 1 &&
+                preg_match('/altavoz|altoparl|speaker/', $compactType) === 1 => 'speaker_screen',
+            preg_match('/camara|camera/', $compactType) === 1 &&
+                preg_match('/altavoz|altoparl|speaker/', $compactType) === 1 => 'camera_speaker',
+            preg_match('/pantalla|screen/', $compactType) === 1 => 'screen_only',
+            preg_match('/camara|camera/', $compactType) === 1 => 'camera_only',
+            preg_match('/altavoz|altoparl|speaker/', $compactType) === 1 => 'speaker_only',
             default => null,
         };
 

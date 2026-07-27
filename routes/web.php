@@ -44,6 +44,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/models/edit', [ModelsController::class, 'edit'])->name('models.edit');
     Route::put('/models', [ModelsController::class, 'update'])->name('models.update');
     Route::get('/imported-products', ImportedProductsController::class)->name('imported-products.index');
+    Route::patch('/imported-products/{product}/price', [ImportedProductsController::class, 'updatePrice'])->name('imported-products.price');
     Route::get('/installation-zones', [InstallationZonesController::class, 'index'])->name('installation-zones.index');
     Route::post('/installation-zones', [InstallationZonesController::class, 'store'])->name('installation-zones.store');
     Route::put('/installation-zones/{installationZone}', [InstallationZonesController::class, 'update'])->name('installation-zones.update');

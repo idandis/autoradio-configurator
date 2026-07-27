@@ -125,14 +125,31 @@ class ConfiguratorController extends Controller
         $options = [];
 
         foreach ($products as $product) {
+            $cameraVariant = $product->handle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave'
+                ? ($product->variants->first(fn ($variant) => mb_strtolower(trim((string) ($variant->option_value ?: $variant->title))) === '1080p ahd3d')
+                    ?? $product->variants->first())
+                : $product->variants->first();
+
             $options[] = [
                 'key' => $product->handle,
-                'title' => $product->title,
-                'price' => (float) $product->price_min,
+                'title' => $product->handle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave'
+                    ? 'Cámara 360° estandar'
+                    : $product->title,
+                'price' => (float) ($cameraVariant?->price ?? $product->price_min),
                 'image' => $product->image_url,
-                'shopifyVariantId' => $product->variants->first()?->shopify_variant_id,
-                'sku' => $product->variants->first()?->sku,
-                'isStandard' => $product->handle === 'camara-trasera-estandar',
+                'shopifyVariantId' => $cameraVariant?->shopify_variant_id,
+                'sku' => $cameraVariant?->sku,
+                'isStandard' => in_array($product->handle, [
+                    'camara-trasera-estandar',
+                    'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna',
+                    'camara-360-para-radios-de-coche-android-con-vista-de-ave',
+                ], true),
+                'isStandardFront' => $product->handle === 'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna',
+                'isFront' => $product->handle === 'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna' || $product->subtype === 'front',
+                'isRear' => $product->handle !== 'camara-360-para-radios-de-coche-android-con-vista-de-ave' &&
+                    ($product->handle === 'camara-trasera-estandar'
+                    || $product->subtype === 'rear'
+                    || ($product->subtype === 'ahd' && preg_match('/traser|rear/', mb_strtolower($product->title)) === 1)),
                 'brand' => $product->brand,
                 'model' => $product->model,
                 'yearFrom' => $product->year_from,

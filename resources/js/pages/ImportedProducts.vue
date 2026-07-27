@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, router } from '@inertiajs/vue3';
-import { reactive } from 'vue';
+import { reactive, ref } from 'vue';
 
 const props = defineProps<{
     filters: {
@@ -34,6 +34,22 @@ const filters = reactive({
     category: props.filters.category || '',
     search: props.filters.search || '',
 });
+const editingPrice = ref<number | null>(null);
+const priceDraft = ref('');
+const savingPrice = ref(false);
+
+const startPriceEdit = (product: (typeof props.products.data)[number]) => {
+    editingPrice.value = product.id;
+    priceDraft.value = product.price_min ?? '';
+};
+
+const savePrice = (product: (typeof props.products.data)[number]) => {
+    savingPrice.value = true;
+    router.patch(`/imported-products/${product.id}/price`, { price: priceDraft.value }, {
+        preserveScroll: true,
+        onFinish: () => { savingPrice.value = false; editingPrice.value = null; },
+    });
+};
 
 const applyFilters = () => {
     router.get(
@@ -175,7 +191,13 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                             {{ formatVehicle(product) }}
                         </td>
                         <td class="px-6 py-4 align-top">
-                            {{ product.price_min ? `${product.price_min} €` : 'N/D' }}
+                            <div v-if="editingPrice === product.id" class="flex items-center gap-2">
+                                <input v-model="priceDraft" type="number" min="0" step="0.01" class="w-28 rounded-md border border-sidebar-border/70 bg-background px-2 py-1" @keydown.enter.prevent="savePrice(product)" />
+                                <button type="button" class="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground" :disabled="savingPrice" @click="savePrice(product)">Salva</button>
+                            </div>
+                            <button v-else type="button" class="font-medium hover:text-primary" @click="startPriceEdit(product)">
+                                {{ product.price_min ? `${product.price_min} €` : 'N/D' }}
+                            </button>
                         </td>
                         <td class="px-6 py-4 align-top">
                             {{ product.variants_count }}
