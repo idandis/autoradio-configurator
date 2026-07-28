@@ -505,14 +505,14 @@ class ConfiguratorCsvImporter
 
             if (
                 (str_contains($needle, 'camara') || str_contains($needle, 'camera')) &&
-                (str_contains($needle, 'altavoz') || str_contains($needle, 'altoparl') || str_contains($needle, 'speaker'))
+                (str_contains($needle, 'altavoz') || str_contains($needle, 'altavoces') || str_contains($needle, 'altoparl') || str_contains($needle, 'speaker'))
             ) {
                 return str_contains($needle, 'pantalla') || str_contains($needle, 'screen')
                     ? 'screen_camera_speaker'
                     : 'camera_speaker';
             }
 
-            if (str_contains($needle, 'pantalla') && (str_contains($needle, 'altavoz') || str_contains($needle, 'altoparl') || str_contains($needle, 'speaker'))) {
+            if (str_contains($needle, 'pantalla') && (str_contains($needle, 'altavoz') || str_contains($needle, 'altavoces') || str_contains($needle, 'altoparl') || str_contains($needle, 'speaker'))) {
                 return 'speaker_screen';
             }
 
@@ -553,19 +553,20 @@ class ConfiguratorCsvImporter
                 preg_match('/(?:2|dos)\s*(?:camara|camera)/', $compactType) === 1) => 'screen_camera_front_rear',
             preg_match('/pantalla|screen/', $compactType) === 1 &&
                 preg_match('/camara|camera/', $compactType) === 1 &&
-                preg_match('/altavoz|altoparl|speaker/', $compactType) === 1 => 'screen_camera_speaker',
+                preg_match('/altav(?:oz|oces)|altoparl|speaker/', $compactType) === 1 => 'screen_camera_speaker',
             preg_match('/camara|camera/', $compactType) === 1 &&
-                preg_match('/delantera|frontal|front/', $compactType) === 1 &&
-                preg_match('/trasera|rear/', $compactType) === 1 => 'camera_front_rear',
+                ((preg_match('/delantera|frontal|front/', $compactType) === 1 &&
+                    preg_match('/trasera|rear/', $compactType) === 1) ||
+                    preg_match('/(?:2|dos)\s*(?:camara|camera)/', $compactType) === 1) => 'camera_front_rear',
             preg_match('/pantalla|screen/', $compactType) === 1 &&
                 preg_match('/camara|camera/', $compactType) === 1 => 'screen_camera',
             preg_match('/pantalla|screen/', $compactType) === 1 &&
-                preg_match('/altavoz|altoparl|speaker/', $compactType) === 1 => 'speaker_screen',
+                preg_match('/altav(?:oz|oces)|altoparl|speaker/', $compactType) === 1 => 'speaker_screen',
             preg_match('/camara|camera/', $compactType) === 1 &&
-                preg_match('/altavoz|altoparl|speaker/', $compactType) === 1 => 'camera_speaker',
+                preg_match('/altav(?:oz|oces)|altoparl|speaker/', $compactType) === 1 => 'camera_speaker',
             preg_match('/pantalla|screen/', $compactType) === 1 => 'screen_only',
             preg_match('/camara|camera/', $compactType) === 1 => 'camera_only',
-            preg_match('/altavoz|altoparl|speaker/', $compactType) === 1 => 'speaker_only',
+            preg_match('/altav(?:oz|oces)|altoparl|speaker/', $compactType) === 1 => 'speaker_only',
             default => null,
         };
 

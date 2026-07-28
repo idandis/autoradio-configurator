@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 
 type Variant = {
@@ -32,6 +32,7 @@ type SimpleOption = {
     sku?: string | null;
     subtype?: string | null;
     location?: string | null;
+    installationRaw?: string | null;
     isStandard?: boolean;
     isStandardFront?: boolean;
     isFront?: boolean;
@@ -144,6 +145,19 @@ const showMissingVehicleForm = ref(false);
 const missingVehicleSending = ref(false);
 const missingVehicleSent = ref(false);
 const missingVehicleError = ref('');
+const quoteTotals = ref<HTMLElement | null>(null);
+const mobileQuoteTotals = ref<HTMLElement | null>(null);
+const showMobileQuoteTotals = ref(false);
+const updateMobileQuoteTotals = () => {
+    if (!quoteTotals.value || !mobileQuoteTotals.value || window.innerWidth >= 1024) {
+        showMobileQuoteTotals.value = false;
+        return;
+    }
+
+    const fixedHeight = mobileQuoteTotals.value.offsetHeight;
+    showMobileQuoteTotals.value =
+        quoteTotals.value.getBoundingClientRect().top > window.innerHeight - fixedHeight;
+};
 const missingVehicleForm = ref({ first_name: '', last_name: '', email: '', phone: '', province: '', brand: '', model: '', year: '', comment: '', photo: null as File | null });
 
 const openMissingVehicleForm = () => {
@@ -271,6 +285,31 @@ const compatibleVehicles = computed(() => {
             );
         });
 });
+
+const toggleScreenStep = async () => {
+    const canJumpToFirstScreen =
+        window.innerWidth < 1024
+        && selectedBrand.value !== null
+        && selectedYear.value !== null
+        && selectedModel.value !== null
+        && compatibleVehicles.value.length > 0;
+
+    if (!canJumpToFirstScreen) {
+        toggleStep('screen');
+        return;
+    }
+
+    if (!openSteps.value.includes('screen')) {
+        openSteps.value = [...openSteps.value, 'screen'];
+    }
+
+    await nextTick();
+    window.requestAnimationFrame(() => {
+        document
+            .getElementById(`screen-product-${compatibleVehicles.value[0].id}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+};
 
 const selectedCompatibilityEntry = computed(() => {
     if (
@@ -418,9 +457,14 @@ const updateVariantAutoScroll = (event: PointerEvent) => {
 onMounted(() => {
     document.documentElement.lang = props.locale;
     window.addEventListener('keydown', closeImageZoomOnEscape);
+    window.addEventListener('scroll', updateMobileQuoteTotals, { passive: true });
+    window.addEventListener('resize', updateMobileQuoteTotals);
+    requestAnimationFrame(updateMobileQuoteTotals);
 });
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', closeImageZoomOnEscape);
+    window.removeEventListener('scroll', updateMobileQuoteTotals);
+    window.removeEventListener('resize', updateMobileQuoteTotals);
     stopVariantAutoScroll();
 });
 const failedBrandImage = ref<string | null>(null);
@@ -734,96 +778,113 @@ const serviceZones = computed(() => [
     { key: 'south' as const, label: t('installation.zone_south') },
 ]);
 
+const toggleServiceZone = (zone: 'north' | 'capital' | 'south') => {
+    selectedServiceZone.value = selectedServiceZone.value === zone ? null : zone;
+    selectedPrecheckMethod.value = null;
+    selectedInstallationKey.value = null;
+};
+
+const togglePrecheckMethod = (method: 'self' | 'installer') => {
+    selectedPrecheckMethod.value =
+        selectedPrecheckMethod.value === method ? null : method;
+    selectedInstallationKey.value = null;
+};
+
 const hasSelectedProducts = computed(
     () => Boolean(selectedScreens.value.length || selectedCameras.value.length || selectedSpeakers.value.length),
 );
 const requiresPrecheck = computed(
     () => selectedScreens.value.length > 0,
 );
+const showsInstallationZoneStep = computed(
+    () => Boolean(checkedPostalCode.value && isGranCanaria.value && hasSelectedProducts.value),
+);
+const precheckStepNumber = computed(
+    () => showsInstallationZoneStep.value ? 2 : 1,
+);
+const finalInstallationStepNumber = computed(
+    () => 1 +
+        (showsInstallationZoneStep.value ? 1 : 0) +
+        (requiresPrecheck.value ? 1 : 0),
+);
 
-const requiredInstallationSubtype = computed(() => {
+const normalizeInstallationValue = (value: string) =>
+    value
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase()
+        .replace(/\s*\+\s*/g, '+')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+const requiredInstallationCombination = computed(() => {
     const hasScreen = selectedScreens.value.length > 0;
     const hasCamera = selectedCameras.value.length > 0;
     const hasSpeaker = selectedSpeakers.value.length > 0;
     const hasCamera360 = selectedCameras.value.some(
         (camera) => camera.key === 'camara-360-para-radios-de-coche-android-con-vista-de-ave',
     );
-    const hasFrontCamera = selectedCameras.value.some((camera) => camera.isFront);
-    const hasRearCamera = selectedCameras.value.some((camera) => camera.isRear);
 
-    if (hasScreen && hasFrontCamera && hasRearCamera && !hasSpeaker) return 'screen_camera_front_rear';
-    if (hasScreen && hasCamera360 && selectedCameras.value.length === 1 && !hasSpeaker) return 'screen_camera_360';
-    if (hasCamera360 && selectedCameras.value.length === 1 && !hasScreen && !hasSpeaker) return 'camera_360';
-    if (!hasScreen && hasFrontCamera && hasRearCamera && !hasSpeaker) return 'camera_front_rear';
-    if (hasScreen && hasCamera && !hasSpeaker) return 'screen_camera';
-    if (hasScreen && hasCamera && hasSpeaker) return 'screen_camera_speaker';
-    if (hasScreen && !hasCamera && hasSpeaker) return 'speaker_screen';
-    if (hasScreen && !hasCamera && !hasSpeaker) return 'screen_only';
-    if (!hasScreen && hasCamera && !hasSpeaker) return 'camera_only';
-    if (!hasScreen && hasCamera && hasSpeaker) return 'camera_speaker';
-    if (!hasScreen && !hasCamera && hasSpeaker) return 'speaker_only';
+    if (hasCamera && hasSpeaker) return null;
+    if (hasSpeaker && !hasScreen) return null;
+
+    if (hasScreen && hasSpeaker) {
+        if (selectedSpeakers.value.length === 1) return '2 altavoces+pantalla';
+        if (selectedSpeakers.value.length === 2) return '4 altavoces+pantalla';
+        return null;
+    }
+
+    if (hasScreen && hasCamera360) return 'pantalla+camara 360';
+    if (hasScreen && selectedCameras.value.length >= 2) return 'pantalla+2 camara';
+    if (hasScreen && hasCamera) return 'pantalla+camara';
+    if (hasScreen) return 'pantalla';
+    if (hasCamera360) return 'camara 360';
+    if (selectedCameras.value.length >= 2) return '2 camara';
+    if (hasCamera) return 'camara';
 
     return null;
 });
 
+const optionInstallationCombination = (option: SimpleOption) => {
+    const raw = option.installationRaw ?? '';
+    const commaPosition = raw.indexOf(',');
+
+    if (commaPosition >= 0) {
+        return normalizeInstallationValue(raw.slice(commaPosition + 1));
+    }
+
+    return normalizeInstallationValue(option.subtype ?? '');
+};
+
 const visibleInstallationOptions = computed(() => {
     if (
         !matchedInstallationZone.value ||
-        (hasSelectedProducts.value && !requiredInstallationSubtype.value) ||
-        (hasSelectedProducts.value && !selectedServiceZone.value) ||
+        (hasSelectedProducts.value && !requiredInstallationCombination.value) ||
+        (hasSelectedProducts.value && isGranCanaria.value && !selectedServiceZone.value) ||
         (requiresPrecheck.value && !selectedPrecheckMethod.value)
     ) {
         return [];
     }
 
-    const zoneName = matchedInstallationZone.value!.name.toLocaleLowerCase();
+    const zoneName = normalizeInstallationValue(matchedInstallationZone.value.name);
+    const matchingOptions = props.installationOptions.filter((option) => {
+        const belongsToZone =
+            normalizeInstallationValue(option.location ?? '') === zoneName ||
+            matchedInstallationZone.value!.productHandles.includes(option.key);
 
-    return props.installationOptions.filter((option) => {
-        const belongsToStandaloneZone =
-            !hasSelectedProducts.value &&
-            `${option.location ?? ''} ${option.title}`.toLocaleLowerCase().includes(zoneName);
-        const belongsToConfiguredCombination =
-            hasSelectedProducts.value &&
-            (matchedInstallationZone.value!.productHandles.includes(option.key) ||
-                `${option.location ?? ''} ${option.title}`.toLocaleLowerCase().includes(zoneName));
-        const optionText = option.title.toLocaleLowerCase();
-        const subtypeMatches = (option.subtype === requiredInstallationSubtype.value &&
-            !(['camera_only', 'screen_camera'].includes(requiredInstallationSubtype.value ?? '') &&
-                (optionText.includes('360') || optionText.includes('2 cam'))) &&
-            !(requiredInstallationSubtype.value === 'camera_only' &&
-                (optionText.includes('pantalla') || optionText.includes('screen') || optionText.includes('delantera') || optionText.includes('frontal'))) || (
-            ['camera_front_rear', 'screen_camera_front_rear'].includes(requiredInstallationSubtype.value ?? '') &&
-            (optionText.includes('trasera') || optionText.includes('rear')) &&
-            (optionText.includes('delantera') || optionText.includes('frontal') || optionText.includes('front')) &&
-            (requiredInstallationSubtype.value !== 'screen_camera_front_rear' || optionText.includes('pantalla') || optionText.includes('screen'))
-        ));
-        const multipleCameraScreenMatch =
-            requiredInstallationSubtype.value === 'screen_camera_front_rear' &&
-            (optionText.includes('pantalla') || optionText.includes('screen')) &&
-            /(?:2|dos)\s*(?:c[aá]maras?|cameras?)/.test(optionText);
-        const camera360Match =
-            requiredInstallationSubtype.value === 'camera_360' &&
-            optionText.includes('360');
-        const screenCamera360Match =
-            requiredInstallationSubtype.value === 'screen_camera_360' &&
-            (optionText.includes('pantalla') || optionText.includes('screen')) &&
-            optionText.includes('360');
-        const singleCameraMatch =
-            requiredInstallationSubtype.value === 'camera_only' &&
-            (optionText.includes('cámara') || optionText.includes('camara') || optionText.includes('camera')) &&
-            !optionText.includes('360') &&
-            !optionText.includes('pantalla') &&
-            !optionText.includes('screen') &&
-            !optionText.includes('delantera') &&
-            !optionText.includes('frontal') &&
-            !optionText.includes('2 cam');
-
-        return (
-            (belongsToStandaloneZone || belongsToConfiguredCombination) &&
+        return belongsToZone &&
             option !== precheckProduct.value &&
-            (!hasSelectedProducts.value || subtypeMatches || multipleCameraScreenMatch || camera360Match || screenCamera360Match || singleCameraMatch)
-        );
+            (!hasSelectedProducts.value ||
+                optionInstallationCombination(option) === requiredInstallationCombination.value);
     });
+
+    const uniqueOptions = new Map<string, SimpleOption>();
+    matchingOptions.forEach((option) => {
+        const key = `${normalizeInstallationValue(option.location ?? '')}|${optionInstallationCombination(option)}`;
+        if (!uniqueOptions.has(key)) uniqueOptions.set(key, option);
+    });
+
+    return [...uniqueOptions.values()];
 });
 
 const checkPostalCode = async () => {
@@ -878,6 +939,52 @@ const selectedInstallation = computed(
             (option) => option.key === selectedInstallationKey.value,
         ) ?? null,
 );
+
+const goToSelectedProduct = async (
+    type: 'screen' | 'camera' | 'speaker' | 'installation',
+    key: string | number,
+) => {
+    if (!openSteps.value.includes(type)) {
+        openSteps.value = [...openSteps.value, type];
+    }
+
+    if (type === 'speaker') {
+        const speaker = props.speakerOptions.find((option) => option.key === key);
+
+        if (speaker) {
+            const categoryWithRememberedSize = speaker.categories.find((candidate) => {
+                const rememberedSize = selectedSpeakerSizeByCategory.value[candidate];
+
+                return rememberedSize && speaker.sizes.includes(rememberedSize);
+            });
+            const category = categoryWithRememberedSize
+                ?? (speaker.categories.includes(selectedSpeakerCategory.value)
+                    ? selectedSpeakerCategory.value
+                    : speaker.categories[0] ?? '');
+            const currentSize = selectedSpeakerSizeByCategory.value[category];
+            const size = currentSize && speaker.sizes.includes(currentSize)
+                ? currentSize
+                : speaker.sizes[0] ?? '';
+
+            selectedSpeakerCategory.value = category;
+            selectedSpeakerSizeByCategory.value = {
+                ...selectedSpeakerSizeByCategory.value,
+                [category]: size,
+            };
+        }
+    }
+
+    if (type === 'installation') {
+        installationRequested.value = true;
+    }
+
+    await nextTick();
+    window.requestAnimationFrame(() => {
+        document
+            .getElementById(`product-${type}-${key}`)
+            ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+};
 
 const productsSubtotal = computed(
     () =>
@@ -1049,7 +1156,7 @@ const nextQuoteNumber = async () => {
     const csrfToken = document
         .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
         ?.content;
-    const response = await fetch('/admin/quote-number', {
+    const response = await fetch('/configurator/quote-number', {
         method: 'POST',
         headers: {
             Accept: 'application/json',
@@ -1069,8 +1176,8 @@ const nextQuoteNumber = async () => {
     return String(result.number);
 };
 
-const generateQuote = async () => {
-    if (!quoteClientName.value.trim() || !hasSelectedProducts.value) {
+const generateQuote = async (withoutClientData = false) => {
+    if ((!withoutClientData && !quoteClientName.value.trim()) || !hasSelectedProducts.value) {
         return;
     }
 
@@ -1093,6 +1200,11 @@ const generateQuote = async () => {
     }
 
     const quoteDate = new Intl.DateTimeFormat(localeTag.value).format(new Date());
+    const clientName = withoutClientData
+        ? t('print.not_specified')
+        : quoteClientName.value.trim();
+    const clientPhone = withoutClientData ? '' : quoteClientPhone.value.trim();
+    const clientEmail = withoutClientData ? '' : quoteClientEmail.value.trim();
     const vehicle = [selectedBrand.value, selectedModel.value, selectedYear.value]
         .filter(Boolean)
         .join(' ');
@@ -1144,12 +1256,10 @@ const generateQuote = async () => {
         });
     }
 
-    if (selectedPrecheckMethod.value) {
+    if (selectedPrecheckMethod.value === 'installer') {
         items.push({
             code: precheckProduct.value?.sku || 'PRECHECK',
-            description: selectedPrecheckMethod.value === 'installer'
-                ? `${t('installation.precheck_installer_title')} — ${serviceZones.value.find((zone) => zone.key === selectedServiceZone.value)?.label ?? ''}`
-                : t('installation.precheck_self_title'),
+            description: t('installation.precheck_installer_summary'),
             quantity: 1,
             price: precheckPrice.value,
         });
@@ -1258,9 +1368,9 @@ const generateQuote = async () => {
     <section class="details">
         <div>
             <h2>${escapeHtml(t('print.client'))}:</h2>
-            <p><strong>${escapeHtml(quoteClientName.value.trim())}</strong></p>
-            ${quoteClientPhone.value.trim() ? `<p>${escapeHtml(t('print.phone'))}: ${escapeHtml(quoteClientPhone.value.trim())}</p>` : ''}
-            ${quoteClientEmail.value.trim() ? `<p>${escapeHtml(t('print.email'))}: ${escapeHtml(quoteClientEmail.value.trim())}</p>` : ''}
+            <p><strong>${escapeHtml(clientName)}</strong></p>
+            ${clientPhone ? `<p>${escapeHtml(t('print.phone'))}: ${escapeHtml(clientPhone)}</p>` : ''}
+            ${clientEmail ? `<p>${escapeHtml(t('print.email'))}: ${escapeHtml(clientEmail)}</p>` : ''}
             <p>${escapeHtml(t('print.vehicle'))}: ${escapeHtml(vehicle || t('print.not_specified'))}</p>
         </div>
         <div class="issuer">
@@ -1409,14 +1519,14 @@ watch(
     <div class="min-h-screen bg-[#121212] text-white">
         <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
             <div class="mb-8 flex items-start justify-between gap-6">
-                <div>
-                    <p class="text-sm font-medium uppercase tracking-[0.24em] text-amber-400">
+                <div class="mx-auto text-center sm:mx-0 sm:text-left">
+                    <p class="text-xs font-medium uppercase tracking-[0.2em] text-amber-400 sm:text-sm sm:tracking-[0.24em]">
                         {{ t('intro.eyebrow') }}
                     </p>
-                    <h1 class="mt-3 text-4xl font-semibold tracking-tight">
+                    <h1 class="mx-auto mt-2 max-w-sm text-3xl font-semibold leading-tight tracking-tight sm:mx-0 sm:mt-3 sm:max-w-none sm:text-4xl">
                         {{ t('intro.title') }}
                     </h1>
-                    <p class="mt-3 max-w-3xl text-base text-neutral-400">
+                    <p class="mx-auto mt-2 max-w-sm text-sm leading-5 text-neutral-400 sm:mx-0 sm:mt-3 sm:max-w-3xl sm:text-base sm:leading-normal">
                         {{ t('intro.description') }}
                     </p>
                     <button
@@ -1470,18 +1580,12 @@ watch(
                             :class="selectedBrand ? 'md:grid-cols-[1fr_220px]' : ''"
                         >
                             <div>
-                                <label
-                                    for="vehicle-brand"
-                                    class="mb-3 block text-sm font-medium text-neutral-300"
-                                >
-                                    {{ t('fields.brand') }}
-                                </label>
                                 <select
                                     id="vehicle-brand"
                                     v-model="selectedBrand"
-                                    class="w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-sm text-white"
+                                    class="vehicle-option-select w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-base text-white sm:text-sm"
                                 >
-                                    <option :value="null">.</option>
+                                    <option :value="null">{{ t('fields.select_brand') }}</option>
                                     <option
                                         v-for="brand in brands"
                                         :key="brand ?? 'unknown-brand'"
@@ -1493,12 +1597,11 @@ watch(
                             </div>
 
                             <div v-if="selectedBrand">
-                                <label class="mb-3 block text-sm font-medium text-neutral-300">{{ t('fields.year') }}</label>
                                 <select
                                     v-model="selectedYear"
-                                    class="w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-sm text-white"
+                                    class="vehicle-option-select w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-base text-white sm:text-sm"
                                 >
-                                    <option :value="null">.</option>
+                                    <option :value="null">{{ t('fields.select_year') }}</option>
                                     <option
                                         v-for="year in availableYears"
                                         :key="year"
@@ -1534,16 +1637,17 @@ watch(
 
                         </div>
                         <div class="border-t border-neutral-800 pt-6">
-                            <button type="button" class="mx-auto block w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('screen')">{{ t('steps.screen') }}</button>
+                            <button type="button" class="mx-auto block w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleScreenStep">{{ t('steps.screen') }}</button>
                             <div v-if="openSteps.includes('screen') || (selectedModel && compatibleVehicles.length)" class="mt-6">
                             <div v-if="selectedYear !== null && compatibleVehicles.length" class="mt-4 grid gap-5">
                                 <article
                                     v-for="vehicle in compatibleVehicles"
                                     :key="vehicle.id"
+                                    :id="`screen-product-${vehicle.id}`"
                                     class="grid gap-5 rounded-xl border p-4 transition lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
                                     :class="
                                         selectedVehicle?.id === vehicle.id
-                                            ? 'border-amber-400/70 bg-amber-400/5'
+                                            ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400'
                                             : 'border-neutral-800 bg-[#121212]'
                                     "
                                 >
@@ -1587,13 +1691,14 @@ watch(
                                                 <button
                                                     v-for="variant in vehicle.variants"
                                                     :key="variant.id"
+                                                    :id="`product-screen-${variant.id}`"
                                                     type="button"
                                                     @click="toggleScreenVariant(variant.id)"
                                                     class="group flex min-h-10 w-full items-center justify-between gap-4 rounded-lg border px-3 py-2 text-left text-sm font-medium leading-tight transition"
                                                     :class="
                                                         selectedScreenVariantIds.includes(variant.id)
                                                             ? 'border-amber-400 bg-amber-400 text-black'
-                                                            : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'
+                                                            : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400/10'
                                                     "
                                                 >
                                                     <span class="min-w-0 flex-1 truncate">{{ variant.title }}</span>
@@ -1602,7 +1707,7 @@ watch(
                                                         :class="
                                                             selectedScreenVariantIds.includes(variant.id)
                                                                 ? 'text-black/70'
-                                                                : 'text-amber-400 group-hover:text-black'
+                                                                : 'text-amber-400'
                                                         "
                                                     >
                                                         {{ variant.price.toFixed(2) }} €
@@ -1636,31 +1741,44 @@ watch(
                                 <div
                                     v-for="camera in visibleCameraOptions"
                                     :key="camera.key"
-                                    class="group relative overflow-hidden rounded-xl border transition"
+                                    :id="`product-camera-${camera.key}`"
+                                    class="group relative min-w-0 overflow-visible rounded-xl border transition"
                                     :class="
                                         selectedCameraKeys.includes(camera.key)
-                                            ? 'border-amber-400 bg-neutral-900'
+                                            ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400'
                                             : 'border-neutral-800 bg-[#121212] hover:border-neutral-700'
                                     "
                                 >
                                     <button
                                         type="button"
                                         @click="toggleCamera(camera.key)"
-                                        class="grid h-full w-full gap-0 p-0 text-left"
+                                        class="grid h-full min-w-0 w-full max-w-full grid-cols-[minmax(0,1fr)] gap-0 overflow-hidden rounded-xl p-0 text-left"
                                     >
-                                        <img
+                                        <div
                                             v-if="camera.image"
-                                            :src="camera.image"
-                                            :alt="camera.title"
-                                            class="h-48 w-full rounded-lg bg-[#121212] object-contain object-center sm:h-56"
-                                        />
-                                        <div class="flex items-center justify-start gap-1 p-2">
-                                            <p class="min-w-0 truncate whitespace-nowrap text-xs font-medium">{{ camera.isStandardFront ? t('camera.standard_front') : camera.title }}</p>
+                                            class="relative h-48 min-w-0 w-full max-w-full overflow-hidden rounded-lg transition sm:h-56"
+                                            :class="selectedCameraKeys.includes(camera.key) ? 'bg-amber-400/10' : 'bg-[#121212]'"
+                                        >
+                                            <img
+                                                :src="camera.image"
+                                                :alt="camera.title"
+                                                class="absolute inset-0 h-full w-full object-contain object-center"
+                                            />
+                                        </div>
+                                        <div class="flex min-w-0 w-full max-w-full items-center justify-start gap-1 overflow-hidden p-2">
+                                            <p class="min-w-0 flex-1 truncate whitespace-nowrap text-xs font-medium">{{ camera.isStandardFront ? t('camera.standard_front') : camera.title }}</p>
                                             <p class="shrink-0 whitespace-nowrap text-sm font-semibold">
                                                 {{ camera.price.toFixed(2) }} €
                                             </p>
                                         </div>
                                     </button>
+
+                                    <div
+                                        v-if="!camera.isStandard"
+                                        class="pointer-events-none absolute -left-8 top-5 z-20 w-28 -rotate-45 bg-amber-400 px-2 py-1.5 text-center text-[10px] font-bold uppercase tracking-wide text-black shadow-lg"
+                                    >
+                                        {{ t('camera.specific_for_vehicle') }}
+                                    </div>
 
                                     <a
                                         :href="productUrl(camera.key)"
@@ -1730,8 +1848,9 @@ watch(
                                 <article
                                     v-for="speaker in visibleSpeakerOptions"
                                     :key="speaker.key"
+                                    :id="`product-speaker-${speaker.key}`"
                                     class="group relative overflow-hidden rounded-xl border transition"
-                                    :class="selectedSpeakerKeys.includes(speaker.key) ? 'border-amber-400 bg-neutral-900' : 'border-neutral-800 bg-[#121212] hover:border-neutral-700'"
+                                    :class="selectedSpeakerKeys.includes(speaker.key) ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-800 bg-[#121212] hover:border-neutral-700'"
                                 >
                                     <button
                                         type="button"
@@ -1742,7 +1861,8 @@ watch(
                                             v-if="speaker.image"
                                             :src="speaker.image"
                                             :alt="speaker.productTitle"
-                                            class="h-36 w-full rounded-lg bg-[#121212] p-2 object-contain object-center sm:h-40"
+                                            class="h-36 w-full rounded-lg p-2 object-contain object-center transition sm:h-40"
+                                            :class="selectedSpeakerKeys.includes(speaker.key) ? 'bg-amber-400/10' : 'bg-[#121212]'"
                                         />
                                         <div>
                                             <p class="font-medium">{{ speaker.productTitle }}</p>
@@ -1792,11 +1912,11 @@ watch(
                                     </button>
                                 </div>
                                 <p v-if="postalCodeError" class="mt-3 text-sm text-red-400">{{ postalCodeError }}</p>
-                                <p v-else-if="checkedPostalCode && isGranCanaria" class="mt-3 text-sm text-emerald-400">
-                                    {{ t('installation.gran_canaria_available') }}
+                                <p v-else-if="checkedPostalCode && matchedInstallationZone" class="mt-3 text-sm text-emerald-400">
+                                    {{ t('installation.available_zone', { zone: matchedInstallationZone.name }) }}
                                 </p>
                                 <p v-else-if="checkedPostalCode" class="mt-3 text-sm text-amber-400">
-                                    {{ t('installation.gran_canaria_only') }}
+                                    {{ t('installation.unavailable') }}
                                     <a
                                         :href="storefrontUrl('/pages/contact')"
                                         target="_blank"
@@ -1813,7 +1933,7 @@ watch(
                             <div v-if="checkedPostalCode && isGranCanaria && hasSelectedProducts" class="contents">
                                 <div v-if="hasSelectedProducts" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
                                     <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
-                                        {{ t('installation.zone_step') }}
+                                        {{ t('installation.zone_step', { step: 1 }) }}
                                     </p>
                                     <h3 class="mt-2 text-xl font-semibold text-white">
                                         {{ t('installation.zone_question') }}
@@ -1834,7 +1954,7 @@ watch(
                                             class="absolute inset-0 cursor-pointer transition hover:bg-amber-400/10"
                                             :class="selectedServiceZone === 'north' ? 'bg-amber-400/20' : ''"
                                             style="clip-path: polygon(6% 8%, 92% 8%, 64% 41%, 5% 43%);"
-                                            @click="selectedServiceZone = 'north'"
+                                            @click="toggleServiceZone('north')"
                                         />
                                         <button
                                             type="button"
@@ -1842,7 +1962,7 @@ watch(
                                             class="absolute inset-0 cursor-pointer transition hover:bg-amber-400/10"
                                             :class="selectedServiceZone === 'capital' ? 'bg-amber-400/20' : ''"
                                             style="clip-path: polygon(64% 8%, 96% 15%, 96% 48%, 65% 43%, 45% 39%, 64% 28%);"
-                                            @click="selectedServiceZone = 'capital'"
+                                            @click="toggleServiceZone('capital')"
                                         />
                                         <button
                                             type="button"
@@ -1850,7 +1970,7 @@ watch(
                                             class="absolute inset-0 cursor-pointer transition hover:bg-amber-400/10"
                                             :class="selectedServiceZone === 'south' ? 'bg-amber-400/20' : ''"
                                             style="clip-path: polygon(5% 41%, 45% 39%, 65% 43%, 96% 48%, 94% 91%, 9% 91%);"
-                                            @click="selectedServiceZone = 'south'"
+                                            @click="toggleServiceZone('south')"
                                         />
                                     </div>
 
@@ -1861,7 +1981,7 @@ watch(
                                             type="button"
                                             class="rounded-lg border px-4 py-3 text-left text-sm font-medium transition"
                                             :class="selectedServiceZone === zone.key ? 'border-amber-400 bg-amber-400 text-black' : 'border-neutral-700 bg-neutral-900 text-neutral-200 hover:border-amber-400'"
-                                            @click="selectedServiceZone = zone.key"
+                                            @click="toggleServiceZone(zone.key)"
                                         >
                                             {{ zone.label }}
                                         </button>
@@ -1870,7 +1990,7 @@ watch(
 
                                 <div v-if="requiresPrecheck" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
                                     <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
-                                        {{ t('installation.precheck_step') }}
+                                        {{ t('installation.precheck_step', { step: precheckStepNumber }) }}
                                     </p>
                                     <h3 class="mt-2 text-xl font-semibold text-white">
                                         {{ t('installation.precheck_question') }}
@@ -1885,7 +2005,7 @@ watch(
                                             :disabled="!selectedServiceZone"
                                             class="rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-40"
                                             :class="selectedPrecheckMethod === 'self' ? 'border-amber-400 bg-amber-400/10' : 'border-neutral-700 bg-neutral-900 hover:border-amber-400'"
-                                            @click="selectedPrecheckMethod = 'self'"
+                                            @click="togglePrecheckMethod('self')"
                                         >
                                             <span class="block font-semibold text-white">{{ t('installation.precheck_self_title') }}</span>
                                             <span class="mt-1 block text-sm leading-5 text-neutral-400">{{ t('installation.precheck_self_description') }}</span>
@@ -1896,7 +2016,7 @@ watch(
                                             :disabled="!selectedServiceZone"
                                             class="rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-40"
                                             :class="selectedPrecheckMethod === 'installer' ? 'border-amber-400 bg-amber-400/10' : 'border-neutral-700 bg-neutral-900 hover:border-amber-400'"
-                                            @click="selectedPrecheckMethod = 'installer'"
+                                            @click="togglePrecheckMethod('installer')"
                                         >
                                             <span class="block font-semibold text-white">{{ t('installation.precheck_installer_title') }}</span>
                                             <span class="mt-1 block text-sm leading-5 text-neutral-400">{{ t('installation.precheck_installer_description') }}</span>
@@ -1908,7 +2028,7 @@ watch(
 
                             <div v-else-if="checkedPostalCode && requiresPrecheck" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
                                 <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
-                                    {{ t('installation.precheck_step') }}
+                                    {{ t('installation.precheck_step', { step: precheckStepNumber }) }}
                                 </p>
                                 <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.precheck_self_title') }}</h3>
                                 <p class="mt-2 max-w-2xl text-sm leading-6 text-neutral-400">
@@ -1918,7 +2038,7 @@ watch(
                                     type="button"
                                     class="mt-4 rounded-xl border p-4 text-left transition"
                                     :class="selectedPrecheckMethod === 'self' ? 'border-amber-400 bg-amber-400/10' : 'border-neutral-700 bg-neutral-900 hover:border-amber-400'"
-                                    @click="selectedPrecheckMethod = 'self'"
+                                    @click="togglePrecheckMethod('self')"
                                 >
                                     <span class="font-semibold text-white">{{ t('installation.choose_remote_precheck') }}</span>
                                     <span class="ml-3 text-sm font-semibold text-emerald-400">{{ t('installation.free') }}</span>
@@ -1926,11 +2046,20 @@ watch(
                             </div>
 
                             <div
-                                v-if="(!hasSelectedProducts && checkedPostalCode && isGranCanaria) || (selectedServiceZone && (selectedPrecheckMethod || !requiresPrecheck))"
+                                v-if="
+                                    (!hasSelectedProducts && checkedPostalCode && matchedInstallationZone) ||
+                                    (
+                                        hasSelectedProducts &&
+                                        checkedPostalCode &&
+                                        matchedInstallationZone &&
+                                        (!isGranCanaria || selectedServiceZone) &&
+                                        (selectedPrecheckMethod || !requiresPrecheck)
+                                    )
+                                "
                                 class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6"
                                 :class="requiresPrecheck ? 'lg:col-span-2' : ''"
                             >
-                                <h3 class="text-sm font-semibold uppercase tracking-[0.24em] text-amber-400">{{ t(hasSelectedProducts ? 'installation.final_installation' : 'installation.standalone_installation') }}</h3>
+                                <h3 class="text-sm font-semibold uppercase tracking-[0.24em] text-amber-400">{{ t(hasSelectedProducts ? 'installation.final_installation' : 'installation.standalone_installation', { step: finalInstallationStepNumber }) }}</h3>
                                 <p class="mt-1 text-sm text-neutral-400">{{ t(hasSelectedProducts ? 'installation.final_installation_help' : 'installation.standalone_installation_help') }}</p>
                             <div
                                 class="mt-4 grid gap-4"
@@ -1939,6 +2068,7 @@ watch(
                                 <article
                                     v-for="installation in visibleInstallationOptions"
                                     :key="installation.key"
+                                    :id="`product-installation-${installation.key}`"
                                     role="button"
                                     tabindex="0"
                                     class="relative cursor-pointer overflow-hidden rounded-xl border transition"
@@ -2096,10 +2226,14 @@ watch(
                                 :key="screen.id"
                                 class="flex items-start justify-between gap-4"
                             >
-                                <div>
-                                    <p class="font-medium text-neutral-100">
+                                <div class="min-w-0">
+                                    <button
+                                        type="button"
+                                        class="text-left font-medium text-neutral-100 underline decoration-transparent underline-offset-4 transition hover:text-amber-400 hover:decoration-amber-400 focus-visible:text-amber-400 focus-visible:decoration-amber-400"
+                                        @click="goToSelectedProduct('screen', screen.id)"
+                                    >
                                         {{ screen.title }}
-                                    </p>
+                                    </button>
                                     <p class="text-sm text-neutral-500">{{ t('screen.label') }}</p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
@@ -2112,10 +2246,14 @@ watch(
                                 :key="speaker.key"
                                 class="flex items-start justify-between gap-4"
                             >
-                                <div>
-                                    <p class="font-medium text-neutral-100">
+                                <div class="min-w-0">
+                                    <button
+                                        type="button"
+                                        class="text-left font-medium text-neutral-100 underline decoration-transparent underline-offset-4 transition hover:text-amber-400 hover:decoration-amber-400 focus-visible:text-amber-400 focus-visible:decoration-amber-400"
+                                        @click="goToSelectedProduct('speaker', speaker.key)"
+                                    >
                                         {{ speaker.productTitle }}
-                                    </p>
+                                    </button>
                                     <p class="text-sm text-neutral-500">{{ t('speaker.label') }}</p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
@@ -2128,10 +2266,14 @@ watch(
                                 :key="camera.key"
                                 class="flex items-start justify-between gap-4"
                             >
-                                <div>
-                                    <p class="font-medium text-neutral-100">
+                                <div class="min-w-0">
+                                    <button
+                                        type="button"
+                                        class="text-left font-medium text-neutral-100 underline decoration-transparent underline-offset-4 transition hover:text-amber-400 hover:decoration-amber-400 focus-visible:text-amber-400 focus-visible:decoration-amber-400"
+                                        @click="goToSelectedProduct('camera', camera.key)"
+                                    >
                                         {{ camera.title }}
-                                    </p>
+                                    </button>
                                     <p class="text-sm text-neutral-500">{{ t('camera.label') }}</p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
@@ -2140,10 +2282,14 @@ watch(
                             </div>
 
                             <div v-if="selectedInstallation" class="flex items-start justify-between gap-4">
-                                <div>
-                                    <p class="font-medium text-neutral-100">
+                                <div class="min-w-0">
+                                    <button
+                                        type="button"
+                                        class="text-left font-medium text-neutral-100 underline decoration-transparent underline-offset-4 transition hover:text-amber-400 hover:decoration-amber-400 focus-visible:text-amber-400 focus-visible:decoration-amber-400"
+                                        @click="goToSelectedProduct('installation', selectedInstallation.key)"
+                                    >
                                         {{ selectedInstallation.title }}
-                                    </p>
+                                    </button>
                                     <p class="text-sm text-neutral-500">{{ t('installation.label') }}</p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
@@ -2151,24 +2297,21 @@ watch(
                                 </p>
                             </div>
 
-                            <div v-if="selectedPrecheckMethod" class="flex items-start justify-between gap-4">
+                            <div v-if="selectedPrecheckMethod === 'installer'" class="flex items-start justify-between gap-4">
                                 <div>
                                     <p class="font-medium text-neutral-100">
-                                        {{ selectedPrecheckMethod === 'installer' ? t('installation.precheck_installer_title') : t('installation.precheck_self_title') }}
-                                    </p>
-                                    <p class="text-sm text-neutral-500">
-                                        {{ serviceZones.find((zone) => zone.key === selectedServiceZone)?.label }}
+                                        {{ t('installation.precheck_installer_summary') }}
                                     </p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold text-white">
-                                    {{ precheckPrice ? `${precheckPrice.toFixed(2)} €` : t('installation.free') }}
+                                    {{ precheckPrice.toFixed(2) }} €
                                 </p>
                             </div>
                         </div>
                     </div>
                     </div>
 
-                    <div class="mt-4 shrink-0 space-y-4 border-t border-neutral-800 bg-[#121212] pt-4">
+                    <div ref="quoteTotals" class="mt-4 shrink-0 space-y-4 border-t border-neutral-800 bg-[#121212] pt-4">
                         <div class="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
                             <div class="flex items-center justify-between text-sm text-neutral-400">
                                 <span>{{ t('quote.subtotal') }}</span>
@@ -2179,7 +2322,7 @@ watch(
                                 <span>{{ selectedInstallation.price.toFixed(2) }} €</span>
                             </div>
                             <div v-if="selectedPrecheckMethod === 'installer'" class="mt-2 flex items-center justify-between text-sm text-neutral-400">
-                                <span>{{ t('installation.precheck_installer_title') }}</span>
+                                <span>{{ t('installation.precheck_installer_summary') }}</span>
                                 <span>{{ precheckPrice.toFixed(2) }} €</span>
                             </div>
                             <div
@@ -2205,8 +2348,52 @@ watch(
                         >
                             {{ t('actions.add_to_cart') }}
                         </button>
+
+                        <button
+                            type="button"
+                            class="w-full rounded-xl border border-amber-400 px-5 py-4 text-base font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-600"
+                            :disabled="!hasSelectedProducts"
+                            @click="generateQuote(true)"
+                        >
+                            {{ t('actions.download_quote') }}
+                        </button>
                     </div>
                 </aside>
+
+                <div
+                    ref="mobileQuoteTotals"
+                    class="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-700 bg-[#121212]/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgba(0,0,0,0.45)] backdrop-blur lg:hidden"
+                    :class="showMobileQuoteTotals ? 'visible opacity-100' : 'pointer-events-none invisible opacity-0'"
+                >
+                    <div class="mx-auto max-w-md space-y-2">
+                        <div class="rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-lg font-semibold text-white">{{ t('quote.total') }}</span>
+                                <span class="text-2xl font-semibold text-amber-400">
+                                    {{ discountedTotal.toFixed(2) }} €
+                                </span>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            class="w-full rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="!canCheckout"
+                            @click="goToCheckout"
+                        >
+                            {{ t('actions.add_to_cart') }}
+                        </button>
+
+                        <button
+                            type="button"
+                            class="w-full rounded-xl border border-amber-400 px-5 py-3 text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-600"
+                            :disabled="!hasSelectedProducts"
+                            @click="generateQuote(true)"
+                        >
+                            {{ t('actions.download_quote') }}
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
         <p class="pb-6 text-center text-xs text-neutral-700">
@@ -2299,7 +2486,7 @@ watch(
                         type="button"
                         :disabled="!quoteClientName.trim()"
                         class="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
-                        @click="generateQuote"
+                        @click="generateQuote(false)"
                     >
                         {{ t('actions.generate_quote') }}
                     </button>
@@ -2333,6 +2520,20 @@ watch(
 .upload-photo-button { position: relative; display: flex; min-height: 3.5rem; cursor: pointer; align-items: center; justify-content: center; border: 1px dashed #737373; border-radius: 0.5rem; padding: 0.75rem 1rem; color: #d4d4d4; text-align: center; }
 .upload-photo-button:hover, .upload-photo-selected { border-color: #fbbf24; background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
 .upload-photo-button input { position: absolute; inset: 0; height: 100%; width: 100%; cursor: pointer; opacity: 0; }
+
+@media (max-width: 639px) {
+    .vehicle-option-select {
+        font-size: 16px;
+        line-height: 1.5;
+    }
+
+    .vehicle-option-select option {
+        min-height: 3rem;
+        padding: 0.75rem;
+        font-size: 32px;
+        line-height: 1.5;
+    }
+}
 
 .quote-scrollbar::-webkit-scrollbar {
     width: 8px;

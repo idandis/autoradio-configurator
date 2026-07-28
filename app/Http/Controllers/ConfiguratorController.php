@@ -176,6 +176,7 @@ class ConfiguratorController extends Controller
                 'sku' => $product->variants->first()?->sku,
                 'subtype' => $product->subtype,
                 'location' => $product->meta['installation']['location'] ?? null,
+                'installationRaw' => $product->meta['installation']['raw'] ?? null,
             ];
         }
 

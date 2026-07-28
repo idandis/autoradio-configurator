@@ -35,10 +35,12 @@ Route::post('/configurator/missing-vehicle', [ConfiguratorController::class, 'mi
 Route::get('/configurator/postal-code/{postalCode}', ConfiguratorPostalCodeController::class)
     ->where('postalCode', '\\d{5}')
     ->name('configurator.postal-code');
+Route::post('/configurator/quote-number', QuoteNumberController::class)
+    ->middleware('throttle:20,1')
+    ->name('configurator.quote-number');
 
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
-    Route::post('/admin/quote-number', QuoteNumberController::class)->name('admin.quote-number');
     Route::post('/dashboard/import-csv', [ConfiguratorImportController::class, 'store'])->name('dashboard.import');
     Route::get('/brands', BrandsController::class)->name('brands.index');
     Route::get('/models', ModelsController::class)->name('models.index');

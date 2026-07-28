@@ -17,7 +17,9 @@ class ConfiguratorPostalCodeController extends Controller
             ->where('postal_code', $postalCode)
             ->first();
 
-        $location = $postalCodeRecord?->island ?? $this->canaryIsland($postalCode);
+        $location = $postalCodeRecord?->island
+            ?? $this->canaryIsland($postalCode)
+            ?? $this->installationLocation($postalCodeRecord?->province);
 
         if (! $postalCodeRecord && ! $location) {
             return response()->json(['found' => false]);
@@ -67,5 +69,22 @@ class ConfiguratorPostalCodeController extends Controller
             '389' => 'El Hierro',
             default => null,
         };
+    }
+
+    private function installationLocation(?string $province): ?string
+    {
+        if (! $province) {
+            return null;
+        }
+
+        $normalizedProvince = $this->normalize($province);
+
+        return ConfiguratorProduct::query()
+            ->where('category', 'installation')
+            ->get(['meta'])
+            ->map(fn (ConfiguratorProduct $product) => $product->meta['installation']['location'] ?? null)
+            ->filter()
+            ->unique(fn (string $location) => $this->normalize($location))
+            ->first(fn (string $location) => $this->normalize($location) === $normalizedProvince);
     }
 }
