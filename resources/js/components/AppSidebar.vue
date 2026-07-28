@@ -7,6 +7,7 @@ import {
     LayoutGrid,
     MapPin,
     PackageSearch,
+    ClipboardList,
     SlidersHorizontal,
     Tags,
 } from '@lucide/vue';
@@ -57,6 +58,7 @@ const mainNavItems: NavItem[] = [
         href: importedProducts(),
         icon: PackageSearch,
     },
+    { title: 'Moduli inviati', href: '/missing-vehicle-requests', icon: ClipboardList },
 ];
 
 const footerNavItems: NavItem[] = [

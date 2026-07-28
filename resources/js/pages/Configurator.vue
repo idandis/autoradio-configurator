@@ -172,7 +172,10 @@ const submitMissingVehicleForm = async () => {
         });
         if (!response.ok) {
             const errorBody = await response.json().catch(() => ({}));
-            throw new Error(errorBody.message || `HTTP ${response.status}`);
+            const validationMessage = errorBody.errors
+                ? Object.values(errorBody.errors).flat().join(' ')
+                : '';
+            throw new Error(validationMessage || errorBody.message || `HTTP ${response.status}`);
         }
         missingVehicleSent.value = true;
     } catch (error) {
@@ -891,17 +894,15 @@ const total = computed(
 );
 
 const discountTiers = [
-    { code: 'StepTwo', threshold: 500, percentage: 3 },
-    { code: 'StepOne', threshold: 300, percentage: 2 },
+    { code: 'Vip', threshold: 900, percentage: 5 },
+    { code: 'Pro', threshold: 500, percentage: 3 },
+    { code: 'Base', threshold: 300, percentage: 2 },
 ];
 const activeDiscount = computed(
     () => discountTiers.find((tier) => total.value >= tier.threshold) ?? null,
 );
 const nextDiscount = computed(() => {
-    if (total.value < 300) return discountTiers[1];
-    if (total.value < 500) return discountTiers[0];
-
-    return null;
+    return [...discountTiers].reverse().find((tier) => total.value < tier.threshold) ?? null;
 });
 const amountUntilNextDiscount = computed(() =>
     nextDiscount.value
@@ -1461,10 +1462,7 @@ watch(
             <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <section class="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
                     <div class="grid gap-6">
-                        <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('vehicle')">{{ t('steps.vehicle') }}</button>
-                        <h2 v-if="openSteps.includes('vehicle')" class="text-2xl font-semibold text-amber-400">
-                            {{ t('steps.vehicle') }}
-                        </h2>
+                        <button type="button" class="mx-auto block w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('vehicle')">{{ t('steps.vehicle') }}</button>
                         <div v-if="openSteps.includes('vehicle')">
 
                         <div
@@ -1536,7 +1534,7 @@ watch(
 
                         </div>
                         <div class="border-t border-neutral-800 pt-6">
-                            <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('screen')">{{ t('steps.screen') }}</button>
+                            <button type="button" class="mx-auto block w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('screen')">{{ t('steps.screen') }}</button>
                             <div v-if="openSteps.includes('screen') || (selectedModel && compatibleVehicles.length)" class="mt-6">
                             <div v-if="selectedYear !== null && compatibleVehicles.length" class="mt-4 grid gap-5">
                                 <article
@@ -1632,11 +1630,8 @@ watch(
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
-                            <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('camera')">{{ t('steps.camera') }}</button>
+                            <button type="button" class="mx-auto block w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('camera')">{{ t('steps.camera') }}</button>
                             <div v-if="openSteps.includes('camera')" class="mt-6">
-                            <h2 class="text-2xl font-semibold text-amber-400">
-                                {{ t('steps.camera') }}
-                            </h2>
                             <div class="mt-4 grid gap-4 md:grid-cols-3">
                                 <div
                                     v-for="camera in visibleCameraOptions"
@@ -1651,17 +1646,17 @@ watch(
                                     <button
                                         type="button"
                                         @click="toggleCamera(camera.key)"
-                                        class="grid h-full w-full gap-3 p-4 text-left"
+                                        class="grid h-full w-full gap-0 p-0 text-left"
                                     >
                                         <img
                                             v-if="camera.image"
                                             :src="camera.image"
                                             :alt="camera.title"
-                                            class="h-24 w-full rounded-lg bg-[#121212] p-2 object-contain object-center sm:h-32 lg:h-28 xl:h-32"
+                                            class="h-48 w-full rounded-lg bg-[#121212] object-contain object-center sm:h-56"
                                         />
-                                        <div>
-                                            <p class="font-medium">{{ camera.isStandardFront ? t('camera.standard_front') : camera.title }}</p>
-                                            <p class="mt-1 text-lg font-semibold">
+                                        <div class="flex items-center justify-start gap-1 p-2">
+                                            <p class="min-w-0 truncate whitespace-nowrap text-xs font-medium">{{ camera.isStandardFront ? t('camera.standard_front') : camera.title }}</p>
+                                            <p class="shrink-0 whitespace-nowrap text-sm font-semibold">
                                                 {{ camera.price.toFixed(2) }} €
                                             </p>
                                         </div>
@@ -1691,11 +1686,8 @@ watch(
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
-                            <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('speaker')">{{ t('steps.speaker') }}</button>
+                            <button type="button" class="mx-auto block w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('speaker')">{{ t('steps.speaker') }}</button>
                             <div v-if="openSteps.includes('speaker')" class="mt-6">
-                            <h2 class="text-2xl font-semibold text-amber-400">
-                                {{ t('steps.speaker') }}
-                            </h2>
                             <div class="mt-4 grid max-w-2xl gap-4">
                                 <div>
                                     <div class="flex flex-wrap gap-2">
@@ -1775,11 +1767,8 @@ watch(
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
-                            <button type="button" class="w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('installation'); installationRequested = true">{{ t('steps.installation') }}</button>
+                            <button type="button" class="mx-auto block w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('installation'); installationRequested = true">{{ t('steps.installation') }}</button>
                             <div v-if="openSteps.includes('installation')" class="mt-6">
-                            <h2 v-if="hasSelectedProducts" class="text-2xl font-semibold text-amber-400">
-                                {{ t('steps.installation') }}
-                            </h2>
                             <p v-if="hasSelectedProducts" class="mt-2 max-w-3xl text-sm leading-6 text-neutral-400">
                                 {{ t('installation.intro') }}
                             </p>

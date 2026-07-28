@@ -9,6 +9,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImportedProductsController;
 use App\Http\Controllers\InstallationZonesController;
 use App\Http\Controllers\ModelsController;
+use App\Http\Controllers\MissingVehicleRequestsController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuoteNumberController;
 use App\Http\Controllers\Settings\SecurityController;
@@ -44,6 +45,8 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/models/edit', [ModelsController::class, 'edit'])->name('models.edit');
     Route::put('/models', [ModelsController::class, 'update'])->name('models.update');
     Route::get('/imported-products', ImportedProductsController::class)->name('imported-products.index');
+    Route::get('/missing-vehicle-requests', MissingVehicleRequestsController::class)->name('missing-vehicle-requests.index');
+    Route::delete('/missing-vehicle-requests/{missingVehicleRequest}', [MissingVehicleRequestsController::class, 'destroy'])->name('missing-vehicle-requests.destroy');
     Route::patch('/imported-products/{product}/price', [ImportedProductsController::class, 'updatePrice'])->name('imported-products.price');
     Route::get('/installation-zones', [InstallationZonesController::class, 'index'])->name('installation-zones.index');
     Route::post('/installation-zones', [InstallationZonesController::class, 'store'])->name('installation-zones.store');

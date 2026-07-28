@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ConfiguratorProduct;
 use App\Models\InstallationZone;
+use App\Models\MissingVehicleRequest;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
@@ -27,6 +28,8 @@ class ConfiguratorController extends Controller
         ]);
 
         $photo = $request->file('photo');
+        $photoPath = $photo->store('missing-vehicle-requests', 'public');
+        MissingVehicleRequest::create([...$data, 'photo_path' => $photoPath]);
         unset($data['photo']);
         $body = "Nuovo form configuratore compilato\n\n";
         foreach ($data as $key => $value) {
