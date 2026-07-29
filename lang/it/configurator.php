@@ -48,6 +48,8 @@ return [
     ],
     'speaker' => [
         'categories' => [
+            'complete_speakers' => 'Altoparlanti completi',
+            'speaker_kit' => 'Kit di altoparlanti',
             'full_range' => 'Gamma completa',
             'midrange' => 'Gamma media',
             'subwoofer' => 'Subwoofer',

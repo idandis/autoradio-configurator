@@ -103,22 +103,88 @@ const storefrontUrl = (path: string) => {
 
 const page = usePage();
 const isAdmin = computed(() => Boolean(page.props.auth?.user?.is_admin));
+const mobileHeaderOpen = ref(false);
+const currentYear = new Date().getFullYear();
+const headerCopy = computed(() => ({
+    es: {
+        announcement: 'Te damos la bienvenida a nuestra tienda',
+        home: 'Home',
+        contact: 'Contactos',
+        about: 'Quiénes somos',
+        language: 'Español',
+    },
+    it: {
+        announcement: 'Ti diamo il benvenuto nel nostro negozio',
+        home: 'Home',
+        contact: 'Contatti',
+        about: 'Chi siamo',
+        language: 'Italiano',
+    },
+    en: {
+        announcement: 'Welcome to our store',
+        home: 'Home',
+        contact: 'Contact',
+        about: 'About us',
+        language: 'English',
+    },
+})[props.locale]);
+
+const changeHeaderLanguage = (event: Event) => {
+    const locale = (event.target as HTMLSelectElement).value;
+    const url = new URL(window.location.href);
+    url.searchParams.set('lang', locale);
+    window.location.href = url.toString();
+};
+
+const vehicleFieldValues = (value: string | null | undefined): string[] => {
+    if (!value) {
+        return [];
+    }
+
+    return [...new Set(
+        value
+            .split('|')
+            .map((part) => part.trim())
+            .filter(Boolean),
+    )];
+};
+
+const vehicleModels = vehicleFieldValues;
+const vehicleBrands = vehicleFieldValues;
+
+const supportsVehicleModel = (
+    modelList: string | null | undefined,
+    selectedModel: string | null,
+) => selectedModel === null || vehicleModels(modelList).includes(selectedModel);
+
+const supportsVehicleBrand = (
+    brandList: string | null | undefined,
+    selectedBrand: string | null,
+) => selectedBrand === null || vehicleBrands(brandList).includes(selectedBrand);
 
 const compatibilityEntries = computed(() => [
-    ...props.vehicles.map((vehicle) => ({
-        brand: vehicle.brand,
-        model: vehicle.model,
-        yearFrom: vehicle.yearFrom,
-        yearTo: vehicle.yearTo,
-    })),
+    ...props.vehicles.flatMap((vehicle) =>
+        vehicleBrands(vehicle.brand).flatMap((brand) =>
+            vehicleModels(vehicle.model).map((model) => ({
+                brand,
+                model,
+                yearFrom: vehicle.yearFrom,
+                yearTo: vehicle.yearTo,
+            })),
+        ),
+    ),
     ...props.cameraOptions
         .filter((camera) => !camera.isStandard)
-        .map((camera) => ({
-            brand: camera.brand ?? null,
-            model: camera.model ?? null,
-            yearFrom: camera.yearFrom ?? null,
-            yearTo: camera.yearTo ?? null,
-        })),
+        .flatMap((camera) =>
+            vehicleBrands(camera.brand).flatMap((brand) =>
+                vehicleModels(camera.model).map((model) => ({
+                    brand,
+                    model,
+                    yearFrom: camera.yearFrom ?? null,
+                    yearTo: camera.yearTo ?? null,
+                })),
+            ),
+        ),
 ]);
 
 const brands = computed(() => [
@@ -141,6 +207,32 @@ const toggleStep = (step: string) => {
         ? openSteps.value.filter((openStep) => openStep !== step)
         : [...openSteps.value, step];
 };
+const stepHasSelections = (step: string) => {
+    switch (step) {
+        case 'vehicle':
+            return selectedBrand.value !== null
+                || selectedYear.value !== null
+                || selectedModel.value !== null;
+        case 'screen':
+            return selectedScreenVariantIds.value.length > 0;
+        case 'camera':
+            return selectedCameraKeys.value.length > 0;
+        case 'speaker':
+            return selectedSpeakerKeys.value.length > 0;
+        case 'installation':
+            return selectedInstallationKey.value !== null
+                || selectedPrecheckMethod.value !== null
+                || selectedServiceZone.value !== null;
+        default:
+            return false;
+    }
+};
+const mainStepButtonClass = (step: string) => [
+    'mx-auto block w-fit min-w-64 rounded-lg border-2 px-5 py-4 text-base font-semibold uppercase tracking-wide transition',
+    stepHasSelections(step)
+        ? 'border-black bg-amber-400 text-black ring-2 ring-amber-400 hover:bg-amber-300'
+        : 'border-amber-400 bg-transparent text-amber-400 hover:border-black hover:bg-amber-400 hover:text-black hover:ring-2 hover:ring-amber-400',
+];
 const showMissingVehicleForm = ref(false);
 const missingVehicleSending = ref(false);
 const missingVehicleSent = ref(false);
@@ -213,19 +305,22 @@ const models = computed(() => {
         return [];
     }
 
+    const brand = selectedBrand.value;
+    const year = selectedYear.value;
+
     return [
         ...new Set(
             compatibilityEntries.value
                 .filter((entry) => {
-                    if (entry.brand !== selectedBrand.value) {
+                    if (entry.brand !== brand) {
                         return false;
                     }
 
                     return (
                         entry.yearFrom !== null &&
                         entry.yearTo !== null &&
-                        selectedYear.value >= entry.yearFrom &&
-                        selectedYear.value <= entry.yearTo
+                        year >= entry.yearFrom &&
+                        year <= entry.yearTo
                     );
                 })
                 .map((entry) => entry.model)
@@ -235,13 +330,14 @@ const models = computed(() => {
 });
 
 const brandVehicles = computed(() =>
-    props.vehicles.filter((vehicle) => vehicle.brand === selectedBrand.value),
+    props.vehicles.filter((vehicle) =>
+        supportsVehicleBrand(vehicle.brand, selectedBrand.value),
+    ),
 );
 
 const matchingVehicles = computed(() =>
     brandVehicles.value.filter(
-        (vehicle) =>
-            selectedModel.value === null || vehicle.model === selectedModel.value,
+        (vehicle) => supportsVehicleModel(vehicle.model, selectedModel.value),
     ),
 );
 
@@ -454,8 +550,158 @@ const updateVariantAutoScroll = (event: PointerEvent) => {
     }
 };
 
-onMounted(() => {
+const CONFIGURATOR_STATE_KEY = 'autoradiocanario-configurator-state-v1';
+const CONFIGURATOR_STATE_TTL = 60 * 60 * 1000;
+let configuratorStateHydrated = false;
+
+const restoreConfiguratorState = async () => {
+    try {
+        const rawState = window.localStorage.getItem(CONFIGURATOR_STATE_KEY);
+
+        if (!rawState) return;
+
+        const stored = JSON.parse(rawState);
+
+        if (!stored?.expiresAt || stored.expiresAt <= Date.now() || !stored?.state) {
+            window.localStorage.removeItem(CONFIGURATOR_STATE_KEY);
+            return;
+        }
+
+        const state = stored.state;
+        const brand = typeof state.selectedBrand === 'string' && brands.value.includes(state.selectedBrand)
+            ? state.selectedBrand
+            : null;
+        const year = Number.isInteger(state.selectedYear) ? state.selectedYear : null;
+        const modelIsValid = brand !== null && year !== null && typeof state.selectedModel === 'string'
+            && compatibilityEntries.value.some((entry) =>
+                entry.brand === brand
+                && entry.model === state.selectedModel
+                && entry.yearFrom !== null
+                && entry.yearTo !== null
+                && year >= entry.yearFrom
+                && year <= entry.yearTo
+            );
+
+        selectedBrand.value = brand;
+        await nextTick();
+        selectedYear.value = year;
+        await nextTick();
+        selectedModel.value = modelIsValid ? state.selectedModel : null;
+
+        const availableVariantIds = new Set(
+            props.vehicles.flatMap((vehicle) => vehicle.variants.map((variant) => variant.id)),
+        );
+        const availableCameraKeys = new Set(props.cameraOptions.map((option) => option.key));
+        const availableSpeakerKeys = new Set(props.speakerOptions.map((option) => option.key));
+        const availableInstallationKeys = new Set(props.installationOptions.map((option) => option.key));
+
+        selectedScreenVariantIds.value = Array.isArray(state.selectedScreenVariantIds)
+            ? state.selectedScreenVariantIds.filter((id: unknown) => typeof id === 'number' && availableVariantIds.has(id))
+            : [];
+        selectedCameraKeys.value = Array.isArray(state.selectedCameraKeys)
+            ? state.selectedCameraKeys.filter((key: unknown) => typeof key === 'string' && availableCameraKeys.has(key))
+            : [];
+        selectedSpeakerKeys.value = Array.isArray(state.selectedSpeakerKeys)
+            ? state.selectedSpeakerKeys.filter((key: unknown) => typeof key === 'string' && availableSpeakerKeys.has(key))
+            : [];
+        selectedSpeakerCategory.value = typeof state.selectedSpeakerCategory === 'string'
+            ? state.selectedSpeakerCategory
+            : '';
+        selectedSpeakerSizeByCategory.value = state.selectedSpeakerSizeByCategory
+            && typeof state.selectedSpeakerSizeByCategory === 'object'
+            ? state.selectedSpeakerSizeByCategory
+            : {};
+        selectedInstallationKey.value =
+            typeof state.selectedInstallationKey === 'string'
+            && availableInstallationKeys.has(state.selectedInstallationKey)
+                ? state.selectedInstallationKey
+                : null;
+        installationRequested.value = state.installationRequested === true;
+        selectedPrecheckMethod.value = ['self', 'installer'].includes(state.selectedPrecheckMethod)
+            ? state.selectedPrecheckMethod
+            : null;
+        selectedServiceZone.value = ['north', 'capital', 'south'].includes(state.selectedServiceZone)
+            ? state.selectedServiceZone
+            : null;
+        postalCode.value = typeof state.postalCode === 'string' ? state.postalCode : '';
+        checkedPostalCode.value = typeof state.checkedPostalCode === 'string'
+            ? state.checkedPostalCode
+            : null;
+        resolvedInstallationArea.value = state.resolvedInstallationArea
+            && typeof state.resolvedInstallationArea.name === 'string'
+            && Array.isArray(state.resolvedInstallationArea.productHandles)
+                ? state.resolvedInstallationArea
+                : null;
+        openSteps.value = Array.isArray(state.openSteps)
+            ? state.openSteps.filter((step: unknown) =>
+                typeof step === 'string'
+                && ['vehicle', 'screen', 'camera', 'speaker', 'installation'].includes(step)
+            )
+            : [];
+
+        await nextTick();
+    } catch {
+        window.localStorage.removeItem(CONFIGURATOR_STATE_KEY);
+    }
+};
+
+const persistConfiguratorState = () => {
+    if (!configuratorStateHydrated) return;
+
+    try {
+        window.localStorage.setItem(CONFIGURATOR_STATE_KEY, JSON.stringify({
+            expiresAt: Date.now() + CONFIGURATOR_STATE_TTL,
+            state: {
+                selectedBrand: selectedBrand.value,
+                selectedModel: selectedModel.value,
+                selectedYear: selectedYear.value,
+                selectedScreenVariantIds: selectedScreenVariantIds.value,
+                selectedCameraKeys: selectedCameraKeys.value,
+                selectedSpeakerCategory: selectedSpeakerCategory.value,
+                selectedSpeakerSizeByCategory: selectedSpeakerSizeByCategory.value,
+                selectedSpeakerKeys: selectedSpeakerKeys.value,
+                selectedInstallationKey: selectedInstallationKey.value,
+                installationRequested: installationRequested.value,
+                selectedPrecheckMethod: selectedPrecheckMethod.value,
+                selectedServiceZone: selectedServiceZone.value,
+                postalCode: postalCode.value,
+                checkedPostalCode: checkedPostalCode.value,
+                resolvedInstallationArea: resolvedInstallationArea.value,
+                openSteps: openSteps.value,
+            },
+        }));
+    } catch {
+        // Browsers may disable localStorage; the configurator must remain usable.
+    }
+};
+
+watch(
+    [
+        selectedBrand,
+        selectedModel,
+        selectedYear,
+        selectedScreenVariantIds,
+        selectedCameraKeys,
+        selectedSpeakerCategory,
+        selectedSpeakerSizeByCategory,
+        selectedSpeakerKeys,
+        selectedInstallationKey,
+        installationRequested,
+        selectedPrecheckMethod,
+        selectedServiceZone,
+        postalCode,
+        checkedPostalCode,
+        resolvedInstallationArea,
+        openSteps,
+    ],
+    persistConfiguratorState,
+    { deep: true },
+);
+
+onMounted(async () => {
     document.documentElement.lang = props.locale;
+    await restoreConfiguratorState();
+    configuratorStateHydrated = true;
     window.addEventListener('keydown', closeImageZoomOnEscape);
     window.addEventListener('scroll', updateMobileQuoteTotals, { passive: true });
     window.addEventListener('resize', updateMobileQuoteTotals);
@@ -605,8 +851,8 @@ const visibleCameraOptions = computed(() => {
         }
 
         return (
-            option.brand === selectedBrand.value &&
-            option.model === selectedModel.value &&
+            supportsVehicleBrand(option.brand, selectedBrand.value) &&
+            supportsVehicleModel(option.model, selectedModel.value) &&
             selectedYear.value >= option.yearFrom &&
             selectedYear.value <= option.yearTo
         );
@@ -695,6 +941,8 @@ const formatSpeakerCategory = (category: string) => {
         .toLocaleLowerCase();
 
     const translationKeys: Record<string, string> = {
+        'altavoces completos': 'speaker.categories.complete_speakers',
+        'kit de altavoces': 'speaker.categories.speaker_kit',
         'rango completo': 'speaker.categories.full_range',
         'full range': 'speaker.categories.full_range',
         'gamma completa': 'speaker.categories.full_range',
@@ -1208,6 +1456,9 @@ const generateQuote = async (withoutClientData = false) => {
     const vehicle = [selectedBrand.value, selectedModel.value, selectedYear.value]
         .filter(Boolean)
         .join(' ');
+    const vehicleImage = selectedVehicleImageUrl.value
+        ? new URL(selectedVehicleImageUrl.value, window.location.origin).href
+        : null;
     const items: Array<{
         code: string;
         description: string;
@@ -1314,15 +1565,17 @@ const generateQuote = async (withoutClientData = false) => {
         .tagline { margin-top: 5px; font-size: 7px; letter-spacing: 2px; }
         .quote-title { text-align: right; }
         .quote-title h1 { margin: 10px 0 5px; font-size: 24px; text-transform: uppercase; }
-        .details { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 18px; }
+        .vehicle-band { display: flex; align-items: center; justify-content: center; width: 100%; height: 100px; margin-top: 14px; background: #121212; }
+        .vehicle-band img { display: block; width: 180px; height: 94px; object-fit: contain; }
+        .details { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 30px; margin-top: 18px; }
         .details h2 { margin: 0 0 4px; font-size: 15px; }
         .details p { margin: 3px 0; }
         .issuer { text-align: right; }
         .date { margin: 14px 0; font-size: 13px; }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-        th, td { border: 1.3px solid #292727; padding: 8px 7px; vertical-align: middle; }
+        table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; color: #292727; }
+        th, td { border: 1px solid #b8b8b8; padding: 8px 7px; vertical-align: middle; }
         tr { break-inside: avoid; page-break-inside: avoid; }
-        th { background: #f8d7d7; font-size: 12px; }
+        th { background: #fff; color: #292727; font-size: 12px; font-weight: 700; }
         th:nth-child(1) { width: 16%; }
         th:nth-child(2) { width: 46%; }
         th:nth-child(3) { width: 7%; }
@@ -1334,15 +1587,15 @@ const generateQuote = async (withoutClientData = false) => {
         .notes ul { margin: 5px 0 14px; padding-left: 18px; }
         .legal { line-height: 1.35; }
         .checkout { margin-top: 12px; overflow-wrap: anywhere; font-size: 8px; }
-        .total { display: grid; grid-template-columns: 2fr 1fr; margin-top: auto; border: 1.3px solid #292727; font-size: 14px; font-weight: 800; }
+        .total { display: grid; grid-template-columns: 2fr 1fr; margin-top: auto; border: 1px solid #b8b8b8; background: #fff; color: #292727; font-size: 14px; font-weight: 800; }
         .total div { padding: 10px; }
-        .total .amount { border-left: 1.3px solid #292727; background: #f8d7d7; text-align: center; }
-        footer { margin: 12px -12mm 0; padding: 18px 12mm; background: #f8d7d7; text-align: center; font-size: 7px; letter-spacing: 1.2px; break-inside: avoid; page-break-inside: avoid; }
+        .total .amount { border-left: 1px solid #b8b8b8; background: #fff; color: #292727; text-align: center; }
+        footer { margin: 12px -12mm 0; padding: 18px 12mm; background: #0067a9; color: #fff; text-align: center; font-size: 7px; font-weight: 700; letter-spacing: 1.2px; break-inside: avoid; page-break-inside: avoid; }
         @media print {
             html, body { height: auto; }
             .page { min-height: auto; break-after: avoid; page-break-after: avoid; }
             .total { margin-top: 16px; }
-            th, .total .amount, footer {
+            table, th, td, .total, .total .amount, footer, .vehicle-band {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
@@ -1365,6 +1618,11 @@ const generateQuote = async (withoutClientData = false) => {
             <div>${escapeHtml(t('print.number'))}: ${escapeHtml(quoteNumber)}</div>
         </div>
     </header>
+    ${vehicleImage ? `
+        <div class="vehicle-band">
+            <img src="${escapeHtml(vehicleImage)}" alt="${escapeHtml(vehicle)}">
+        </div>
+    ` : ''}
     <section class="details">
         <div>
             <h2>${escapeHtml(t('print.client'))}:</h2>
@@ -1397,7 +1655,7 @@ const generateQuote = async (withoutClientData = false) => {
         <div>${escapeHtml(t('quote.total'))}</div>
         <div class="amount">${euroFormatter.value.format(discountedTotal.value)}</div>
     </section>
-    <footer>INFO@AUTORADIOCANARIO.COM &nbsp;&nbsp; AUTORADIOCANARIO &nbsp;&nbsp; WHATSAPP: +34 694 259 117</footer>
+    <footer>INFO@AUTORADIOCANARIO.COM &nbsp;&nbsp; WWW.AUTORADIOCANARIO.COM &nbsp;&nbsp; TEL./WHATSAPP: +34 694 259 117</footer>
 </main>
 <script>window.addEventListener('load', () => window.print());<\/script>
 </body>
@@ -1517,6 +1775,122 @@ watch(
     <Head :title="t('page_title')" />
 
     <div class="min-h-screen bg-[#121212] text-white">
+        <header class="border-b border-neutral-800 bg-[#121212]">
+            <div class="bg-[#334fb4] text-white">
+                <div class="mx-auto grid h-12 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
+                    <div class="hidden items-center gap-5 sm:flex">
+                        <a
+                            href="https://www.facebook.com/autoradiocanario"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Facebook"
+                            class="transition hover:text-amber-300"
+                        >
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.85c0-2.52 1.5-3.91 3.77-3.91 1.09 0 2.23.2 2.23.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.57v1.89h2.77l-.44 2.91h-2.33V22C18.34 21.24 22 17.08 22 12.06Z"/>
+                            </svg>
+                        </a>
+                        <a
+                            href="https://www.instagram.com/autoradiocanario/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Instagram"
+                            class="transition hover:text-amber-300"
+                        >
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <rect x="3" y="3" width="18" height="18" rx="5"/>
+                                <circle cx="12" cy="12" r="4"/>
+                                <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+                            </svg>
+                        </a>
+                    </div>
+                    <div class="col-start-2 flex items-center gap-8 text-center text-[11px] font-semibold tracking-[0.12em] sm:text-xs">
+                        <span class="text-white/65">‹</span>
+                        <span>{{ headerCopy.announcement }}</span>
+                        <span class="text-white/65">›</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="grid h-24 grid-cols-[1fr_auto_1fr] items-center gap-5 lg:flex lg:justify-between">
+                    <button
+                        type="button"
+                        class="col-start-1 justify-self-start rounded-md p-2 transition hover:bg-white/10 lg:hidden"
+                        :aria-expanded="mobileHeaderOpen"
+                        aria-controls="mobile-store-navigation"
+                        @click="mobileHeaderOpen = !mobileHeaderOpen"
+                    >
+                        <span class="sr-only">Menu</span>
+                        <svg v-if="!mobileHeaderOpen" class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                            <path d="M4 7h16M4 12h16M4 17h16"/>
+                        </svg>
+                        <svg v-else class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                            <path d="m6 6 12 12M18 6 6 18"/>
+                        </svg>
+                    </button>
+
+                    <a href="https://www.autoradiocanario.com/" aria-label="AutoradioCanario Home" class="col-start-2 shrink-0 justify-self-center lg:col-auto">
+                        <img src="/images/logo.png" alt="AutoradioCanario" class="h-16 w-24 object-contain" />
+                    </a>
+
+                    <nav class="hidden flex-1 items-center gap-8 pl-4 text-sm lg:flex">
+                        <a href="https://www.autoradiocanario.com/" class="border-b border-white pb-1 transition hover:text-amber-400">
+                            {{ headerCopy.home }}
+                        </a>
+                        <a href="https://www.autoradiocanario.com/pages/contact" class="transition hover:text-amber-400">
+                            {{ headerCopy.contact }}
+                        </a>
+                        <a href="https://www.autoradiocanario.com/pages/quienes-somos" class="transition hover:text-amber-400">
+                            {{ headerCopy.about }}
+                        </a>
+                    </nav>
+
+                    <div class="ml-auto hidden items-center gap-4 lg:flex">
+                        <label class="sr-only" for="header-language">Language</label>
+                        <select
+                            id="header-language"
+                            :value="locale"
+                            class="cursor-pointer border-0 bg-[#121212] py-2 pl-2 pr-7 text-sm text-white outline-none ring-0 focus:ring-0"
+                            @change="changeHeaderLanguage"
+                        >
+                            <option value="es">Español</option>
+                            <option value="en">English</option>
+                            <option value="it">Italiano</option>
+                        </select>
+
+                        <a
+                            :href="checkoutUrl || storefrontUrl('/cart')"
+                            :aria-label="t('actions.checkout')"
+                            class="rounded-md p-2 transition hover:bg-white/10 hover:text-amber-400"
+                        >
+                            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                                <path d="M6.7 8.5h10.6l.75 11H5.95l.75-11Z"/>
+                                <path d="M9 9V6.5a3 3 0 0 1 6 0V9"/>
+                            </svg>
+                        </a>
+
+                    </div>
+                </div>
+
+                <nav
+                    v-if="mobileHeaderOpen"
+                    id="mobile-store-navigation"
+                    class="grid gap-1 border-t border-neutral-800 pb-4 pt-3 text-sm lg:hidden"
+                >
+                    <a href="https://www.autoradiocanario.com/" class="rounded-lg px-3 py-3 hover:bg-white/5 hover:text-amber-400">
+                        {{ headerCopy.home }}
+                    </a>
+                    <a href="https://www.autoradiocanario.com/pages/contact" class="rounded-lg px-3 py-3 hover:bg-white/5 hover:text-amber-400">
+                        {{ headerCopy.contact }}
+                    </a>
+                    <a href="https://www.autoradiocanario.com/pages/quienes-somos" class="rounded-lg px-3 py-3 hover:bg-white/5 hover:text-amber-400">
+                        {{ headerCopy.about }}
+                    </a>
+                </nav>
+            </div>
+        </header>
+
         <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
             <div class="mb-8 flex items-start justify-between gap-6">
                 <div class="mx-auto text-center sm:mx-0 sm:text-left">
@@ -1572,7 +1946,7 @@ watch(
             <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <section class="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
                     <div class="grid gap-6">
-                        <button type="button" class="mx-auto block w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('vehicle')">{{ t('steps.vehicle') }}</button>
+                        <button type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStep('vehicle')">{{ t('steps.vehicle') }}</button>
                         <div v-if="openSteps.includes('vehicle')">
 
                         <div
@@ -1637,7 +2011,7 @@ watch(
 
                         </div>
                         <div class="border-t border-neutral-800 pt-6">
-                            <button type="button" class="mx-auto block w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleScreenStep">{{ t('steps.screen') }}</button>
+                            <button type="button" :class="mainStepButtonClass('screen')" @click="toggleScreenStep">{{ t('steps.screen') }}</button>
                             <div v-if="openSteps.includes('screen') || (selectedModel && compatibleVehicles.length)" class="mt-6">
                             <div v-if="selectedYear !== null && compatibleVehicles.length" class="mt-4 grid gap-5">
                                 <article
@@ -1735,7 +2109,7 @@ watch(
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
-                            <button type="button" class="mx-auto block w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('camera')">{{ t('steps.camera') }}</button>
+                            <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStep('camera')">{{ t('steps.camera') }}</button>
                             <div v-if="openSteps.includes('camera')" class="mt-6">
                             <div class="mt-4 grid gap-4 md:grid-cols-3">
                                 <div
@@ -1804,7 +2178,7 @@ watch(
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
-                            <button type="button" class="mx-auto block w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('speaker')">{{ t('steps.speaker') }}</button>
+                            <button type="button" :class="mainStepButtonClass('speaker')" @click="toggleStep('speaker')">{{ t('steps.speaker') }}</button>
                             <div v-if="openSteps.includes('speaker')" class="mt-6">
                             <div class="mt-4 grid max-w-2xl gap-4">
                                 <div>
@@ -1887,7 +2261,7 @@ watch(
                         </div>
 
                         <div class="border-t border-neutral-800 pt-6">
-                            <button type="button" class="mx-auto block w-fit min-w-64 rounded-lg border-2 border-black bg-amber-400 px-5 py-4 text-base font-semibold uppercase tracking-wide text-black ring-2 ring-amber-400 transition hover:bg-amber-300" @click="toggleStep('installation'); installationRequested = true">{{ t('steps.installation') }}</button>
+                            <button type="button" :class="mainStepButtonClass('installation')" @click="toggleStep('installation'); installationRequested = true">{{ t('steps.installation') }}</button>
                             <div v-if="openSteps.includes('installation')" class="mt-6">
                             <p v-if="hasSelectedProducts" class="mt-2 max-w-3xl text-sm leading-6 text-neutral-400">
                                 {{ t('installation.intro') }}
@@ -2166,9 +2540,21 @@ watch(
                                         @error="failedVehicleImage = selectedVehicleImageUrl"
                                     />
                                 </button>
+                                <img
+                                    v-else
+                                    src="/images/logo.png"
+                                    alt=""
+                                    class="h-full w-full object-contain p-6 opacity-80"
+                                />
                             </div>
                         </div>
-                        <div v-else class="h-52 bg-[#121212]"></div>
+                        <div v-else class="flex h-52 items-center justify-center bg-[#121212] p-1">
+                            <img
+                                src="/images/logo.png"
+                                alt=""
+                                class="h-full w-full object-contain p-6 opacity-80"
+                            />
+                        </div>
                     </div>
 
                     <div class="quote-scrollbar lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
@@ -2401,6 +2787,93 @@ watch(
             <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer" class="underline hover:text-neutral-500">GeoNames</a>
             (CC BY 4.0).
         </p>
+
+        <footer class="border-t border-neutral-800 bg-[#121212] text-white">
+            <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+                <div class="flex flex-col items-center py-14 text-center sm:py-16">
+                    <h2 class="text-base font-medium">{{ headerCopy.contact }}</h2>
+                    <a
+                        href="mailto:info@autoradiocanario.com"
+                        class="mt-7 text-sm transition hover:text-amber-400"
+                    >
+                        Info@AutoRadioCanario.com
+                    </a>
+                    <div class="mt-10 flex items-center gap-6">
+                        <a
+                            href="https://www.facebook.com/autoradiocanario"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Facebook"
+                            class="transition hover:text-amber-400"
+                        >
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.85c0-2.52 1.5-3.91 3.77-3.91 1.09 0 2.23.2 2.23.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.57v1.89h2.77l-.44 2.91h-2.33V22C18.34 21.24 22 17.08 22 12.06Z"/>
+                            </svg>
+                        </a>
+                        <a
+                            href="https://www.instagram.com/autoradiocanario/"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label="Instagram"
+                            class="transition hover:text-amber-400"
+                        >
+                            <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <rect x="3" y="3" width="18" height="18" rx="5"/>
+                                <circle cx="12" cy="12" r="4"/>
+                                <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+
+                <div class="border-t border-neutral-800 py-10">
+                    <div class="flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
+                        <label class="grid w-36 gap-3 text-xs text-neutral-300">
+                            Idioma
+                            <select
+                                :value="locale"
+                                class="border border-neutral-500 bg-[#121212] px-4 py-3 text-sm text-white outline-none"
+                                @change="changeHeaderLanguage"
+                            >
+                                <option value="es">Español</option>
+                                <option value="en">English</option>
+                                <option value="it">Italiano</option>
+                            </select>
+                        </label>
+
+                        <div class="flex max-w-xl flex-wrap gap-2 lg:justify-end" aria-label="Formas de pago">
+                            <span
+                                v-for="payment in ['AMEX', 'Apple Pay', 'Bancontact', 'G Pay', 'Klarna', 'Maestro', 'Mastercard', 'PayPal', 'Shop Pay', 'UnionPay', 'USDC', 'VISA']"
+                                :key="payment"
+                                class="inline-flex h-7 items-center rounded bg-white px-2 text-[10px] font-bold text-neutral-900"
+                            >
+                                {{ payment }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] text-neutral-400">
+                        <span>© {{ currentYear }}, Auto Radio Canario</span>
+                        <span>·</span>
+                        <a href="https://www.autoradiocanario.com/policies/privacy-policy" class="hover:text-white">Política de privacidad</a>
+                        <span>·</span>
+                        <a href="https://www.autoradiocanario.com/policies/refund-policy" class="hover:text-white">Política de reembolso</a>
+                        <span>·</span>
+                        <a href="https://www.autoradiocanario.com/policies/terms-of-service" class="hover:text-white">Términos del servicio</a>
+                        <span>·</span>
+                        <a href="https://www.autoradiocanario.com/policies/shipping-policy" class="hover:text-white">Política de envío</a>
+                        <span>·</span>
+                        <a href="https://www.autoradiocanario.com/policies/contact-information" class="hover:text-white">Información de contacto</a>
+                        <span>·</span>
+                        <a href="https://www.autoradiocanario.com/policies/legal-notice" class="hover:text-white">Aviso legal</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-[#334fb4] px-4 py-12 text-center text-[11px] text-black/80 sm:py-16">
+                By Escuelasoft N0439887
+            </div>
+        </footer>
 
         <div
             v-if="zoomedImage"

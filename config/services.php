@@ -45,4 +45,9 @@ return [
         'version' => env('SHOPIFY_API_VERSION', '2026-04'),
     ],
 
+    'openai' => [
+        'api_key' => env('OPENAI_API_KEY'),
+        'image_model' => env('OPENAI_IMAGE_MODEL', 'gpt-image-1-mini'),
+    ],
+
 ];

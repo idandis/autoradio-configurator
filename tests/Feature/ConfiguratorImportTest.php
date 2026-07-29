@@ -322,8 +322,8 @@ CSV;
     public function test_import_creates_speakers_with_nominal_sizes(): void
     {
         $csv = <<<'CSV'
-Type,Title,Image Src,Option1 Value,Handle,Variant ID,Price / spagna,Metafield: shopify.vehicle-coaxial-speaker-nominal-size [list.metaobject_reference]
-ALTAVOCES,Altoparlanti coassiali,https://example.com/speaker.jpg,Coppia 300W,speaker-coaxial,57508028350000,89.90,"[""6.5 pulgadas"",""165 mm""]"
+Type,Title,Image Src,Option1 Value,Handle,Variant ID,Price / spagna,Metafield: shopify.vehicle-coaxial-speaker-nominal-size [list.metaobject_reference],Metafield: custom.altavoces [single_line_text_field]
+ALTAVOCES,Altoparlanti coassiali,https://example.com/speaker.jpg,Coppia 300W,speaker-coaxial,57508028350000,89.90,"[""6.5 pulgadas"",""165 mm""]","Altavoces completos | Kit de altavoces | Subwoofer | Tweeter"
 ALTAVOCES,,https://example.com/speaker-detail.jpg,,speaker-coaxial,,,
 CSV;
 
@@ -336,6 +336,10 @@ CSV;
         $speaker = ConfiguratorProduct::where('category', 'speaker')->firstOrFail();
 
         $this->assertSame(['6.5 pulgadas', '165 mm'], $speaker->meta['speaker_sizes']);
+        $this->assertSame(
+            ['Altavoces completos', 'Kit de altavoces', 'Subwoofer', 'Tweeter'],
+            $speaker->meta['speaker_categories'],
+        );
         $this->assertSame(1, $speaker->variants()->count());
         $this->assertDatabaseHas('configurator_variants', [
             'shopify_variant_id' => '57508028350000',

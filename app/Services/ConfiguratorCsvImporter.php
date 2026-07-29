@@ -56,6 +56,7 @@ class ConfiguratorCsvImporter
 
     public function __construct(
         private readonly ShopifyService $shopifyService,
+        private readonly VehicleImageGenerator $vehicleImageGenerator,
     ) {}
 
     public function import(string|UploadedFile $source, bool $replaceExistingDataset = true): array
@@ -126,6 +127,10 @@ class ConfiguratorCsvImporter
                 $stats['variants'] += count($product['variants']);
             }
         });
+
+        $imageStats = $this->vehicleImageGenerator->syncAfterImport();
+        $stats['vehicle_images_missing'] = $imageStats['missing'];
+        $stats['vehicle_images_queued'] = $imageStats['queued'];
 
         return $stats;
     }

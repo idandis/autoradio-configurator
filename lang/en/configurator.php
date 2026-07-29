@@ -47,6 +47,8 @@ return [
     ],
     'speaker' => [
         'categories' => [
+            'complete_speakers' => 'Complete speakers',
+            'speaker_kit' => 'Speaker kit',
             'full_range' => 'Full range',
             'midrange' => 'Midrange',
             'subwoofer' => 'Subwoofer',
