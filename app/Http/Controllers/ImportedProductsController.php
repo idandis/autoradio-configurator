@@ -3,13 +3,28 @@
 namespace App\Http\Controllers;
 
 use App\Models\ConfiguratorProduct;
+use App\Models\InstallationZoneProduct;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class ImportedProductsController extends Controller
 {
+    public function destroy(ConfiguratorProduct $product): RedirectResponse
+    {
+        DB::transaction(function () use ($product): void {
+            InstallationZoneProduct::query()
+                ->where('product_handle', $product->handle)
+                ->delete();
+
+            $product->delete();
+        });
+
+        return back()->with('status', 'Prodotto eliminato.');
+    }
+
     public function updatePrice(Request $request, ConfiguratorProduct $product): RedirectResponse
     {
         $validated = $request->validate(['price' => ['required', 'numeric', 'min:0', 'max:999999.99']]);

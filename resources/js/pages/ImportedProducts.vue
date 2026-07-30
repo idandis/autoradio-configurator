@@ -37,6 +37,7 @@ const filters = reactive({
 const editingPrice = ref<number | null>(null);
 const priceDraft = ref('');
 const savingPrice = ref(false);
+const deletingProduct = ref<number | null>(null);
 
 const startPriceEdit = (product: (typeof props.products.data)[number]) => {
     editingPrice.value = product.id;
@@ -48,6 +49,24 @@ const savePrice = (product: (typeof props.products.data)[number]) => {
     router.patch(`/imported-products/${product.id}/price`, { price: priceDraft.value }, {
         preserveScroll: true,
         onFinish: () => { savingPrice.value = false; editingPrice.value = null; },
+    });
+};
+
+const deleteProduct = (product: (typeof props.products.data)[number]) => {
+    const variants = product.variants_count === 1
+        ? '1 variante associata'
+        : `${product.variants_count} varianti associate`;
+
+    if (!window.confirm(`Eliminare definitivamente “${product.title}” e ${variants}?`)) {
+        return;
+    }
+
+    deletingProduct.value = product.id;
+    router.delete(`/imported-products/${product.id}`, {
+        preserveScroll: true,
+        onFinish: () => {
+            deletingProduct.value = null;
+        },
     });
 };
 
@@ -157,6 +176,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                         <th class="px-6 py-3 font-medium">Veicolo</th>
                         <th class="px-6 py-3 font-medium">Prezzo base</th>
                         <th class="px-6 py-3 font-medium">Varianti</th>
+                        <th class="px-6 py-3 text-right font-medium">Azioni</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-sidebar-border/70">
@@ -202,9 +222,19 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                         <td class="px-6 py-4 align-top">
                             {{ product.variants_count }}
                         </td>
+                        <td class="px-6 py-4 text-right align-top">
+                            <button
+                                type="button"
+                                class="rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive transition hover:bg-destructive hover:text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                                :disabled="deletingProduct === product.id"
+                                @click="deleteProduct(product)"
+                            >
+                                {{ deletingProduct === product.id ? 'Eliminazione…' : 'Elimina' }}
+                            </button>
+                        </td>
                     </tr>
                     <tr v-if="props.products.data.length === 0">
-                        <td colspan="5" class="px-6 py-10 text-center text-muted-foreground">
+                        <td colspan="6" class="px-6 py-10 text-center text-muted-foreground">
                             Nessun prodotto trovato con i filtri correnti.
                         </td>
                     </tr>
