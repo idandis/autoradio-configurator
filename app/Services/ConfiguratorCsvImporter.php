@@ -235,6 +235,11 @@ class ConfiguratorCsvImporter
         );
 
         $category = $this->detectCategory($handle, $title, $type, $tags);
+        $isUniversalScreen = $this->isUniversalScreen($handle, $title, $tags);
+
+        if ($category === null && $isUniversalScreen) {
+            $category = 'screen';
+        }
 
         if ($category === null && $installation !== null) {
             $category = 'installation';
@@ -261,7 +266,11 @@ class ConfiguratorCsvImporter
             $this->value($primaryRow, $this->yearHeaders())
         );
 
-        if ($category === 'screen' && ($explicitModel === null || $explicitYears === null)) {
+        if (
+            $category === 'screen' &&
+            ! $isUniversalScreen &&
+            ($explicitModel === null || $explicitYears === null)
+        ) {
             return null;
         }
 
@@ -423,6 +432,15 @@ class ConfiguratorCsvImporter
         }
 
         return null;
+    }
+
+    private function isUniversalScreen(string $handle, string $title, string $tags = ''): bool
+    {
+        $needle = mb_strtolower(trim($handle.' '.$title.' '.$tags));
+
+        return str_contains($needle, 'universal') &&
+            preg_match('/autoradio|auto radio|pantalla|screen|carplay|android auto|\b(?:1|2)\s*din\b/u', $needle) === 1 &&
+            preg_match('/camara|cámara|camera|altavoz|altavoces|speaker|tweeter|subwoofer/u', $needle) !== 1;
     }
 
     private function parseSpeakerSizes(mixed $value): array

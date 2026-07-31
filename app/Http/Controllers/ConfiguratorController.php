@@ -51,8 +51,19 @@ class ConfiguratorController extends Controller
 
     public function __invoke(): Response
     {
+        $allProducts = ConfiguratorProduct::with('variants')
+            ->orderBy('category')
+            ->orderBy('title')
+            ->get();
+
         $screenProducts = ConfiguratorProduct::with('variants')
             ->where('category', 'screen')
+            ->whereNotNull('brand')
+            ->where('brand', '!=', '')
+            ->whereNotNull('model')
+            ->where('model', '!=', '')
+            ->whereNotNull('year_from')
+            ->whereNotNull('year_to')
             ->orderBy('brand')
             ->orderBy('model')
             ->get();
@@ -75,6 +86,35 @@ class ConfiguratorController extends Controller
         return Inertia::render('Configurator', [
             'locale' => app()->getLocale(),
             'translations' => trans('configurator'),
+            'customProducts' => $allProducts->flatMap(function (ConfiguratorProduct $product) {
+                $variants = $product->variants->filter(
+                    fn ($variant) => $variant->price !== null || filled($variant->shopify_variant_id),
+                );
+
+                if ($variants->isEmpty()) {
+                    return [[
+                        'key' => 'product-'.$product->id,
+                        'title' => $product->title,
+                        'variantTitle' => null,
+                        'category' => $product->category,
+                        'sku' => null,
+                        'shopifyVariantId' => null,
+                        'price' => (float) ($product->price_min ?? 0),
+                        'image' => $product->image_url,
+                    ]];
+                }
+
+                return $variants->map(fn ($variant) => [
+                    'key' => 'variant-'.$variant->id,
+                    'title' => $product->title,
+                    'variantTitle' => $variant->option_value ?: $variant->title,
+                    'category' => $product->category,
+                    'sku' => $variant->sku,
+                    'shopifyVariantId' => $variant->shopify_variant_id,
+                    'price' => (float) ($variant->price ?? $product->price_min ?? 0),
+                    'image' => $variant->image_url ?: $product->image_url,
+                ]);
+            })->values(),
             'vehicles' => $screenProducts->map(fn (ConfiguratorProduct $product) => [
                 'id' => $product->id,
                 'handle' => $product->handle,

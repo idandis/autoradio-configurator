@@ -57,6 +57,17 @@ type SpeakerOption = SimpleOption & {
     categories: string[];
 };
 
+type CustomProduct = {
+    key: string;
+    title: string;
+    variantTitle: string | null;
+    category: string;
+    sku: string | null;
+    shopifyVariantId: string | null;
+    price: number;
+    image: string | null;
+};
+
 type TranslationTree = {
     [key: string]: string | TranslationTree;
 };
@@ -64,6 +75,7 @@ type TranslationTree = {
 const props = defineProps<{
     locale: 'es' | 'it' | 'en';
     translations: TranslationTree;
+    customProducts: CustomProduct[];
     vehicles: Vehicle[];
     cameraOptions: SimpleOption[];
     speakerOptions: SpeakerOption[];
@@ -127,6 +139,11 @@ const headerCopy = computed(() => ({
         about: 'About us',
         language: 'English',
     },
+})[props.locale]);
+const customQuoteCopy = computed(() => ({
+    es: { button: 'Presupuesto personalizado', title: 'Presupuesto personalizado', help: 'Añade todos los productos que quieras y crea el presupuesto al terminar.', search: 'Buscar por producto, variante o SKU…', selected: 'Productos añadidos', empty: 'Ningún producto encontrado', add: 'Añadir', added: 'Añadido', remove: 'Quitar', cancel: 'Cancelar', create: 'Crear presupuesto' },
+    it: { button: 'Preventivo custom', title: 'Preventivo custom', help: 'Aggiungi tutti i prodotti che vuoi e crea il preventivo quando hai finito.', search: 'Cerca prodotto, variante o SKU…', selected: 'Prodotti aggiunti', empty: 'Nessun prodotto trovato', add: 'Aggiungi', added: 'Aggiunto', remove: 'Rimuovi', cancel: 'Annulla', create: 'Crea preventivo' },
+    en: { button: 'Custom quote', title: 'Custom quote', help: 'Add all the products you need, then create the quote when finished.', search: 'Search by product, variant or SKU…', selected: 'Added products', empty: 'No products found', add: 'Add', added: 'Added', remove: 'Remove', cancel: 'Cancel', create: 'Create quote' },
 })[props.locale]);
 
 const changeHeaderLanguage = (event: Event) => {
@@ -200,6 +217,46 @@ const selectedSpeakerCategory = ref<string>('');
 const selectedSpeakerSizeByCategory = ref<Record<string, string>>({});
 const selectedSpeakerKeys = ref<string[]>([]);
 const selectedInstallationKey = ref<string | null>(null);
+const showCustomQuoteModal = ref(false);
+const customProductSearch = ref('');
+const selectedCustomProductKeys = ref<string[]>([]);
+const selectedCustomProducts = computed(() =>
+    (props.customProducts ?? []).filter((product) => selectedCustomProductKeys.value.includes(product.key)),
+);
+const filteredCustomProducts = computed(() => {
+    const search = customProductSearch.value.trim().toLocaleLowerCase();
+
+    if (!search) return props.customProducts ?? [];
+
+    return (props.customProducts ?? []).filter((product) =>
+        [product.title, product.variantTitle, product.sku, product.category]
+            .filter(Boolean)
+            .some((value) => String(value).toLocaleLowerCase().includes(search)),
+    );
+});
+const toggleCustomProduct = (key: string) => {
+    selectedCustomProductKeys.value = selectedCustomProductKeys.value.includes(key)
+        ? selectedCustomProductKeys.value.filter((selectedKey) => selectedKey !== key)
+        : [...selectedCustomProductKeys.value, key];
+};
+const startCustomQuote = () => {
+    selectedBrand.value = null;
+    selectedModel.value = null;
+    selectedYear.value = null;
+    selectedScreenVariantIds.value = [];
+    selectedCameraKeys.value = [];
+    selectedSpeakerKeys.value = [];
+    selectedInstallationKey.value = null;
+    selectedPrecheckMethod.value = null;
+    showCustomQuoteModal.value = true;
+};
+const completeCustomQuote = () => {
+    showCustomQuoteModal.value = false;
+    if (selectedCustomProductKeys.value.length > 0) {
+        quoteGenerationError.value = null;
+        showQuoteModal.value = true;
+    }
+};
 const installationRequested = ref(false);
 const openSteps = ref<string[]>([]);
 const toggleStep = (step: string) => {
@@ -1039,7 +1096,12 @@ const togglePrecheckMethod = (method: 'self' | 'installer') => {
 };
 
 const hasSelectedProducts = computed(
-    () => Boolean(selectedScreens.value.length || selectedCameras.value.length || selectedSpeakers.value.length),
+    () => Boolean(
+        selectedScreens.value.length ||
+        selectedCameras.value.length ||
+        selectedSpeakers.value.length ||
+        selectedCustomProducts.value.length
+    ),
 );
 const requiresPrecheck = computed(
     () => selectedScreens.value.length > 0,
@@ -1238,7 +1300,8 @@ const productsSubtotal = computed(
     () =>
         selectedScreens.value.reduce((sum, screen) => sum + screen.price, 0) +
         selectedCameras.value.reduce((sum, camera) => sum + camera.price, 0) +
-        selectedSpeakers.value.reduce((sum, speaker) => sum + speaker.price, 0),
+        selectedSpeakers.value.reduce((sum, speaker) => sum + speaker.price, 0) +
+        selectedCustomProducts.value.reduce((sum, product) => sum + product.price, 0),
 );
 
 const total = computed(
@@ -1298,6 +1361,12 @@ const checkoutLineItems = computed(() => {
                 variantId: speaker.shopifyVariantId,
                 quantity: 1,
             });
+        }
+    });
+
+    selectedCustomProducts.value.forEach((product) => {
+        if (product.shopifyVariantId) {
+            items.push({ variantId: product.shopifyVariantId, quantity: 1 });
         }
     });
 
@@ -1495,6 +1564,17 @@ const generateQuote = async (withoutClientData = false) => {
             description: speaker.productTitle,
             quantity: 1,
             price: speaker.price,
+        });
+    });
+
+    selectedCustomProducts.value.forEach((product) => {
+        items.push({
+            code: product.sku || product.shopifyVariantId || product.key,
+            description: product.variantTitle
+                ? `${product.title} — ${product.variantTitle}`
+                : product.title,
+            quantity: 1,
+            price: product.price,
         });
     });
 
@@ -1892,7 +1972,39 @@ watch(
         </header>
 
         <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-            <div class="mb-8 flex items-start justify-between gap-6">
+            <div class="mb-8">
+                <div v-if="isAdmin" class="mb-8 grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                    <button
+                        type="button"
+                        class="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg border border-amber-400 bg-amber-400 px-5 text-sm font-semibold text-black transition hover:bg-amber-300"
+                        @click="startCustomQuote"
+                    >
+                        {{ customQuoteCopy.button }}
+                    </button>
+                    <button
+                        type="button"
+                        :disabled="!hasSelectedProducts"
+                        class="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg border border-neutral-700 bg-transparent px-5 text-sm font-semibold text-neutral-200 transition hover:border-amber-400 hover:text-amber-400 disabled:cursor-not-allowed disabled:border-neutral-800 disabled:text-neutral-600"
+                        @click="quoteGenerationError = null; showQuoteModal = true"
+                    >
+                        {{ t('actions.create_quote') }}
+                    </button>
+                    <button
+                        type="button"
+                        :disabled="!checkoutUrl"
+                        class="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg border border-amber-400 bg-transparent px-5 text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-800 disabled:text-neutral-600 disabled:hover:bg-transparent"
+                        @click="copyCheckoutUrl"
+                    >
+                        {{ copyCheckoutStatus === 'copied' ? t('actions.copied') : copyCheckoutStatus === 'error' ? t('actions.copy_failed') : t('actions.copy_cart_link') }}
+                    </button>
+                    <a
+                        href="/dashboard"
+                        class="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg border border-neutral-700 bg-transparent px-5 text-sm font-semibold text-neutral-200 transition hover:border-amber-400 hover:text-amber-400"
+                    >
+                        {{ t('admin.dashboard') }}
+                    </a>
+                </div>
+
                 <div class="mx-auto text-center sm:mx-0 sm:text-left">
                     <p class="text-xs font-medium uppercase tracking-[0.2em] text-amber-400 sm:text-sm sm:tracking-[0.24em]">
                         {{ t('intro.eyebrow') }}
@@ -1910,36 +2022,6 @@ watch(
                     >
                         {{ t('vehicle.missing') }}
                     </button>
-                </div>
-                <div v-if="isAdmin" class="flex shrink-0 flex-col gap-2 sm:flex-row">
-                    <button
-                        type="button"
-                        :disabled="!hasSelectedProducts"
-                        class="inline-flex items-center justify-center rounded-md border border-neutral-700 px-4 py-2 text-sm font-medium text-neutral-200 transition hover:border-amber-400 hover:text-amber-400 disabled:cursor-not-allowed disabled:border-neutral-800 disabled:text-neutral-600"
-                        @click="quoteGenerationError = null; showQuoteModal = true"
-                    >
-                        {{ t('actions.create_quote') }}
-                    </button>
-                    <button
-                        type="button"
-                        :disabled="!checkoutUrl"
-                        class="inline-flex items-center justify-center rounded-md border border-amber-400 px-4 py-2 text-sm font-medium text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-800 disabled:text-neutral-600 disabled:hover:bg-transparent"
-                        @click="copyCheckoutUrl"
-                    >
-                        {{
-                            copyCheckoutStatus === 'copied'
-                                ? t('actions.copied')
-                                : copyCheckoutStatus === 'error'
-                                    ? t('actions.copy_failed')
-                                    : t('actions.copy_cart_link')
-                        }}
-                    </button>
-                    <a
-                        href="/dashboard"
-                        class="inline-flex items-center justify-center rounded-md border border-neutral-800 px-4 py-2 text-sm text-neutral-200 transition hover:border-neutral-700 hover:bg-neutral-900"
-                    >
-                        {{ t('admin.dashboard') }}
-                    </a>
                 </div>
             </div>
 
@@ -2667,6 +2749,23 @@ watch(
                                 </p>
                             </div>
 
+                            <div
+                                v-for="product in selectedCustomProducts"
+                                :key="product.key"
+                                class="flex items-start justify-between gap-4"
+                            >
+                                <div class="min-w-0">
+                                    <p class="font-medium text-neutral-100">
+                                        {{ product.title }}<span v-if="product.variantTitle"> — {{ product.variantTitle }}</span>
+                                    </p>
+                                    <p class="text-sm text-neutral-500">{{ product.sku || product.category }}</p>
+                                </div>
+                                <div class="flex shrink-0 items-center gap-3">
+                                    <p class="whitespace-nowrap font-semibold">{{ product.price.toFixed(2) }} €</p>
+                                    <button type="button" class="text-neutral-500 hover:text-red-400" @click="toggleCustomProduct(product.key)">✕</button>
+                                </div>
+                            </div>
+
                             <div v-if="selectedInstallation" class="flex items-start justify-between gap-4">
                                 <div class="min-w-0">
                                     <button
@@ -2889,6 +2988,77 @@ watch(
                 class="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
             />
             <span class="absolute right-5 top-4 text-3xl text-white/70" aria-hidden="true">✕</span>
+        </div>
+
+        <div
+            v-if="isAdmin && showCustomQuoteModal"
+            class="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4"
+            @click.self="showCustomQuoteModal = false"
+        >
+            <section class="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-2xl border border-neutral-700 bg-[#121212] p-6 shadow-2xl">
+                <div class="flex items-start justify-between gap-4">
+                    <div>
+                        <h2 class="text-xl font-semibold text-white">{{ customQuoteCopy.title }}</h2>
+                        <p class="mt-1 text-sm text-neutral-400">{{ customQuoteCopy.help }}</p>
+                    </div>
+                    <button type="button" class="rounded-md px-2 py-1 text-neutral-400 hover:bg-neutral-800 hover:text-white" @click="showCustomQuoteModal = false">✕</button>
+                </div>
+
+                <input
+                    v-model="customProductSearch"
+                    type="search"
+                    autofocus
+                    class="mt-5 rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white placeholder:text-neutral-500"
+                    :placeholder="customQuoteCopy.search"
+                />
+
+                <div v-if="selectedCustomProducts.length" class="mt-4 rounded-xl border border-amber-400/40 bg-amber-400/5 p-3">
+                    <p class="mb-2 text-xs font-semibold uppercase tracking-wider text-amber-400">
+                        {{ customQuoteCopy.selected }} · {{ selectedCustomProducts.length }}
+                    </p>
+                    <div class="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
+                        <div v-for="product in selectedCustomProducts" :key="`selected-${product.key}`" class="flex items-center gap-2 rounded-lg bg-neutral-800 px-3 py-2 text-xs text-white">
+                            <span class="max-w-64 truncate">{{ product.title }}<template v-if="product.variantTitle"> — {{ product.variantTitle }}</template></span>
+                            <button type="button" class="text-neutral-400 hover:text-red-400" :aria-label="customQuoteCopy.remove" @click="toggleCustomProduct(product.key)">✕</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="quote-scrollbar mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-2">
+                    <div
+                        v-for="product in filteredCustomProducts"
+                        :key="product.key"
+                        class="flex items-center gap-4 rounded-xl border p-3 transition"
+                        :class="selectedCustomProductKeys.includes(product.key) ? 'border-amber-400 bg-amber-400/10' : 'border-neutral-800 bg-neutral-900 hover:border-neutral-600'"
+                    >
+                        <img v-if="product.image" :src="product.image" alt="" class="h-12 w-12 rounded-md bg-white object-contain" />
+                        <div class="min-w-0 flex-1">
+                            <p class="truncate text-sm font-medium text-white">{{ product.title }}</p>
+                            <p class="truncate text-xs text-neutral-400">
+                                {{ [product.variantTitle, product.sku, product.category].filter(Boolean).join(' · ') }}
+                            </p>
+                        </div>
+                        <span class="shrink-0 font-semibold text-amber-400">{{ product.price.toFixed(2) }} €</span>
+                        <button
+                            type="button"
+                            class="w-24 shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition"
+                            :class="selectedCustomProductKeys.includes(product.key) ? 'border border-neutral-600 bg-neutral-800 text-neutral-300 hover:border-red-400 hover:text-red-400' : 'bg-amber-400 text-black hover:bg-amber-300'"
+                            @click="toggleCustomProduct(product.key)"
+                        >
+                            {{ selectedCustomProductKeys.includes(product.key) ? customQuoteCopy.added : customQuoteCopy.add }}
+                        </button>
+                    </div>
+                    <p v-if="filteredCustomProducts.length === 0" class="py-10 text-center text-sm text-neutral-500">{{ customQuoteCopy.empty }}</p>
+                </div>
+
+                <div class="mt-5 flex items-center justify-between border-t border-neutral-800 pt-5">
+                    <span class="text-sm text-neutral-400">{{ customQuoteCopy.selected }}: {{ selectedCustomProductKeys.length }}</span>
+                    <div class="flex gap-3">
+                        <button type="button" class="rounded-lg border border-neutral-700 px-4 py-2 text-sm text-neutral-300 hover:bg-neutral-900" @click="showCustomQuoteModal = false">{{ customQuoteCopy.cancel }}</button>
+                        <button type="button" :disabled="selectedCustomProductKeys.length === 0" class="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-black hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40" @click="completeCustomQuote">{{ customQuoteCopy.create }}</button>
+                    </div>
+                </div>
+            </section>
         </div>
 
         <div

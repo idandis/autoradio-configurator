@@ -10,6 +10,7 @@ import {
     ClipboardList,
     SlidersHorizontal,
     Tags,
+    Users,
 } from '@lucide/vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -57,6 +58,11 @@ const mainNavItems: NavItem[] = [
         title: 'Prodotti importati',
         href: importedProducts(),
         icon: PackageSearch,
+    },
+    {
+        title: 'Clienti',
+        href: '/customers',
+        icon: Users,
     },
     { title: 'Moduli inviati', href: '/missing-vehicle-requests', icon: ClipboardList },
 ];
