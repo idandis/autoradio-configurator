@@ -934,14 +934,14 @@ watch(
 
 onMounted(async () => {
     document.documentElement.lang = props.locale;
+    const params = new URLSearchParams(window.location.search);
+    const incomingBrand = resolveAvailableBrand(params.get('marca') ?? params.get('brand'));
     const sharedConfigurationRestored = await restoreSharedConfiguration();
     if (!sharedConfigurationRestored) {
         await restoreConfiguratorState();
 
-        const params = new URLSearchParams(window.location.search);
-        const urlBrand = resolveAvailableBrand(params.get('marca') ?? params.get('brand'));
-        if (urlBrand) {
-            selectedBrand.value = urlBrand;
+        if (incomingBrand) {
+            selectedBrand.value = incomingBrand;
             openSteps.value = Array.from(new Set([...openSteps.value, 'vehicle']));
             await nextTick();
         }
@@ -2199,15 +2199,25 @@ watch(
 );
 
 const checkoutConsentAccepted = ref(false);
+const showCheckoutConsentWarning = ref(false);
 
 const goToCheckout = async () => {
-    if (!checkoutConsentAccepted.value || !checkoutUrl.value) {
+    if (!checkoutUrl.value) {
+        return;
+    }
+
+    if (!checkoutConsentAccepted.value) {
+        showCheckoutConsentWarning.value = true;
         return;
     }
 
     await trackConfigurationEvent('checkout_clicked');
     window.location.href = checkoutUrl.value;
 };
+
+watch(checkoutConsentAccepted, (accepted) => {
+    if (accepted) showCheckoutConsentWarning.value = false;
+});
 
 watch(
     models,
@@ -3302,7 +3312,7 @@ watch(
                             type="button"
                             @click="goToCheckout"
                             class="w-full rounded-xl bg-red-600 px-5 py-3 text-base font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
-                            :disabled="!canCheckout || !checkoutConsentAccepted"
+                            :disabled="!canCheckout"
                         >
                             {{ t('actions.add_to_cart') }}
                         </button>
@@ -3370,7 +3380,7 @@ watch(
                         <button
                             type="button"
                             class="w-full rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
-                            :disabled="!canCheckout || !checkoutConsentAccepted"
+                            :disabled="!canCheckout"
                             @click="goToCheckout"
                         >
                             {{ t('actions.add_to_cart') }}
@@ -3503,6 +3513,24 @@ watch(
                 class="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
             />
             <span class="absolute right-5 top-4 text-3xl text-white/70" aria-hidden="true">✕</span>
+        </div>
+
+        <div
+            v-if="showCheckoutConsentWarning"
+            class="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+            role="alertdialog"
+            aria-modal="true"
+            @click.self="showCheckoutConsentWarning = false"
+        >
+            <section class="w-full max-w-sm rounded-2xl border border-neutral-700 bg-[#181818] p-6 shadow-2xl">
+                <button
+                    type="button"
+                    class="w-full rounded-lg bg-amber-400 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-300"
+                    @click="showCheckoutConsentWarning = false"
+                >
+                    {{ t('checkout_consent.dismiss') }}
+                </button>
+            </section>
         </div>
 
         <div

@@ -109,7 +109,7 @@ return [
         'contact_whatsapp' => 'WhatsApp',
         'unavailable' => 'Instalación no disponible.',
         'request_details' => 'Solicita más información:',
-        'available_zone' => 'Instalación disponible en la zona :zone.',
+        'available_zone' => 'Instalación disponible en la zona :zone. Completa los tres pasos siguientes.',
         'available' => 'Instalación disponible:',
         'possibly_unavailable' => 'La instalación podría no estar disponible:',
         'contact_details' => 'consúltanos para más detalles',
@@ -148,6 +148,8 @@ return [
         'title' => 'Autorización de compra',
         'text' => 'Autorizo expresamente a AutoRadioCanario a gestionar los fondos abonados para adquirir, en mi nombre y por mi cuenta, el producto o productos seleccionados a través de proveedores previamente seleccionados por AutoRadioCanario, de acuerdo con las Condiciones del Servicio.',
         'checkbox' => 'He leído y acepto las Condiciones del Servicio',
+        'required' => 'Acepta las Condiciones del Servicio para proceder al pago.',
+        'dismiss' => 'Acepta las Condiciones del Servicio',
         'confirm' => 'Aceptar y proceder al pago',
     ],
     'quote_form' => [
