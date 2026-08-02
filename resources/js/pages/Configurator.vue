@@ -68,6 +68,20 @@ type CustomProduct = {
     image: string | null;
 };
 
+type SharedConfigurationPayload = {
+    brand: string | null;
+    model: string | null;
+    year: number | null;
+    screens: Array<{ product: string; variant: string }>;
+    cameras: string[];
+    speakers: string[];
+    customProducts: string[];
+    installation: string | null;
+    postalCode: string | null;
+    serviceZone: string | null;
+    precheck: string | null;
+};
+
 type TranslationTree = {
     [key: string]: string | TranslationTree;
 };
@@ -83,6 +97,7 @@ const props = defineProps<{
     installationZones: InstallationZone[];
     vehicleImages: string[];
     brandImages: string[];
+    sharedConfiguration: SharedConfigurationPayload | null;
 }>();
 
 const t = (key: string, replacements: Record<string, string | number> = {}) => {
@@ -145,6 +160,20 @@ const customQuoteCopy = computed(() => ({
     it: { button: 'Preventivo custom', title: 'Preventivo custom', help: 'Aggiungi tutti i prodotti che vuoi e crea il preventivo quando hai finito.', search: 'Cerca prodotto, variante o SKU…', selected: 'Prodotti aggiunti', empty: 'Nessun prodotto trovato', add: 'Aggiungi', added: 'Aggiunto', remove: 'Rimuovi', cancel: 'Annulla', create: 'Crea preventivo' },
     en: { button: 'Custom quote', title: 'Custom quote', help: 'Add all the products you need, then create the quote when finished.', search: 'Search by product, variant or SKU…', selected: 'Added products', empty: 'No products found', add: 'Add', added: 'Added', remove: 'Remove', cancel: 'Cancel', create: 'Create quote' },
 })[props.locale]);
+const paymentMethods = [
+    { name: 'American Express', icon: 'americanexpress', color: '016FD0', fallback: 'AMEX' },
+    { name: 'Apple Pay', icon: 'applepay', color: '000000', fallback: 'Apple Pay' },
+    { name: 'Bancontact', icon: 'bancontact', color: '005498', fallback: 'Bancontact' },
+    { name: 'Google Pay', icon: 'googlepay', color: '4285F4', fallback: 'G Pay' },
+    { name: 'Klarna', icon: 'klarna', color: 'FFB3C7', fallback: 'Klarna' },
+    { name: 'Maestro', icon: 'maestro', color: '009DDD', fallback: 'Maestro' },
+    { name: 'Mastercard', icon: 'mastercard', color: 'EB001B', fallback: 'Mastercard' },
+    { name: 'PayPal', icon: 'paypal', color: '003087', fallback: 'PayPal' },
+    { name: 'Shop Pay', icon: 'shoppay', color: '5A31F4', fallback: 'Shop Pay' },
+    { name: 'UnionPay', icon: 'unionpay', color: 'E21836', fallback: 'UnionPay' },
+    { name: 'USDC', icon: 'usdc', color: '2775CA', fallback: 'USDC' },
+    { name: 'Visa', icon: 'visa', color: '1A1F71', fallback: 'VISA' },
+];
 
 const changeHeaderLanguage = (event: Event) => {
     const locale = (event.target as HTMLSelectElement).value;
@@ -277,9 +306,7 @@ const stepHasSelections = (step: string) => {
         case 'speaker':
             return selectedSpeakerKeys.value.length > 0;
         case 'installation':
-            return selectedInstallationKey.value !== null
-                || selectedPrecheckMethod.value !== null
-                || selectedServiceZone.value !== null;
+            return selectedInstallationKey.value !== null;
         default:
             return false;
     }
@@ -296,10 +323,17 @@ const missingVehicleSent = ref(false);
 const missingVehicleError = ref('');
 const quoteTotals = ref<HTMLElement | null>(null);
 const mobileQuoteTotals = ref<HTMLElement | null>(null);
+const quotePanel = ref<HTMLElement | null>(null);
 const showMobileQuoteTotals = ref(false);
+const summaryMode = ref(false);
 const updateMobileQuoteTotals = () => {
     if (!quoteTotals.value || !mobileQuoteTotals.value || window.innerWidth >= 1024) {
         showMobileQuoteTotals.value = false;
+        return;
+    }
+
+    if (summaryMode.value) {
+        showMobileQuoteTotals.value = true;
         return;
     }
 
@@ -702,6 +736,106 @@ const restoreConfiguratorState = async () => {
     }
 };
 
+const applySharedConfiguration = async (configuration: SharedConfigurationPayload) => {
+    summaryMode.value = true;
+    const { brand, model, year } = configuration;
+    const validVehicle = brand
+        && model
+        && year !== null
+        && Number.isInteger(year)
+        && compatibilityEntries.value.some((entry) =>
+            entry.brand === brand
+            && entry.model === model
+            && entry.yearFrom !== null
+            && entry.yearTo !== null
+            && year >= entry.yearFrom
+            && year <= entry.yearTo
+        );
+
+    selectedBrand.value = validVehicle ? brand : null;
+    await nextTick();
+    selectedYear.value = validVehicle ? year : null;
+    await nextTick();
+    selectedModel.value = validVehicle ? model : null;
+    await nextTick();
+
+    selectedScreenVariantIds.value = configuration.screens.flatMap((screen) => {
+        const vehicle = compatibleVehicles.value.find((candidate) => candidate.handle === screen.product);
+        const token = screen.variant;
+        const variant = vehicle?.variants.find((candidate) =>
+            String(candidate.id) === token
+            || candidate.shopifyVariantId === token
+            || candidate.sku === token
+        );
+
+        return variant ? [variant.id] : [];
+    });
+
+    const visibleCameraKeys = new Set(visibleCameraOptions.value.map((camera) => camera.key));
+    selectedCameraKeys.value = configuration.cameras.filter((key) => visibleCameraKeys.has(key));
+    const speakerKeys = new Set(props.speakerOptions.map((speaker) => speaker.key));
+    selectedSpeakerKeys.value = configuration.speakers.filter((key) => speakerKeys.has(key));
+    const customKeys = new Set(props.customProducts.map((product) => product.key));
+    selectedCustomProductKeys.value = configuration.customProducts.filter((key) => customKeys.has(key));
+
+    const sharedPostalCode = configuration.postalCode;
+    if (sharedPostalCode && /^\d{5}$/.test(sharedPostalCode)) {
+        postalCode.value = sharedPostalCode;
+        await checkPostalCode();
+    }
+
+    const sharedServiceZone = configuration.serviceZone;
+    selectedServiceZone.value = ['north', 'capital', 'south'].includes(sharedServiceZone ?? '')
+        ? sharedServiceZone as 'north' | 'capital' | 'south'
+        : null;
+    const sharedPrecheck = configuration.precheck;
+    selectedPrecheckMethod.value = ['self', 'installer'].includes(sharedPrecheck ?? '')
+        ? sharedPrecheck as 'self' | 'installer'
+        : null;
+    installationRequested.value = Boolean(configuration.installation);
+    await nextTick();
+
+    const installationKey = configuration.installation;
+    selectedInstallationKey.value = installationKey
+        && visibleInstallationOptions.value.some((option) => option.key === installationKey)
+        ? installationKey
+        : null;
+    openSteps.value = [];
+    await nextTick();
+
+};
+
+const restoreSharedConfiguration = async () => {
+    if (props.sharedConfiguration) {
+        await applySharedConfiguration(props.sharedConfiguration);
+        return true;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('summary') !== '1') return false;
+
+    const productHandles = params.getAll('product');
+    const variantTokens = params.getAll('variant');
+    await applySharedConfiguration({
+        brand: params.get('brand'),
+        model: params.get('model'),
+        year: /^\d{4}$/.test(params.get('year') ?? '') ? Number(params.get('year')) : null,
+        screens: productHandles.map((product, index) => ({
+            product,
+            variant: variantTokens[index] ?? '',
+        })),
+        cameras: params.getAll('camera'),
+        speakers: params.getAll('speaker'),
+        customProducts: params.getAll('custom'),
+        installation: params.get('installation'),
+        postalCode: params.get('postal_code'),
+        serviceZone: params.get('service_zone'),
+        precheck: params.get('precheck'),
+    });
+
+    return true;
+};
+
 const persistConfiguratorState = () => {
     if (!configuratorStateHydrated) return;
 
@@ -757,12 +891,26 @@ watch(
 
 onMounted(async () => {
     document.documentElement.lang = props.locale;
-    await restoreConfiguratorState();
+    const sharedConfigurationRestored = await restoreSharedConfiguration();
+    if (!sharedConfigurationRestored) {
+        await restoreConfiguratorState();
+    }
     configuratorStateHydrated = true;
     window.addEventListener('keydown', closeImageZoomOnEscape);
     window.addEventListener('scroll', updateMobileQuoteTotals, { passive: true });
     window.addEventListener('resize', updateMobileQuoteTotals);
-    requestAnimationFrame(updateMobileQuoteTotals);
+    requestAnimationFrame(async () => {
+        updateMobileQuoteTotals();
+
+        if (sharedConfigurationRestored) {
+            await nextTick();
+            await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+            quotePanel.value?.scrollIntoView({
+                behavior: window.innerWidth < 1024 ? 'auto' : 'smooth',
+                block: 'start',
+            });
+        }
+    });
 });
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', closeImageZoomOnEscape);
@@ -1301,14 +1449,18 @@ const productsSubtotal = computed(
         selectedScreens.value.reduce((sum, screen) => sum + screen.price, 0) +
         selectedCameras.value.reduce((sum, camera) => sum + camera.price, 0) +
         selectedSpeakers.value.reduce((sum, speaker) => sum + speaker.price, 0) +
-        selectedCustomProducts.value.reduce((sum, product) => sum + product.price, 0),
+        selectedCustomProducts.value
+            .filter((product) => product.category !== 'installation')
+            .reduce((sum, product) => sum + product.price, 0),
 );
 
-const total = computed(
+const installationCost = computed(
     () =>
-        productsSubtotal.value +
         precheckPrice.value +
-        (selectedInstallation.value?.price ?? 0),
+        (selectedInstallation.value?.price ?? 0) +
+        selectedCustomProducts.value
+            .filter((product) => product.category === 'installation')
+            .reduce((sum, product) => sum + product.price, 0),
 );
 
 const discountTiers = [
@@ -1317,22 +1469,23 @@ const discountTiers = [
     { code: 'Base', threshold: 300, percentage: 2 },
 ];
 const activeDiscount = computed(
-    () => discountTiers.find((tier) => total.value >= tier.threshold) ?? null,
+    () => discountTiers.find((tier) => productsSubtotal.value >= tier.threshold) ?? null,
 );
 const nextDiscount = computed(() => {
-    return [...discountTiers].reverse().find((tier) => total.value < tier.threshold) ?? null;
+    return [...discountTiers].reverse().find((tier) => productsSubtotal.value < tier.threshold) ?? null;
 });
 const amountUntilNextDiscount = computed(() =>
     nextDiscount.value
-        ? Math.max(0, nextDiscount.value.threshold - total.value)
+        ? Math.max(0, nextDiscount.value.threshold - productsSubtotal.value)
         : 0,
 );
 const discountAmount = computed(() =>
     activeDiscount.value
-        ? total.value * (activeDiscount.value.percentage / 100)
+        ? productsSubtotal.value * (activeDiscount.value.percentage / 100)
         : 0,
 );
-const discountedTotal = computed(() => total.value - discountAmount.value);
+const onlineTotal = computed(() => productsSubtotal.value - discountAmount.value);
+const estimatedTotal = computed(() => onlineTotal.value + installationCost.value);
 
 const checkoutLineItems = computed(() => {
     const items: Array<{ variantId: string; quantity: number }> = [];
@@ -1365,29 +1518,10 @@ const checkoutLineItems = computed(() => {
     });
 
     selectedCustomProducts.value.forEach((product) => {
-        if (product.shopifyVariantId) {
+        if (product.category !== 'installation' && product.shopifyVariantId) {
             items.push({ variantId: product.shopifyVariantId, quantity: 1 });
         }
     });
-
-    if (
-        selectedInstallation.value?.shopifyVariantId
-    ) {
-        items.push({
-            variantId: selectedInstallation.value.shopifyVariantId,
-            quantity: 1,
-        });
-    }
-
-    if (
-        selectedPrecheckMethod.value === 'installer' &&
-        precheckProduct.value?.shopifyVariantId
-    ) {
-        items.push({
-            variantId: precheckProduct.value.shopifyVariantId,
-            quantity: 1,
-        });
-    }
 
     return items;
 });
@@ -1405,26 +1539,175 @@ const checkoutUrl = computed(() => {
         .map((item) => `${item.variantId}:${item.quantity}`)
         .join(',');
 
+    const cartUrl = `/cart/${cartPath}?checkout`;
+
     if (activeDiscount.value) {
-        return `https://www.autoradiocanario.com/discount/${activeDiscount.value.code}?redirect=/cart/${cartPath}`;
+        return `https://www.autoradiocanario.com/discount/${activeDiscount.value.code}?redirect=${encodeURIComponent(cartUrl)}`;
     }
 
-    return `https://www.autoradiocanario.com/cart/${cartPath}`;
+    return `https://www.autoradiocanario.com${cartUrl}`;
 });
 
-const copyCheckoutStatus = ref<'idle' | 'copied' | 'error'>('idle');
+const statisticSessionUuid = () => {
+    try {
+        const storageKey = 'autoradiocanario-statistics-session';
+        const existing = window.sessionStorage.getItem(storageKey);
+        if (existing) return existing;
 
-const copyCheckoutUrl = async () => {
-    if (!checkoutUrl.value) {
+        const uuid = window.crypto?.randomUUID?.() ?? 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+            const random = Math.floor(Math.random() * 16);
+            const value = character === 'x' ? random : (random & 0x3) | 0x8;
+            return value.toString(16);
+        });
+        window.sessionStorage.setItem(storageKey, uuid);
+        return uuid;
+    } catch {
+        return null;
+    }
+};
+
+const statisticReferrer = () => {
+    if (!document.referrer) return null;
+
+    try {
+        const referrer = new URL(document.referrer);
+        return `${referrer.origin}${referrer.pathname}`.slice(0, 2048);
+    } catch {
+        return null;
+    }
+};
+
+const trackConfigurationEvent = async (eventType: 'quote_downloaded' | 'checkout_clicked') => {
+    const screen = selectedScreens.value[0] ?? null;
+    const screenProduct = screen ? vehicleForScreenVariant(screen.id) : null;
+    const customProduct = !screen ? selectedCustomProducts.value[0] ?? null : null;
+    const installationTypes = [
+        selectedInstallation.value?.title,
+        selectedPrecheckMethod.value === 'installer'
+            ? t('installation.precheck_installer_summary')
+            : null,
+        ...selectedCustomProducts.value
+            .filter((product) => product.category === 'installation')
+            .map((product) => product.variantTitle
+                ? `${product.title} — ${product.variantTitle}`
+                : product.title),
+    ].filter(Boolean).join(' + ');
+    const searchParams = new URLSearchParams(window.location.search);
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 1500);
+
+    try {
+        const csrfToken = document
+            .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
+            ?.content;
+        await fetch('/configurator/statistics', {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+            },
+            credentials: 'same-origin',
+            keepalive: true,
+            signal: controller.signal,
+            body: JSON.stringify({
+                session_uuid: statisticSessionUuid(),
+                event_type: eventType,
+                brand: selectedBrand.value,
+                model: selectedModel.value,
+                year: selectedYear.value,
+                product_id: screenProduct?.id ?? null,
+                variant_id: screen?.id ?? null,
+                product_title: screenProduct?.title ?? customProduct?.title ?? null,
+                variant_title: screen?.title ?? customProduct?.variantTitle ?? null,
+                product_price: screen?.price ?? customProduct?.price ?? null,
+                installation_selected: installationCost.value > 0,
+                installation_type: installationTypes || null,
+                camera_selected: selectedCameraKeys.value.length > 0,
+                postal_code: postalCode.value || null,
+                service_zone: selectedServiceZone.value ?? matchedInstallationZone.value?.name ?? null,
+                language: props.locale,
+                referrer: statisticReferrer(),
+                utm_source: searchParams.get('utm_source'),
+                utm_campaign: searchParams.get('utm_campaign'),
+                device_type: window.innerWidth < 768
+                    ? 'mobile'
+                    : window.innerWidth < 1024
+                        ? 'tablet'
+                        : 'desktop',
+            }),
+        });
+    } catch {
+        // Statistics are best-effort and must never interrupt the requested action.
+    } finally {
+        window.clearTimeout(timeout);
+    }
+};
+
+const sharedConfigurationPayload = computed<SharedConfigurationPayload | null>(() => {
+    if (!hasSelectedProducts.value) return null;
+
+    const screens = selectedScreenVariantIds.value.flatMap((variantId) => {
+        const vehicle = vehicleForScreenVariant(variantId);
+        const variant = vehicle?.variants.find((candidate) => candidate.id === variantId);
+
+        return vehicle && variant ? [{
+            product: vehicle.handle,
+            variant: variant.shopifyVariantId || String(variant.id),
+        }] : [];
+    });
+
+    return {
+        brand: selectedBrand.value,
+        model: selectedModel.value,
+        year: selectedYear.value,
+        screens,
+        cameras: [...selectedCameraKeys.value],
+        speakers: [...selectedSpeakerKeys.value],
+        customProducts: [...selectedCustomProductKeys.value],
+        installation: selectedInstallationKey.value,
+        postalCode: postalCode.value || null,
+        serviceZone: selectedServiceZone.value,
+        precheck: selectedPrecheckMethod.value,
+    };
+});
+
+const copySharedConfigurationStatus = ref<'idle' | 'copied' | 'error'>('idle');
+
+const copySharedConfigurationUrl = async () => {
+    if (!sharedConfigurationPayload.value) {
         return;
     }
 
     try {
+        const csrfToken = document
+            .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
+            ?.content;
+        const response = await fetch('/configurator/shared-configurations', {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({ configuration: sharedConfigurationPayload.value }),
+        });
+
+        if (!response.ok) throw new Error('Unable to share configuration.');
+
+        const result = await response.json();
+        if (typeof result.uuid !== 'string') throw new Error('Invalid shared configuration UUID.');
+
+        const url = new URL(window.location.origin + window.location.pathname);
+        url.searchParams.set('c', result.uuid);
+        const sharedUrl = url.toString();
+
         if (navigator.clipboard?.writeText) {
-            await navigator.clipboard.writeText(checkoutUrl.value);
+            await navigator.clipboard.writeText(sharedUrl);
         } else {
             const textArea = document.createElement('textarea');
-            textArea.value = checkoutUrl.value;
+            textArea.value = sharedUrl;
             textArea.style.position = 'fixed';
             textArea.style.opacity = '0';
             document.body.appendChild(textArea);
@@ -1433,13 +1716,13 @@ const copyCheckoutUrl = async () => {
             textArea.remove();
         }
 
-        copyCheckoutStatus.value = 'copied';
+        copySharedConfigurationStatus.value = 'copied';
     } catch {
-        copyCheckoutStatus.value = 'error';
+        copySharedConfigurationStatus.value = 'error';
     }
 
     window.setTimeout(() => {
-        copyCheckoutStatus.value = 'idle';
+        copySharedConfigurationStatus.value = 'idle';
     }, 2500);
 };
 
@@ -1447,6 +1730,7 @@ const showQuoteModal = ref(false);
 const quoteClientName = ref('');
 const quoteClientPhone = ref('');
 const quoteClientEmail = ref('');
+const quoteCustomsTaxes = ref('');
 const quoteGenerationError = ref<string | null>(null);
 
 const escapeHtml = (value: string) =>
@@ -1493,13 +1777,13 @@ const nextQuoteNumber = async () => {
     return String(result.number);
 };
 
-const generateQuote = async (withoutClientData = false) => {
+const generateQuote = async (withoutClientData = false, providedPrintWindow?: Window) => {
     if ((!withoutClientData && !quoteClientName.value.trim()) || !hasSelectedProducts.value) {
         return;
     }
 
     quoteGenerationError.value = null;
-    const printWindow = window.open('', '_blank');
+    const printWindow = providedPrintWindow ?? window.open('', '_blank');
 
     if (!printWindow) {
         quoteGenerationError.value = t('errors.popup_blocked');
@@ -1517,11 +1801,10 @@ const generateQuote = async (withoutClientData = false) => {
     }
 
     const quoteDate = new Intl.DateTimeFormat(localeTag.value).format(new Date());
-    const clientName = withoutClientData
-        ? t('print.not_specified')
-        : quoteClientName.value.trim();
+    const clientName = withoutClientData ? '' : quoteClientName.value.trim();
     const clientPhone = withoutClientData ? '' : quoteClientPhone.value.trim();
     const clientEmail = withoutClientData ? '' : quoteClientEmail.value.trim();
+    const customsTaxes = withoutClientData ? '' : quoteCustomsTaxes.value.trim();
     const vehicle = [selectedBrand.value, selectedModel.value, selectedYear.value]
         .filter(Boolean)
         .join(' ');
@@ -1570,9 +1853,11 @@ const generateQuote = async (withoutClientData = false) => {
     selectedCustomProducts.value.forEach((product) => {
         items.push({
             code: product.sku || product.shopifyVariantId || product.key,
-            description: product.variantTitle
+            description: (product.variantTitle
                 ? `${product.title} — ${product.variantTitle}`
-                : product.title,
+                : product.title) + (product.category === 'installation'
+                ? ` — ${t('quote.installation_direct')}`
+                : ''),
             quantity: 1,
             price: product.price,
         });
@@ -1581,7 +1866,7 @@ const generateQuote = async (withoutClientData = false) => {
     if (selectedInstallation.value) {
         items.push({
             code: selectedInstallation.value.sku || selectedInstallation.value.key,
-            description: selectedInstallation.value.title,
+            description: `${selectedInstallation.value.title} — ${t('quote.installation_direct')}`,
             quantity: 1,
             price: selectedInstallation.value.price,
         });
@@ -1590,7 +1875,7 @@ const generateQuote = async (withoutClientData = false) => {
     if (selectedPrecheckMethod.value === 'installer') {
         items.push({
             code: precheckProduct.value?.sku || 'PRECHECK',
-            description: t('installation.precheck_installer_summary'),
+            description: `${t('installation.precheck_installer_summary')} — ${t('quote.installation_direct')}`,
             quantity: 1,
             price: precheckPrice.value,
         });
@@ -1621,7 +1906,7 @@ const generateQuote = async (withoutClientData = false) => {
         .map((item) => `<li>${escapeHtml(item.description)}</li>`)
         .join('');
     const checkoutLink = checkoutUrl.value
-        ? `<p class="checkout"><strong>${escapeHtml(t('print.purchase_link'))}:</strong><br><span>${escapeHtml(checkoutUrl.value)}</span></p>`
+        ? `<div class="checkout"><strong>${escapeHtml(t('print.purchase_link'))}:</strong><br><span>${escapeHtml(checkoutUrl.value)}</span><p class="purchase-authorization">${escapeHtml(t('print.purchase_authorization'))}</p></div>`
         : '';
 
     printWindow.document.write(`<!doctype html>
@@ -1665,21 +1950,28 @@ const generateQuote = async (withoutClientData = false) => {
         .money { text-align: right; white-space: nowrap; }
         .notes { margin-top: 22px; font-size: 9px; }
         .notes ul { margin: 5px 0 14px; padding-left: 18px; }
-        .legal { line-height: 1.35; }
+        .customs-taxes { margin-top: 10px; line-height: 1.4; break-inside: avoid; page-break-inside: avoid; }
+        .customs-taxes h3 { margin: 0 0 4px; font-size: 10px; }
+        .customs-taxes p { margin: 0; white-space: pre-wrap; }
         .checkout { margin-top: 12px; overflow-wrap: anywhere; font-size: 8px; }
-        .total { display: grid; grid-template-columns: 2fr 1fr; margin-top: auto; border: 1px solid #b8b8b8; background: #fff; color: #292727; font-size: 14px; font-weight: 800; }
-        .total div { padding: 10px; }
-        .total .amount { border-left: 1px solid #b8b8b8; background: #fff; color: #292727; text-align: center; }
+        .purchase-authorization { margin: 5px 0 0; font-size: 9px; line-height: 1.4; color: #292727; }
+        .totals { margin-top: auto; border: 1px solid #b8b8b8; background: #fff; color: #292727; font-size: 12px; font-weight: 700; }
+        .total-row { display: grid; grid-template-columns: 2fr 1fr; border-bottom: 1px solid #d5d5d5; }
+        .total-row:last-child { border-bottom: 0; font-size: 14px; font-weight: 800; }
+        .total-row div { padding: 9px 10px; }
+        .total-row .amount { border-left: 1px solid #b8b8b8; text-align: right; }
+        .direct-notice { margin: 10px 0; line-height: 1.4; }
+        .service-amount-notice { margin: 5px 0 0; font-size: 9px; line-height: 1.4; color: #292727; break-inside: avoid; page-break-inside: avoid; }
         footer { margin: 12px -12mm 0; padding: 18px 12mm; background: #0067a9; color: #fff; text-align: center; font-size: 7px; font-weight: 700; letter-spacing: 1.2px; break-inside: avoid; page-break-inside: avoid; }
         @media print {
             html, body { height: auto; }
             .page { min-height: auto; break-after: avoid; page-break-after: avoid; }
-            .total { margin-top: 16px; }
-            table, th, td, .total, .total .amount, footer, .vehicle-band {
+            .totals { margin-top: 16px; }
+            table, th, td, .totals, .total-row .amount, footer, .vehicle-band {
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
             }
-            .total, footer { break-inside: avoid; page-break-inside: avoid; }
+            .totals, footer { break-inside: avoid; page-break-inside: avoid; }
         }
     </style>
 </head>
@@ -1706,18 +1998,18 @@ const generateQuote = async (withoutClientData = false) => {
     <section class="details">
         <div>
             <h2>${escapeHtml(t('print.client'))}:</h2>
-            <p><strong>${escapeHtml(clientName)}</strong></p>
+            ${clientName ? `<p><strong>${escapeHtml(clientName)}</strong></p>` : ''}
             ${clientPhone ? `<p>${escapeHtml(t('print.phone'))}: ${escapeHtml(clientPhone)}</p>` : ''}
             ${clientEmail ? `<p>${escapeHtml(t('print.email'))}: ${escapeHtml(clientEmail)}</p>` : ''}
             <p>${escapeHtml(t('print.vehicle'))}: ${escapeHtml(vehicle || t('print.not_specified'))}</p>
         </div>
         <div class="issuer">
             <h2>${escapeHtml(t('print.issued_by'))}:</h2>
-            <p>AutoRadioCanario</p>
-            <p>Y9309149M</p>
+            <p><strong>AUTORADIOCANARIO</strong></p>
             <p>Avenida Mencey 49</p>
-            <p>35120 Arguineguín</p>
-            <p>Las Palmas</p>
+            <p>35120 Mogán (Las Palmas)</p>
+            <p>info@autoradiocanario.com</p>
+            <p>+34 694 259 117</p>
         </div>
     </section>
     <p class="date"><strong>${escapeHtml(t('print.date'))}:</strong> ${escapeHtml(quoteDate)}</p>
@@ -1728,12 +2020,22 @@ const generateQuote = async (withoutClientData = false) => {
     <section class="notes">
         <strong>${escapeHtml(t('print.includes'))}:</strong>
         <ul>${includedItems}</ul>
-        <p class="legal">${escapeHtml(t('print.legal'))}</p>
+        ${customsTaxes ? `
+            <div class="customs-taxes">
+                <h3>${escapeHtml(t('quote_form.customs_taxes'))}</h3>
+                <p>${escapeHtml(customsTaxes)}</p>
+            </div>
+        ` : ''}
+        <p class="service-amount-notice">${escapeHtml(t('quote.service_amount_notice'))}</p>
+        ${installationCost.value > 0 ? `<p class="direct-notice">${escapeHtml(t('quote.installation_payment_notice'))}</p>` : ''}
         ${checkoutLink}
     </section>
-    <section class="total">
-        <div>${escapeHtml(t('quote.total'))}</div>
-        <div class="amount">${euroFormatter.value.format(discountedTotal.value)}</div>
+    <section class="totals">
+        <div class="total-row"><div>${escapeHtml(t('quote.products_online'))}</div><div class="amount">${euroFormatter.value.format(productsSubtotal.value)}</div></div>
+        ${discountAmount.value > 0 ? `<div class="total-row"><div>${escapeHtml(t('quote.discount', { percentage: activeDiscount.value?.percentage ?? 0 }))}</div><div class="amount">−${euroFormatter.value.format(discountAmount.value)}</div></div>` : ''}
+        ${installationCost.value > 0 ? `<div class="total-row"><div>${escapeHtml(t('quote.installation_direct'))}</div><div class="amount">${euroFormatter.value.format(installationCost.value)}</div></div>` : ''}
+        <div class="total-row"><div>${escapeHtml(t('quote.estimated_total'))}</div><div class="amount">${euroFormatter.value.format(estimatedTotal.value)}</div></div>
+        <div class="total-row"><div>${escapeHtml(t('quote.online_total'))}</div><div class="amount">${euroFormatter.value.format(onlineTotal.value)}</div></div>
     </section>
     <footer>INFO@AUTORADIOCANARIO.COM &nbsp;&nbsp; WWW.AUTORADIOCANARIO.COM &nbsp;&nbsp; TEL./WHATSAPP: +34 694 259 117</footer>
 </main>
@@ -1742,6 +2044,18 @@ const generateQuote = async (withoutClientData = false) => {
 </html>`);
     printWindow.document.close();
     showQuoteModal.value = false;
+};
+
+const downloadQuote = async () => {
+    const printWindow = window.open('', '_blank');
+    await trackConfigurationEvent('quote_downloaded');
+
+    if (!printWindow) {
+        quoteGenerationError.value = t('errors.popup_blocked');
+        return;
+    }
+
+    await generateQuote(true, printWindow);
 };
 
 watch(
@@ -1754,8 +2068,26 @@ watch(
     { immediate: true },
 );
 
-const goToCheckout = () => {
+const showCheckoutConsent = ref(false);
+const checkoutConsentAccepted = ref(false);
+
+const goToCheckout = async () => {
     if (!checkoutUrl.value) {
+        return;
+    }
+
+    await trackConfigurationEvent('checkout_clicked');
+    checkoutConsentAccepted.value = false;
+    showCheckoutConsent.value = true;
+};
+
+const closeCheckoutConsent = () => {
+    showCheckoutConsent.value = false;
+    checkoutConsentAccepted.value = false;
+};
+
+const confirmCheckout = () => {
+    if (!checkoutConsentAccepted.value || !checkoutUrl.value) {
         return;
     }
 
@@ -1976,7 +2308,7 @@ watch(
                 <div v-if="isAdmin" class="mb-8 grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     <button
                         type="button"
-                        class="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg border border-amber-400 bg-amber-400 px-5 text-sm font-semibold text-black transition hover:bg-amber-300"
+                        class="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg border border-amber-400 bg-transparent px-5 text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black"
                         @click="startCustomQuote"
                     >
                         {{ customQuoteCopy.button }}
@@ -1984,22 +2316,22 @@ watch(
                     <button
                         type="button"
                         :disabled="!hasSelectedProducts"
-                        class="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg border border-neutral-700 bg-transparent px-5 text-sm font-semibold text-neutral-200 transition hover:border-amber-400 hover:text-amber-400 disabled:cursor-not-allowed disabled:border-neutral-800 disabled:text-neutral-600"
+                        class="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg border border-amber-400 bg-transparent px-5 text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-amber-400"
                         @click="quoteGenerationError = null; showQuoteModal = true"
                     >
                         {{ t('actions.create_quote') }}
                     </button>
                     <button
                         type="button"
-                        :disabled="!checkoutUrl"
-                        class="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg border border-amber-400 bg-transparent px-5 text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-800 disabled:text-neutral-600 disabled:hover:bg-transparent"
-                        @click="copyCheckoutUrl"
+                        :disabled="!sharedConfigurationPayload"
+                        class="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg border border-amber-400 bg-transparent px-5 text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-amber-400"
+                        @click="copySharedConfigurationUrl"
                     >
-                        {{ copyCheckoutStatus === 'copied' ? t('actions.copied') : copyCheckoutStatus === 'error' ? t('actions.copy_failed') : t('actions.copy_cart_link') }}
+                        {{ copySharedConfigurationStatus === 'copied' ? t('actions.copied') : copySharedConfigurationStatus === 'error' ? t('actions.copy_failed') : t('actions.copy_quote_link') }}
                     </button>
                     <a
                         href="/dashboard"
-                        class="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg border border-neutral-700 bg-transparent px-5 text-sm font-semibold text-neutral-200 transition hover:border-amber-400 hover:text-amber-400"
+                        class="inline-flex h-11 items-center justify-center whitespace-nowrap rounded-lg border border-red-600 bg-red-600 px-5 text-sm font-semibold text-white transition hover:border-red-500 hover:bg-red-500"
                     >
                         {{ t('admin.dashboard') }}
                     </a>
@@ -2348,6 +2680,12 @@ watch(
                             <p v-if="hasSelectedProducts" class="mt-2 max-w-3xl text-sm leading-6 text-neutral-400">
                                 {{ t('installation.intro') }}
                             </p>
+                            <p
+                                v-if="hasSelectedProducts"
+                                class="mt-3 max-w-3xl rounded-lg border border-amber-400/30 bg-amber-400/5 p-3 text-sm leading-6 text-amber-200"
+                            >
+                                {{ t('quote.installation_payment_notice') }}
+                            </p>
                             <div v-if="installationRequested" class="mt-4 rounded-xl border border-neutral-800 bg-[#121212] p-4">
                                 <label for="postal-code" class="block text-sm font-medium text-neutral-200">
                                     {{ t('installation.question') }}
@@ -2571,6 +2909,7 @@ watch(
                                         class="font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
                                     >{{ t('installation.contact_whatsapp') }}: +34 694 259 117</a>
                                 </div>
+
                             </div>
                             </div>
                             </div>
@@ -2578,7 +2917,7 @@ watch(
                     </div>
                 </section>
 
-                <aside class="flex flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-[#121212] p-6 lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] lg:self-start">
+                <aside ref="quotePanel" class="flex flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-[#121212] p-4 lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] lg:self-start">
                     <div class="shrink-0 overflow-hidden rounded-xl border border-neutral-800 bg-[#121212]">
                         <div
                             v-if="selectedBrand"
@@ -2607,7 +2946,7 @@ watch(
                                 </div>
                             </div>
 
-                            <div class="flex h-52 min-w-0 items-center justify-center bg-[#121212] p-1">
+                            <div class="flex h-44 min-w-0 items-center justify-center bg-[#121212] p-1">
                                 <button
                                     v-if="selectedVehicleImageUrl && failedVehicleImage !== selectedVehicleImageUrl"
                                     type="button"
@@ -2630,7 +2969,7 @@ watch(
                                 />
                             </div>
                         </div>
-                        <div v-else class="flex h-52 items-center justify-center bg-[#121212] p-1">
+                        <div v-else class="flex h-44 items-center justify-center bg-[#121212] p-1">
                             <img
                                 src="/images/logo.png"
                                 alt=""
@@ -2793,22 +3132,19 @@ watch(
                                 </p>
                             </div>
                         </div>
+
                     </div>
                     </div>
 
-                    <div ref="quoteTotals" class="mt-4 shrink-0 space-y-4 border-t border-neutral-800 bg-[#121212] pt-4">
-                        <div class="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
+                    <div ref="quoteTotals" class="mt-2 shrink-0 space-y-2 border-t border-neutral-800 bg-[#121212] pt-2">
+                        <div class="rounded-xl border border-neutral-800 bg-neutral-900 p-2.5">
                             <div class="flex items-center justify-between text-sm text-neutral-400">
                                 <span>{{ t('quote.subtotal') }}</span>
                                 <span>{{ productsSubtotal.toFixed(2) }} €</span>
                             </div>
-                            <div v-if="selectedInstallation" class="mt-2 flex items-center justify-between text-sm text-neutral-400">
-                                <span>{{ t('installation.label') }}</span>
-                                <span>{{ selectedInstallation.price.toFixed(2) }} €</span>
-                            </div>
-                            <div v-if="selectedPrecheckMethod === 'installer'" class="mt-2 flex items-center justify-between text-sm text-neutral-400">
-                                <span>{{ t('installation.precheck_installer_summary') }}</span>
-                                <span>{{ precheckPrice.toFixed(2) }} €</span>
+                            <div v-if="installationCost > 0" class="mt-2 flex items-center justify-between gap-4 text-sm text-amber-300">
+                                <span>{{ t('quote.installation_direct') }}</span>
+                                <span class="shrink-0">{{ installationCost.toFixed(2) }} €</span>
                             </div>
                             <div
                                 v-if="discountAmount > 0"
@@ -2817,10 +3153,16 @@ watch(
                                 <span>{{ t('quote.discount', { percentage: activeDiscount?.percentage ?? 0 }) }}</span>
                                 <span>−{{ discountAmount.toFixed(2) }} €</span>
                             </div>
-                            <div class="mt-4 flex items-center justify-between border-t border-neutral-800 pt-4">
-                                <span class="text-lg font-semibold text-white">{{ t('quote.total') }}</span>
-                                <span class="text-3xl font-semibold text-amber-400">
-                                    {{ discountedTotal.toFixed(2) }} €
+                            <div class="mt-3 flex items-center justify-between border-t border-neutral-800 pt-3">
+                                <span class="text-sm font-semibold text-neutral-300">{{ t('quote.estimated_total') }}</span>
+                                <span class="text-lg font-semibold text-white">
+                                    {{ estimatedTotal.toFixed(2) }} €
+                                </span>
+                            </div>
+                            <div class="mt-2 flex items-center justify-between gap-3">
+                                <span class="text-base font-semibold text-white">{{ t('quote.online_total') }}</span>
+                                <span class="shrink-0 whitespace-nowrap text-2xl font-semibold text-amber-400">
+                                    {{ onlineTotal.toFixed(2) }} €
                                 </span>
                             </div>
                         </div>
@@ -2828,7 +3170,7 @@ watch(
                         <button
                             type="button"
                             @click="goToCheckout"
-                            class="w-full rounded-xl bg-red-600 px-5 py-4 text-base font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="w-full rounded-xl bg-red-600 px-5 py-3 text-base font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                             :disabled="!canCheckout"
                         >
                             {{ t('actions.add_to_cart') }}
@@ -2836,9 +3178,9 @@ watch(
 
                         <button
                             type="button"
-                            class="w-full rounded-xl border border-amber-400 px-5 py-4 text-base font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-600"
+                            class="w-full rounded-xl border border-amber-400 px-5 py-3 text-base font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-600"
                             :disabled="!hasSelectedProducts"
-                            @click="generateQuote(true)"
+                            @click="downloadQuote"
                         >
                             {{ t('actions.download_quote') }}
                         </button>
@@ -2853,10 +3195,14 @@ watch(
                     <div class="mx-auto max-w-md space-y-2">
                         <div class="rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3">
                             <div class="flex items-center justify-between">
-                                <span class="text-lg font-semibold text-white">{{ t('quote.total') }}</span>
-                                <span class="text-2xl font-semibold text-amber-400">
-                                    {{ discountedTotal.toFixed(2) }} €
+                                <span class="text-lg font-semibold text-white">{{ t('quote.online_total') }}</span>
+                                <span class="shrink-0 whitespace-nowrap text-2xl font-semibold text-amber-400">
+                                    {{ onlineTotal.toFixed(2) }} €
                                 </span>
+                            </div>
+                            <div v-if="installationCost > 0" class="mt-1 flex items-center justify-between text-xs text-neutral-400">
+                                <span>{{ t('quote.installation_direct') }}</span>
+                                <span>{{ installationCost.toFixed(2) }} €</span>
                             </div>
                         </div>
 
@@ -2873,7 +3219,7 @@ watch(
                             type="button"
                             class="w-full rounded-xl border border-amber-400 px-5 py-3 text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-600"
                             :disabled="!hasSelectedProducts"
-                            @click="generateQuote(true)"
+                            @click="downloadQuote"
                         >
                             {{ t('actions.download_quote') }}
                         </button>
@@ -2942,17 +3288,25 @@ watch(
 
                         <div class="flex max-w-xl flex-wrap gap-2 lg:justify-end" aria-label="Formas de pago">
                             <span
-                                v-for="payment in ['AMEX', 'Apple Pay', 'Bancontact', 'G Pay', 'Klarna', 'Maestro', 'Mastercard', 'PayPal', 'Shop Pay', 'UnionPay', 'USDC', 'VISA']"
-                                :key="payment"
-                                class="inline-flex h-7 items-center rounded bg-white px-2 text-[10px] font-bold text-neutral-900"
+                                v-for="payment in paymentMethods"
+                                :key="payment.name"
+                                class="relative inline-flex h-8 w-14 items-center justify-center overflow-hidden rounded-md border border-neutral-300 bg-white px-1.5 shadow-sm"
+                                :title="payment.name"
                             >
-                                {{ payment }}
+                                <span class="text-center text-[8px] font-bold leading-none text-neutral-800">{{ payment.fallback }}</span>
+                                <img
+                                    :src="`https://cdn.simpleicons.org/${payment.icon}/${payment.color}`"
+                                    :alt="payment.name"
+                                    class="absolute inset-0 h-full w-full bg-white object-contain p-1.5"
+                                    loading="lazy"
+                                    @error="($event.currentTarget as HTMLImageElement).remove()"
+                                />
                             </span>
                         </div>
                     </div>
 
                     <div class="mt-10 flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] text-neutral-400">
-                        <span>© {{ currentYear }}, Auto Radio Canario</span>
+                        <span>© {{ currentYear }}, AutoRadioCanario</span>
                         <span>·</span>
                         <a href="https://www.autoradiocanario.com/policies/privacy-policy" class="hover:text-white">Política de privacidad</a>
                         <span>·</span>
@@ -2988,6 +3342,70 @@ watch(
                 class="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
             />
             <span class="absolute right-5 top-4 text-3xl text-white/70" aria-hidden="true">✕</span>
+        </div>
+
+        <div
+            v-if="showCheckoutConsent"
+            class="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="checkout-consent-title"
+            @click.self="closeCheckoutConsent"
+        >
+            <section class="w-full max-w-2xl rounded-2xl border border-neutral-700 bg-[#121212] p-6 shadow-2xl sm:p-8">
+                <div class="flex items-start justify-between gap-4">
+                    <h2 id="checkout-consent-title" class="text-xl font-semibold text-white sm:text-2xl">
+                        {{ t('checkout_consent.title') }}
+                    </h2>
+                    <button
+                        type="button"
+                        class="rounded-md px-2 py-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
+                        :aria-label="t('actions.close')"
+                        @click="closeCheckoutConsent"
+                    >
+                        ✕
+                    </button>
+                </div>
+
+                <p class="mt-5 text-sm leading-7 text-neutral-200 sm:text-base">
+                    {{ t('checkout_consent.text') }}
+                </p>
+
+                <label class="mt-6 flex cursor-pointer items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4 text-sm leading-6 text-neutral-100">
+                    <input
+                        v-model="checkoutConsentAccepted"
+                        type="checkbox"
+                        required
+                        class="mt-1 h-5 w-5 shrink-0 accent-amber-400"
+                    />
+                    <span>
+                        {{ t('checkout_consent.checkbox') }}
+                        <a
+                            :href="storefrontUrl('/policies/terms-of-service')"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="ml-1 font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
+                            @click.stop
+                        >
+                            {{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}
+                        </a>
+                    </span>
+                </label>
+
+                <div class="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <button type="button" class="rounded-lg border border-neutral-700 px-5 py-3 text-sm font-semibold text-neutral-200 hover:bg-neutral-900" @click="closeCheckoutConsent">
+                        {{ t('actions.cancel') }}
+                    </button>
+                    <button
+                        type="button"
+                        :disabled="!checkoutConsentAccepted"
+                        class="rounded-lg bg-amber-400 px-5 py-3 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+                        @click="confirmCheckout"
+                    >
+                        {{ t('checkout_consent.confirm') }}
+                    </button>
+                </div>
+            </section>
         </div>
 
         <div
@@ -3111,6 +3529,15 @@ watch(
                             class="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white"
                             placeholder="cliente@email.com"
                         />
+                    </label>
+                    <label class="grid gap-2 text-sm text-neutral-300">
+                        {{ t('quote_form.customs_taxes') }}
+                        <textarea
+                            v-model="quoteCustomsTaxes"
+                            rows="4"
+                            class="resize-y rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white"
+                            :placeholder="t('quote_form.customs_taxes_placeholder')"
+                        ></textarea>
                     </label>
                 </div>
                 <p v-if="quoteGenerationError" class="mt-4 text-sm text-red-400">

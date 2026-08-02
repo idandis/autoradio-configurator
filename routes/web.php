@@ -5,6 +5,7 @@ use App\Http\Controllers\BrandsController;
 use App\Http\Controllers\ConfiguratorController;
 use App\Http\Controllers\ConfiguratorImportController;
 use App\Http\Controllers\ConfiguratorPostalCodeController;
+use App\Http\Controllers\ConfigurationStatisticController;
 use App\Http\Controllers\CustomersController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImportedProductsController;
@@ -14,6 +15,7 @@ use App\Http\Controllers\MissingVehicleRequestsController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuoteNumberController;
 use App\Http\Controllers\Settings\SecurityController;
+use App\Http\Controllers\SharedConfigurationController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -39,8 +41,14 @@ Route::get('/configurator/postal-code/{postalCode}', ConfiguratorPostalCodeContr
 Route::post('/configurator/quote-number', QuoteNumberController::class)
     ->middleware('throttle:20,1')
     ->name('configurator.quote-number');
+Route::post('/configurator/statistics', [ConfigurationStatisticController::class, 'store'])
+    ->middleware('throttle:120,1')
+    ->name('configurator.statistics.store');
 
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
+    Route::post('/configurator/shared-configurations', [SharedConfigurationController::class, 'store'])
+        ->middleware('throttle:30,1')
+        ->name('configurator.shared-configurations.store');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::post('/dashboard/import-csv', [ConfiguratorImportController::class, 'store'])->name('dashboard.import');
     Route::get('/brands', BrandsController::class)->name('brands.index');

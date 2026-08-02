@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\ConfiguratorProduct;
 use App\Models\InstallationZone;
 use App\Models\MissingVehicleRequest;
+use App\Models\SharedConfiguration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -49,7 +51,7 @@ class ConfiguratorController extends Controller
         return response()->json(['message' => 'ok']);
     }
 
-    public function __invoke(): Response
+    public function __invoke(Request $request): Response
     {
         $allProducts = ConfiguratorProduct::with('variants')
             ->orderBy('category')
@@ -86,6 +88,7 @@ class ConfiguratorController extends Controller
         return Inertia::render('Configurator', [
             'locale' => app()->getLocale(),
             'translations' => trans('configurator'),
+            'sharedConfiguration' => $this->sharedConfiguration($request),
             'customProducts' => $allProducts->flatMap(function (ConfiguratorProduct $product) {
                 $variants = $product->variants->filter(
                     fn ($variant) => $variant->price !== null || filled($variant->shopify_variant_id),
@@ -161,6 +164,20 @@ class ConfiguratorController extends Controller
                 ->sort()
                 ->values(),
         ]);
+    }
+
+    private function sharedConfiguration(Request $request): ?array
+    {
+        $uuid = $request->string('c')->toString();
+
+        if (! Str::isUuid($uuid)) {
+            return null;
+        }
+
+        return SharedConfiguration::query()
+            ->where('uuid', $uuid)
+            ->first()
+            ?->configuration;
     }
 
     private function cameraOptions($products): array
