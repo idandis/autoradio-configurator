@@ -13,7 +13,7 @@ import { initializeFlashToast } from '@/lib/flashToast';
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
 createInertiaApp({
-    title: (title) => (title ? `${title} - ${appName}` : appName),
+    title: (title) => title || appName,
     resolve: async (name) => {
         const page = await resolvePageComponent(
             `./pages/${name}.vue`,

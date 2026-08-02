@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'page_title' => 'Configurador',
+    'page_title' => 'Configurador de Coches',
     'title' => 'Configura tu sistema',
     'subtitle' => 'Elige el coche y añade los componentes compatibles.',
     'steps' => [
