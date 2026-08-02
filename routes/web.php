@@ -30,9 +30,7 @@ use Inertia\Inertia;
     ]);
 });*/
 
-Route::get('/', function () {
-    return redirect()->route('configurator.show');
-});
+Route::get('/', ConfiguratorController::class);
 
 Route::get('/configurator', ConfiguratorController::class)->name('configurator.show');
 Route::post('/configurator/missing-vehicle', [ConfiguratorController::class, 'missingVehicle'])->name('configurator.missing-vehicle');

@@ -144,7 +144,7 @@ const mobileHeaderOpen = ref(false);
 const currentYear = new Date().getFullYear();
 const headerCopy = computed(() => ({
     es: {
-        announcement: 'Te damos la bienvenida a nuestra tienda',
+        announcement: 'CONFIGURATOR DE COCHE',
         home: 'Home',
         contact: 'Contactos',
         about: 'Quiénes somos',
@@ -2321,10 +2321,8 @@ watch(
                             </svg>
                         </a>
                     </div>
-                    <div class="col-start-2 flex items-center gap-8 text-center text-[11px] font-semibold tracking-[0.12em] sm:text-xs">
-                        <span class="text-white/65">‹</span>
+                    <div class="col-start-2 flex items-center text-center text-[11px] font-semibold tracking-[0.12em] sm:text-xs">
                         <span>{{ headerCopy.announcement }}</span>
-                        <span class="text-white/65">›</span>
                     </div>
                 </div>
             </div>
