@@ -6,6 +6,7 @@ use App\Http\Controllers\ConfiguratorController;
 use App\Http\Controllers\ConfiguratorImportController;
 use App\Http\Controllers\ConfiguratorPostalCodeController;
 use App\Http\Controllers\ConfigurationStatisticController;
+use App\Http\Controllers\ConfigurationStatisticsController;
 use App\Http\Controllers\CustomersController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ImportedProductsController;
@@ -30,7 +31,7 @@ use Inertia\Inertia;
 });*/
 
 Route::get('/', function () {
-    return redirect()->route('login');
+    return redirect()->route('configurator.show');
 });
 
 Route::get('/configurator', ConfiguratorController::class)->name('configurator.show');
@@ -46,6 +47,18 @@ Route::post('/configurator/statistics', [ConfigurationStatisticController::class
     ->name('configurator.statistics.store');
 
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
+    Route::get('/configuration-statistics', ConfigurationStatisticsController::class)
+        ->name('configuration-statistics.index');
+    Route::get('/configuration-statistics/export/{format}', [ConfigurationStatisticsController::class, 'export'])
+        ->whereIn('format', ['csv', 'xlsx', 'pdf'])
+        ->name('configuration-statistics.export');
+    Route::delete('/configuration-statistics/selected', [ConfigurationStatisticsController::class, 'destroySelected'])
+        ->name('configuration-statistics.destroy-selected');
+    Route::delete('/configuration-statistics/all', [ConfigurationStatisticsController::class, 'destroyAll'])
+        ->name('configuration-statistics.destroy-all');
+    Route::delete('/configuration-statistics/{configurationStatistic}', [ConfigurationStatisticsController::class, 'destroy'])
+        ->whereNumber('configurationStatistic')
+        ->name('configuration-statistics.destroy');
     Route::post('/configurator/shared-configurations', [SharedConfigurationController::class, 'store'])
         ->middleware('throttle:30,1')
         ->name('configurator.shared-configurations.store');

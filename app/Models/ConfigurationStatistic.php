@@ -15,6 +15,7 @@ class ConfigurationStatistic extends Model
             'product_id' => 'integer',
             'variant_id' => 'integer',
             'product_price' => 'decimal:2',
+            'configuration_value' => 'decimal:2',
             'installation_selected' => 'boolean',
             'camera_selected' => 'boolean',
         ];

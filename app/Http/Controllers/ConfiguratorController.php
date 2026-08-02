@@ -97,6 +97,8 @@ class ConfiguratorController extends Controller
                 if ($variants->isEmpty()) {
                     return [[
                         'key' => 'product-'.$product->id,
+                        'productId' => $product->id,
+                        'variantId' => null,
                         'title' => $product->title,
                         'variantTitle' => null,
                         'category' => $product->category,
@@ -104,11 +106,17 @@ class ConfiguratorController extends Controller
                         'shopifyVariantId' => null,
                         'price' => (float) ($product->price_min ?? 0),
                         'image' => $product->image_url,
+                        'brand' => $product->brand,
+                        'model' => $product->model,
+                        'yearFrom' => $product->year_from,
+                        'yearTo' => $product->year_to,
                     ]];
                 }
 
                 return $variants->map(fn ($variant) => [
                     'key' => 'variant-'.$variant->id,
+                    'productId' => $product->id,
+                    'variantId' => $variant->id,
                     'title' => $product->title,
                     'variantTitle' => $variant->option_value ?: $variant->title,
                     'category' => $product->category,
@@ -116,6 +124,10 @@ class ConfiguratorController extends Controller
                     'shopifyVariantId' => $variant->shopify_variant_id,
                     'price' => (float) ($variant->price ?? $product->price_min ?? 0),
                     'image' => $variant->image_url ?: $product->image_url,
+                    'brand' => $product->brand,
+                    'model' => $product->model,
+                    'yearFrom' => $product->year_from,
+                    'yearTo' => $product->year_to,
                 ]);
             })->values(),
             'vehicles' => $screenProducts->map(fn (ConfiguratorProduct $product) => [
@@ -192,9 +204,13 @@ class ConfiguratorController extends Controller
 
             $options[] = [
                 'key' => $product->handle,
+                'productId' => $product->id,
+                'variantId' => $cameraVariant?->id,
                 'title' => $product->handle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave'
                     ? 'Cámara 360° estandar'
                     : $product->title,
+                'productTitle' => $product->title,
+                'variantTitle' => $cameraVariant?->option_value ?: $cameraVariant?->title,
                 'price' => (float) ($cameraVariant?->price ?? $product->price_min),
                 'image' => $product->image_url,
                 'shopifyVariantId' => $cameraVariant?->shopify_variant_id,
@@ -227,7 +243,11 @@ class ConfiguratorController extends Controller
         foreach ($products->sortBy('price_min')->values() as $product) {
             $options[] = [
                 'key' => $product->handle,
+                'productId' => $product->id,
+                'variantId' => $product->variants->first()?->id,
                 'title' => $product->title,
+                'productTitle' => $product->title,
+                'variantTitle' => $product->variants->first()?->option_value ?: $product->variants->first()?->title,
                 'price' => (float) $product->price_min,
                 'shopifyVariantId' => $product->variants->first()?->shopify_variant_id,
                 'sku' => $product->variants->first()?->sku,
@@ -275,15 +295,22 @@ class ConfiguratorController extends Controller
 
                 return [
                     'key' => 'speaker-'.$variant->id,
+                    'productId' => $variant->configurator_product_id,
+                    'variantId' => $variant->id,
                     'handle' => $product->handle,
                     'title' => $product->title,
                     'productTitle' => $product->title,
+                    'variantTitle' => $variant->option_value ?: $variant->title,
                     'price' => (float) $variant->price,
                     'image' => $product->image_url ?: $variant->image_url,
                     'shopifyVariantId' => $variant->shopify_variant_id,
                     'sku' => $variant->sku,
                     'sizes' => $sizes,
                     'categories' => $categories,
+                    'brand' => $product->brand,
+                    'model' => $product->model,
+                    'yearFrom' => $product->year_from,
+                    'yearTo' => $product->year_to,
                 ];
             })
             ->filter()

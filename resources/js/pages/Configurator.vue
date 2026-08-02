@@ -25,7 +25,11 @@ type Vehicle = {
 
 type SimpleOption = {
     key: string;
+    productId?: number | null;
+    variantId?: number | null;
     title: string;
+    productTitle?: string;
+    variantTitle?: string | null;
     price: number;
     image?: string | null;
     shopifyVariantId?: string | null;
@@ -59,6 +63,8 @@ type SpeakerOption = SimpleOption & {
 
 type CustomProduct = {
     key: string;
+    productId: number;
+    variantId: number | null;
     title: string;
     variantTitle: string | null;
     category: string;
@@ -66,6 +72,10 @@ type CustomProduct = {
     shopifyVariantId: string | null;
     price: number;
     image: string | null;
+    brand: string | null;
+    model: string | null;
+    yearFrom: number | null;
+    yearTo: number | null;
 };
 
 type SharedConfigurationPayload = {
@@ -1221,7 +1231,7 @@ const precheckProduct = computed(() =>
 
 const precheckPrice = computed(() =>
     selectedPrecheckMethod.value === 'installer'
-        ? (precheckProduct.value?.price ?? 40)
+        ? (precheckProduct.value?.price ?? 25)
         : 0,
 );
 
@@ -1577,10 +1587,87 @@ const statisticReferrer = () => {
     }
 };
 
+const statisticProduct = computed(() => {
+    const screen = selectedScreens.value[0];
+    if (screen) {
+        const product = vehicleForScreenVariant(screen.id);
+        if (product) {
+            return {
+                productId: product.id,
+                variantId: screen.id,
+                productTitle: product.title,
+                variantTitle: screen.title,
+                productPrice: screen.price,
+                productType: 'screen',
+                vehicleSpecific: true,
+            };
+        }
+    }
+
+    const camera = selectedCameras.value[0];
+    if (camera) {
+        return {
+            productId: camera.productId ?? null,
+            variantId: camera.variantId ?? null,
+            productTitle: camera.productTitle ?? camera.title,
+            variantTitle: camera.variantTitle ?? null,
+            productPrice: camera.price,
+            productType: 'camera',
+            vehicleSpecific: !camera.isStandard
+                && Boolean(camera.brand && camera.model)
+                && camera.yearFrom != null
+                && camera.yearTo != null,
+        };
+    }
+
+    const speaker = selectedSpeakers.value[0];
+    if (speaker) {
+        return {
+            productId: speaker.productId ?? null,
+            variantId: speaker.variantId ?? null,
+            productTitle: speaker.productTitle,
+            variantTitle: speaker.variantTitle ?? null,
+            productPrice: speaker.price,
+            productType: 'speaker',
+            vehicleSpecific: Boolean(speaker.brand && speaker.model)
+                && speaker.yearFrom != null
+                && speaker.yearTo != null,
+        };
+    }
+
+    const customProduct = selectedCustomProducts.value.find((product) => product.category !== 'installation');
+    if (customProduct) {
+        return {
+            productId: customProduct.productId,
+            variantId: customProduct.variantId,
+            productTitle: customProduct.title,
+            variantTitle: customProduct.variantTitle,
+            productPrice: customProduct.price,
+            productType: customProduct.category,
+            vehicleSpecific: Boolean(customProduct.brand && customProduct.model)
+                && customProduct.yearFrom != null
+                && customProduct.yearTo != null,
+        };
+    }
+
+    const installation = selectedInstallation.value;
+    if (installation) {
+        return {
+            productId: installation.productId ?? null,
+            variantId: installation.variantId ?? null,
+            productTitle: installation.title,
+            variantTitle: installation.variantTitle ?? null,
+            productPrice: installation.price,
+            productType: 'installation',
+            vehicleSpecific: false,
+        };
+    }
+
+    return null;
+});
+
 const trackConfigurationEvent = async (eventType: 'quote_downloaded' | 'checkout_clicked') => {
-    const screen = selectedScreens.value[0] ?? null;
-    const screenProduct = screen ? vehicleForScreenVariant(screen.id) : null;
-    const customProduct = !screen ? selectedCustomProducts.value[0] ?? null : null;
+    const product = statisticProduct.value;
     const installationTypes = [
         selectedInstallation.value?.title,
         selectedPrecheckMethod.value === 'installer'
@@ -1613,14 +1700,16 @@ const trackConfigurationEvent = async (eventType: 'quote_downloaded' | 'checkout
             body: JSON.stringify({
                 session_uuid: statisticSessionUuid(),
                 event_type: eventType,
-                brand: selectedBrand.value,
-                model: selectedModel.value,
-                year: selectedYear.value,
-                product_id: screenProduct?.id ?? null,
-                variant_id: screen?.id ?? null,
-                product_title: screenProduct?.title ?? customProduct?.title ?? null,
-                variant_title: screen?.title ?? customProduct?.variantTitle ?? null,
-                product_price: screen?.price ?? customProduct?.price ?? null,
+                brand: product?.vehicleSpecific ? selectedBrand.value : null,
+                model: product?.vehicleSpecific ? selectedModel.value : null,
+                year: product?.vehicleSpecific ? selectedYear.value : null,
+                product_id: product?.productId ?? null,
+                variant_id: product?.variantId ?? null,
+                product_type: product?.productType ?? null,
+                product_title: product?.productTitle ?? null,
+                variant_title: product?.variantTitle ?? null,
+                product_price: product?.productPrice ?? null,
+                configuration_value: estimatedTotal.value,
                 installation_selected: installationCost.value > 0,
                 installation_type: installationTypes || null,
                 camera_selected: selectedCameraKeys.value.length > 0,
@@ -2814,7 +2903,7 @@ watch(
                                         >
                                             <span class="block font-semibold text-white">{{ t('installation.precheck_installer_title') }}</span>
                                             <span class="mt-1 block text-sm leading-5 text-neutral-400">{{ t('installation.precheck_installer_description') }}</span>
-                                            <span class="mt-3 block whitespace-nowrap text-lg font-semibold text-white">{{ (precheckProduct?.price ?? 40).toFixed(2) }} €</span>
+                                            <span class="mt-3 block whitespace-nowrap text-lg font-semibold text-white">{{ (precheckProduct?.price ?? 25).toFixed(2) }} €</span>
                                         </button>
                                     </div>
                                 </div>

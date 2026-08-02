@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
 import {
+    Activity,
     BookOpen,
     CarFront,
     FolderGit2,
@@ -65,6 +66,7 @@ const mainNavItems: NavItem[] = [
         icon: Users,
     },
     { title: 'Moduli inviati', href: '/missing-vehicle-requests', icon: ClipboardList },
+    { title: 'Statistiche', href: '/configuration-statistics', icon: Activity },
 ];
 
 const footerNavItems: NavItem[] = [

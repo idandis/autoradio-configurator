@@ -19,9 +19,11 @@ class ConfigurationStatisticController extends Controller
             'year' => ['nullable', 'integer', 'between:1900,2100'],
             'product_id' => ['nullable', 'integer', 'min:1'],
             'variant_id' => ['nullable', 'integer', 'min:1'],
+            'product_type' => ['nullable', 'string', 'max:50'],
             'product_title' => ['nullable', 'string', 'max:255'],
             'variant_title' => ['nullable', 'string', 'max:255'],
             'product_price' => ['nullable', 'numeric', 'between:0,99999999.99'],
+            'configuration_value' => ['nullable', 'numeric', 'between:0,99999999.99'],
             'installation_selected' => ['required', 'boolean'],
             'installation_type' => ['nullable', 'string', 'max:255'],
             'camera_selected' => ['required', 'boolean'],
@@ -42,6 +44,8 @@ class ConfigurationStatisticController extends Controller
             'year' => $data['year'] ?? null,
             'product_id' => $data['product_id'] ?? null,
             'variant_id' => $data['variant_id'] ?? null,
+            'product_type' => $data['product_type'] ?? null,
+            'configuration_value' => $data['configuration_value'] ?? null,
             'installation_selected' => $data['installation_selected'],
             'installation_type' => $data['installation_type'] ?? null,
             'camera_selected' => $data['camera_selected'],
@@ -63,6 +67,8 @@ class ConfigurationStatisticController extends Controller
             ->where('year', $data['year'] ?? null)
             ->where('product_id', $data['product_id'] ?? null)
             ->where('variant_id', $data['variant_id'] ?? null)
+            ->where('product_type', $data['product_type'] ?? null)
+            ->where('configuration_value', $data['configuration_value'] ?? null)
             ->where('installation_selected', $data['installation_selected'])
             ->where('installation_type', $data['installation_type'] ?? null)
             ->where('camera_selected', $data['camera_selected'])

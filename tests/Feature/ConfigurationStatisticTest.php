@@ -3,8 +3,10 @@
 namespace Tests\Feature;
 
 use App\Models\ConfigurationStatistic;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 class ConfigurationStatisticTest extends TestCase
@@ -40,6 +42,74 @@ class ConfigurationStatisticTest extends TestCase
         $this->postJson('/configurator/statistics', $payload)->assertCreated();
         $this->assertDatabaseCount('configuration_statistics', 2);
         Carbon::setTestNow();
+    }
+
+    public function test_admin_can_filter_paginated_statistics(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        ConfigurationStatistic::create($this->payload());
+        ConfigurationStatistic::create([
+            ...$this->payload(),
+            'session_uuid' => '9af68be8-0c9a-4747-b5dc-924701e54db0',
+            'event_type' => 'quote_downloaded',
+            'brand' => null,
+            'model' => null,
+            'year' => null,
+            'product_title' => 'Altoparlante universale',
+            'language' => 'it',
+        ]);
+
+        $this->actingAs($admin)
+            ->get('/configuration-statistics?event_type=quote_downloaded&language=it&search=Altoparlante')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('ConfigurationStatistics')
+                ->has('events.data', 1)
+                ->where('events.per_page', 50)
+                ->where('stats.checkout_clicked', 1)
+                ->where('stats.quote_downloaded', 1)
+                ->where('stats.total', 2)
+            );
+    }
+
+    public function test_admin_can_delete_one_or_selected_statistics_only(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $first = ConfigurationStatistic::create($this->payload());
+        $second = ConfigurationStatistic::create([...$this->payload(), 'session_uuid' => '10f68be8-0c9a-4747-b5dc-924701e54db0']);
+        $third = ConfigurationStatistic::create([...$this->payload(), 'session_uuid' => '20f68be8-0c9a-4747-b5dc-924701e54db0']);
+
+        $this->actingAs($admin)->delete(route('configuration-statistics.destroy', $first))->assertRedirect();
+        $this->assertDatabaseMissing('configuration_statistics', ['id' => $first->id]);
+        $this->assertDatabaseHas('configuration_statistics', ['id' => $second->id]);
+
+        $this->actingAs($admin)->delete(route('configuration-statistics.destroy-selected'), [
+            'ids' => [$second->id],
+        ])->assertRedirect();
+        $this->assertDatabaseMissing('configuration_statistics', ['id' => $second->id]);
+        $this->assertDatabaseHas('configuration_statistics', ['id' => $third->id]);
+    }
+
+    public function test_complete_deletion_requires_exact_confirmation_and_admin_access(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $nonAdmin = User::factory()->create(['is_admin' => false]);
+        ConfigurationStatistic::create($this->payload());
+
+        $this->actingAs($nonAdmin)->delete(route('configuration-statistics.destroy-all'), [
+            'confirmation' => 'CANCELLA',
+        ])->assertForbidden();
+        $this->assertDatabaseCount('configuration_statistics', 1);
+
+        $this->actingAs($admin)->delete(route('configuration-statistics.destroy-all'), [
+            'confirmation' => 'cancella',
+        ])->assertSessionHasErrors('confirmation');
+        $this->assertDatabaseCount('configuration_statistics', 1);
+
+        $this->actingAs($admin)->delete(route('configuration-statistics.destroy-all'), [
+            'confirmation' => 'CANCELLA',
+        ])->assertRedirect();
+        $this->assertDatabaseCount('configuration_statistics', 0);
     }
 
     private function payload(): array
