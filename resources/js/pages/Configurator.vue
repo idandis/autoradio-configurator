@@ -247,6 +247,13 @@ const brands = computed(() => [
     ...new Set(compatibilityEntries.value.map((entry) => entry.brand).filter(Boolean)),
 ]);
 
+const resolveAvailableBrand = (value: string | null | undefined): string | null => {
+    const normalized = value?.trim().toLocaleLowerCase();
+    if (!normalized) return null;
+
+    return brands.value.find((brand) => brand.toLocaleLowerCase() === normalized) ?? null;
+};
+
 const selectedBrand = ref<string | null>(null);
 const selectedModel = ref<string | null>(null);
 const selectedYear = ref<number | null>(null);
@@ -749,12 +756,13 @@ const restoreConfiguratorState = async () => {
 const applySharedConfiguration = async (configuration: SharedConfigurationPayload) => {
     summaryMode.value = true;
     const { brand, model, year } = configuration;
-    const validVehicle = brand
+    const resolvedBrand = resolveAvailableBrand(brand);
+    const validVehicle = resolvedBrand
         && model
         && year !== null
         && Number.isInteger(year)
         && compatibilityEntries.value.some((entry) =>
-            entry.brand === brand
+            entry.brand === resolvedBrand
             && entry.model === model
             && entry.yearFrom !== null
             && entry.yearTo !== null
@@ -762,7 +770,7 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
             && year <= entry.yearTo
         );
 
-    selectedBrand.value = validVehicle ? brand : null;
+    selectedBrand.value = validVehicle ? resolvedBrand : null;
     await nextTick();
     selectedYear.value = validVehicle ? year : null;
     await nextTick();
@@ -827,7 +835,7 @@ const restoreSharedConfiguration = async () => {
     const productHandles = params.getAll('product');
     const variantTokens = params.getAll('variant');
     await applySharedConfiguration({
-        brand: params.get('brand'),
+        brand: params.get('marca') ?? params.get('brand'),
         model: params.get('model'),
         year: /^\d{4}$/.test(params.get('year') ?? '') ? Number(params.get('year')) : null,
         screens: productHandles.map((product, index) => ({
@@ -904,6 +912,14 @@ onMounted(async () => {
     const sharedConfigurationRestored = await restoreSharedConfiguration();
     if (!sharedConfigurationRestored) {
         await restoreConfiguratorState();
+
+        const params = new URLSearchParams(window.location.search);
+        const urlBrand = resolveAvailableBrand(params.get('marca') ?? params.get('brand'));
+        if (urlBrand) {
+            selectedBrand.value = urlBrand;
+            openSteps.value = Array.from(new Set([...openSteps.value, 'vehicle']));
+            await nextTick();
+        }
     }
     configuratorStateHydrated = true;
     window.addEventListener('keydown', closeImageZoomOnEscape);
