@@ -23,7 +23,7 @@ return [
     ],
     'vehicle' => [
         'missing_model' => 'Can’t find your model? Contact us and we’ll find it for you.',
-        'form_required' => 'Complete all required fields and upload a photo.',
+        'form_required' => 'Complete all required fields.',
         'missing_year' => 'Can’t find your car’s year? Contact us and we’ll find it for you.',
         'image_unavailable' => 'Image unavailable',
         'zoom' => 'Enlarge vehicle image',

@@ -26,22 +26,28 @@ class ConfiguratorController extends Controller
             'model' => ['required', 'string', 'max:100'],
             'year' => ['required', 'integer', 'between:1900,2100'],
             'comment' => ['nullable', 'string', 'max:5000'],
-            'photo' => ['required', 'image', 'max:10240'],
+            'photo' => ['nullable', 'image', 'max:10240'],
         ]);
 
         $photo = $request->file('photo');
-        $photoPath = $photo->store('missing-vehicle-requests', 'public');
+        $photoPath = $photo?->store('missing-vehicle-requests', 'public');
         MissingVehicleRequest::create([...$data, 'photo_path' => $photoPath]);
         unset($data['photo']);
-        $body = "Nuovo form configuratore compilato\n\n";
-        foreach ($data as $key => $value) {
-            $body .= ucfirst(str_replace('_', ' ', $key)).": ".($value ?: '-')."\n";
-        }
+        $body = view('emails.missing-vehicle-request', ['requestData' => $data])->render();
 
         try {
-            Mail::raw($body, function ($message) use ($photo) {
-                $message->to('info@autoradiocanario.com')->subject('Nuovo form configuratore compilato');
-                $message->attach($photo->getRealPath(), ['as' => $photo->getClientOriginalName(), 'mime' => $photo->getMimeType()]);
+            Mail::html($body, function ($message) use ($data, $photo) {
+                $message
+                    ->to(config('mail.notification_to'))
+                    ->replyTo($data['email'], $data['first_name'].' '.$data['last_name'])
+                    ->subject('Nuova richiesta autoradio: '.$data['brand'].' '.$data['model']);
+
+                if ($photo) {
+                    $message->attach($photo->getRealPath(), [
+                        'as' => $photo->getClientOriginalName(),
+                        'mime' => $photo->getMimeType(),
+                    ]);
+                }
             });
         } catch (\Throwable $exception) {
             report($exception);

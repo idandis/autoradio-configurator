@@ -24,7 +24,7 @@ return [
     'vehicle' => [
         'missing' => '¿No encuentras tu marca, año o modelo? Escríbenos y te lo buscamos.',
         'missing_model' => '¿No encuentras tu modelo? Escríbenos y te la buscamos.',
-        'form_title' => 'Déjanos buscar tu autoradio ideal', 'form_description' => 'Completa el formulario y te contactaremos con una solución compatible.', 'first_name' => 'Nombre', 'last_name' => 'Apellido', 'email' => 'Correo electrónico', 'phone' => 'Teléfono', 'province' => 'Provincia de residencia', 'year' => 'Año de fabricación', 'comment' => 'Comentario sobre tu vehículo (opcional)', 'photo' => 'Foto de tu autoradio actual', 'upload_photo' => 'Cargar foto del autoradio (obligatorio)', 'form_submit' => 'Enviar', 'form_sending' => 'Enviando…', 'form_success' => 'Solicitud enviada. ¡Te contactaremos pronto!', 'form_error' => 'No se pudo enviar. Inténtalo de nuevo.', 'form_required' => 'Completa todos los campos obligatorios y carga una foto.',
+        'form_title' => 'Déjanos buscar tu autoradio ideal', 'form_description' => 'Completa el formulario y te contactaremos con una solución compatible.', 'first_name' => 'Nombre', 'last_name' => 'Apellido', 'email' => 'Correo electrónico', 'phone' => 'Teléfono', 'province' => 'Provincia de residencia', 'year' => 'Año de fabricación', 'comment' => 'Comentario sobre tu vehículo (opcional)', 'photo' => 'Foto de tu autoradio actual', 'upload_photo' => 'Cargar foto del autoradio (opcional)', 'form_submit' => 'Enviar', 'form_sending' => 'Enviando…', 'form_success' => 'Solicitud enviada. ¡Te contactaremos pronto!', 'form_error' => 'No se pudo enviar. Inténtalo de nuevo.', 'form_required' => 'Completa todos los campos obligatorios.',
         'missing_year' => '¿No encuentras el año de tu coche? Escríbenos y te lo buscamos.',
         'image_unavailable' => 'Imagen no disponible',
         'zoom' => 'Ampliar imagen del vehículo',
@@ -147,7 +147,7 @@ return [
     'checkout_consent' => [
         'title' => 'Autorización de compra',
         'text' => 'Autorizo expresamente a AutoRadioCanario a gestionar los fondos abonados para adquirir, en mi nombre y por mi cuenta, el producto o productos seleccionados a través de proveedores previamente seleccionados por AutoRadioCanario, de acuerdo con las Condiciones del Servicio.',
-        'checkbox' => 'He leído y acepto las Condiciones del Servicio y autorizo la gestión de compra en mi nombre.',
+        'checkbox' => 'He leído y acepto las Condiciones del Servicio',
         'confirm' => 'Aceptar y proceder al pago',
     ],
     'quote_form' => [

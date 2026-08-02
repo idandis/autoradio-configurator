@@ -359,17 +359,35 @@ const updateMobileQuoteTotals = () => {
         quoteTotals.value.getBoundingClientRect().top > window.innerHeight - fixedHeight;
 };
 const missingVehicleForm = ref({ first_name: '', last_name: '', email: '', phone: '', province: '', brand: '', model: '', year: '', comment: '', photo: null as File | null });
+type MissingVehicleField = 'first_name' | 'last_name' | 'email' | 'phone' | 'province' | 'brand' | 'model' | 'year';
+const missingVehicleFieldErrors = ref<Partial<Record<MissingVehicleField, boolean>>>({});
+
+const clearMissingVehicleFieldError = (field: MissingVehicleField) => {
+    delete missingVehicleFieldErrors.value[field];
+};
 
 const openMissingVehicleForm = () => {
     missingVehicleSent.value = false;
     missingVehicleError.value = '';
+    missingVehicleFieldErrors.value = {};
     showMissingVehicleForm.value = true;
 };
 
 const submitMissingVehicleForm = async () => {
     const requiredFields = ['first_name', 'last_name', 'email', 'phone', 'province', 'brand', 'model', 'year'] as const;
-    if (requiredFields.some((field) => !missingVehicleForm.value[field]) || !missingVehicleForm.value.photo) {
-        missingVehicleError.value = t('vehicle.form_required');
+    const fieldErrors: Partial<Record<MissingVehicleField, boolean>> = {};
+    requiredFields.forEach((field) => {
+        if (!String(missingVehicleForm.value[field]).trim()) fieldErrors[field] = true;
+    });
+    if (missingVehicleForm.value.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(missingVehicleForm.value.email)) {
+        fieldErrors.email = true;
+    }
+    const year = Number(missingVehicleForm.value.year);
+    if (missingVehicleForm.value.year && (!Number.isInteger(year) || year < 1900 || year > 2100)) {
+        fieldErrors.year = true;
+    }
+    missingVehicleFieldErrors.value = fieldErrors;
+    if (Object.keys(fieldErrors).length > 0) {
         return;
     }
     missingVehicleSending.value = true;
@@ -386,10 +404,17 @@ const submitMissingVehicleForm = async () => {
         });
         if (!response.ok) {
             const errorBody = await response.json().catch(() => ({}));
-            const validationMessage = errorBody.errors
-                ? Object.values(errorBody.errors).flat().join(' ')
-                : '';
-            throw new Error(validationMessage || errorBody.message || `HTTP ${response.status}`);
+            if (errorBody.errors && typeof errorBody.errors === 'object') {
+                const serverFieldErrors: Partial<Record<MissingVehicleField, boolean>> = {};
+                requiredFields.forEach((field) => {
+                    if (field in errorBody.errors) serverFieldErrors[field] = true;
+                });
+                if (Object.keys(serverFieldErrors).length > 0) {
+                    missingVehicleFieldErrors.value = serverFieldErrors;
+                    return;
+                }
+            }
+            throw new Error(errorBody.message || `HTTP ${response.status}`);
         }
         missingVehicleSent.value = true;
     } catch (error) {
@@ -2173,29 +2198,14 @@ watch(
     { immediate: true },
 );
 
-const showCheckoutConsent = ref(false);
 const checkoutConsentAccepted = ref(false);
 
 const goToCheckout = async () => {
-    if (!checkoutUrl.value) {
-        return;
-    }
-
-    await trackConfigurationEvent('checkout_clicked');
-    checkoutConsentAccepted.value = false;
-    showCheckoutConsent.value = true;
-};
-
-const closeCheckoutConsent = () => {
-    showCheckoutConsent.value = false;
-    checkoutConsentAccepted.value = false;
-};
-
-const confirmCheckout = () => {
     if (!checkoutConsentAccepted.value || !checkoutUrl.value) {
         return;
     }
 
+    await trackConfigurationEvent('checkout_clicked');
     window.location.href = checkoutUrl.value;
 };
 
@@ -3118,18 +3128,6 @@ watch(
                     </div>
 
                     <div class="mt-6 space-y-4">
-                            <div class="rounded-xl border border-neutral-800 bg-neutral-900 p-4">
-                                <p class="text-lg font-semibold">
-                                    {{ selectedBrand }} {{ selectedModel }}
-                                </p>
-                            <p class="text-sm text-neutral-400">
-                                {{ selectedYear ?? t('vehicle.all_years') }}
-                            </p>
-                                <p class="mt-3 text-sm text-neutral-500">
-                                    {{ selectedVehicle?.title }}
-                                </p>
-                            </div>
-
                         <div class="space-y-3 rounded-xl border border-neutral-800 bg-neutral-900 p-4">
                             <div
                                 v-for="screen in selectedScreens"
@@ -3270,11 +3268,41 @@ watch(
                             </div>
                         </div>
 
+                        <label class="flex cursor-pointer items-start gap-2 px-1 text-xs leading-5 text-neutral-400">
+                            <input
+                                v-model="checkoutConsentAccepted"
+                                type="checkbox"
+                                required
+                                class="sr-only"
+                            />
+                            <span
+                                class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition"
+                                :class="checkoutConsentAccepted ? 'border-neutral-400 bg-neutral-300 text-black' : 'border-neutral-600 bg-transparent'"
+                                aria-hidden="true"
+                            >
+                                <svg v-if="checkoutConsentAccepted" class="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="3">
+                                    <path d="m4 10 4 4 8-9" />
+                                </svg>
+                            </span>
+                            <span>
+                                {{ t('checkout_consent.checkbox') }}
+                                <a
+                                    href="https://www.autoradiocanario.com/policies/terms-of-service"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="ml-1 text-neutral-300 underline underline-offset-2 hover:text-white"
+                                    @click.stop
+                                >
+                                    <br>{{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}
+                                </a>
+                            </span>
+                        </label>
+
                         <button
                             type="button"
                             @click="goToCheckout"
                             class="w-full rounded-xl bg-red-600 px-5 py-3 text-base font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
-                            :disabled="!canCheckout"
+                            :disabled="!canCheckout || !checkoutConsentAccepted"
                         >
                             {{ t('actions.add_to_cart') }}
                         </button>
@@ -3309,10 +3337,40 @@ watch(
                             </div>
                         </div>
 
+                        <label class="flex cursor-pointer items-start gap-2 px-1 text-xs leading-5 text-neutral-400">
+                            <input
+                                v-model="checkoutConsentAccepted"
+                                type="checkbox"
+                                required
+                                class="sr-only"
+                            />
+                            <span
+                                class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition"
+                                :class="checkoutConsentAccepted ? 'border-neutral-400 bg-neutral-300 text-black' : 'border-neutral-600 bg-transparent'"
+                                aria-hidden="true"
+                            >
+                                <svg v-if="checkoutConsentAccepted" class="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="3">
+                                    <path d="m4 10 4 4 8-9" />
+                                </svg>
+                            </span>
+                            <span>
+                                {{ t('checkout_consent.checkbox') }}
+                                <a
+                                    href="https://www.autoradiocanario.com/policies/terms-of-service"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    class="ml-1 text-neutral-300 underline underline-offset-2 hover:text-white"
+                                    @click.stop
+                                >
+                                    <br>{{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}
+                                </a>
+                            </span>
+                        </label>
+
                         <button
                             type="button"
                             class="w-full rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
-                            :disabled="!canCheckout"
+                            :disabled="!canCheckout || !checkoutConsentAccepted"
                             @click="goToCheckout"
                         >
                             {{ t('actions.add_to_cart') }}
@@ -3445,70 +3503,6 @@ watch(
                 class="max-h-full max-w-full rounded-xl object-contain shadow-2xl"
             />
             <span class="absolute right-5 top-4 text-3xl text-white/70" aria-hidden="true">✕</span>
-        </div>
-
-        <div
-            v-if="showCheckoutConsent"
-            class="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="checkout-consent-title"
-            @click.self="closeCheckoutConsent"
-        >
-            <section class="w-full max-w-2xl rounded-2xl border border-neutral-700 bg-[#121212] p-6 shadow-2xl sm:p-8">
-                <div class="flex items-start justify-between gap-4">
-                    <h2 id="checkout-consent-title" class="text-xl font-semibold text-white sm:text-2xl">
-                        {{ t('checkout_consent.title') }}
-                    </h2>
-                    <button
-                        type="button"
-                        class="rounded-md px-2 py-1 text-neutral-400 hover:bg-neutral-800 hover:text-white"
-                        :aria-label="t('actions.close')"
-                        @click="closeCheckoutConsent"
-                    >
-                        ✕
-                    </button>
-                </div>
-
-                <p class="mt-5 text-sm leading-7 text-neutral-200 sm:text-base">
-                    {{ t('checkout_consent.text') }}
-                </p>
-
-                <label class="mt-6 flex cursor-pointer items-start gap-3 rounded-xl border border-amber-400/40 bg-amber-400/5 p-4 text-sm leading-6 text-neutral-100">
-                    <input
-                        v-model="checkoutConsentAccepted"
-                        type="checkbox"
-                        required
-                        class="mt-1 h-5 w-5 shrink-0 accent-amber-400"
-                    />
-                    <span>
-                        {{ t('checkout_consent.checkbox') }}
-                        <a
-                            :href="storefrontUrl('/policies/terms-of-service')"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="ml-1 font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
-                            @click.stop
-                        >
-                            {{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}
-                        </a>
-                    </span>
-                </label>
-
-                <div class="mt-7 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                    <button type="button" class="rounded-lg border border-neutral-700 px-5 py-3 text-sm font-semibold text-neutral-200 hover:bg-neutral-900" @click="closeCheckoutConsent">
-                        {{ t('actions.cancel') }}
-                    </button>
-                    <button
-                        type="button"
-                        :disabled="!checkoutConsentAccepted"
-                        class="rounded-lg bg-amber-400 px-5 py-3 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
-                        @click="confirmCheckout"
-                    >
-                        {{ t('checkout_consent.confirm') }}
-                    </button>
-                </div>
-            </section>
         </div>
 
         <div
@@ -3672,11 +3666,11 @@ watch(
             <div class="mb-6 flex items-start justify-between"><div><h2 class="text-2xl font-semibold text-amber-400">{{ t('vehicle.form_title') }}</h2><p class="mt-2 text-sm text-neutral-400">{{ t('vehicle.form_description') }}</p></div><button type="button" class="text-2xl text-neutral-400" @click="showMissingVehicleForm = false">×</button></div>
             <div v-if="missingVehicleSent" class="rounded-lg border border-green-500/40 bg-green-500/10 p-4 text-green-300">{{ t('vehicle.form_success') }}</div>
             <form v-else novalidate class="grid gap-4" @submit.prevent="submitMissingVehicleForm">
-                <div class="grid gap-4 sm:grid-cols-2"><input v-model="missingVehicleForm.first_name" required :placeholder="t('vehicle.first_name')" class="form-input" /><input v-model="missingVehicleForm.last_name" required :placeholder="t('vehicle.last_name')" class="form-input" /></div>
-                <input v-model="missingVehicleForm.email" required type="email" :placeholder="t('vehicle.email')" class="form-input" /><input v-model="missingVehicleForm.phone" required :placeholder="t('vehicle.phone')" class="form-input" /><input v-model="missingVehicleForm.province" required :placeholder="t('vehicle.province')" class="form-input" />
-                <div class="grid gap-4 sm:grid-cols-2"><input v-model="missingVehicleForm.brand" required :placeholder="t('fields.brand')" class="form-input" /><input v-model="missingVehicleForm.model" required :placeholder="t('fields.model')" class="form-input" /></div>
-                <input v-model="missingVehicleForm.year" required type="number" min="1900" max="2100" :placeholder="t('vehicle.year')" class="form-input" /><textarea v-model="missingVehicleForm.comment" rows="3" :placeholder="t('vehicle.comment')" class="form-input"></textarea>
-                <label class="upload-photo-button" :class="{ 'upload-photo-selected': missingVehicleForm.photo }"><span>{{ missingVehicleForm.photo ? missingVehicleForm.photo.name : t('vehicle.upload_photo') }}</span><input required type="file" accept="image/*" @change="missingVehicleForm.photo = ($event.target as HTMLInputElement).files?.[0] ?? null" /></label>
+                <div class="grid gap-4 sm:grid-cols-2"><input v-model="missingVehicleForm.first_name" required :placeholder="t('vehicle.first_name')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.first_name }" @input="clearMissingVehicleFieldError('first_name')" /><input v-model="missingVehicleForm.last_name" required :placeholder="t('vehicle.last_name')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.last_name }" @input="clearMissingVehicleFieldError('last_name')" /></div>
+                <input v-model="missingVehicleForm.email" required type="email" :placeholder="t('vehicle.email')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.email }" @input="clearMissingVehicleFieldError('email')" /><input v-model="missingVehicleForm.phone" required :placeholder="t('vehicle.phone')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.phone }" @input="clearMissingVehicleFieldError('phone')" /><input v-model="missingVehicleForm.province" required :placeholder="t('vehicle.province')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.province }" @input="clearMissingVehicleFieldError('province')" />
+                <div class="grid gap-4 sm:grid-cols-2"><input v-model="missingVehicleForm.brand" required :placeholder="t('fields.brand')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.brand }" @input="clearMissingVehicleFieldError('brand')" /><input v-model="missingVehicleForm.model" required :placeholder="t('fields.model')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.model }" @input="clearMissingVehicleFieldError('model')" /></div>
+                <input v-model="missingVehicleForm.year" required type="number" min="1900" max="2100" :placeholder="t('vehicle.year')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.year }" @input="clearMissingVehicleFieldError('year')" /><textarea v-model="missingVehicleForm.comment" rows="3" :placeholder="t('vehicle.comment')" class="form-input"></textarea>
+                <label class="upload-photo-button" :class="{ 'upload-photo-selected': missingVehicleForm.photo }"><span>{{ missingVehicleForm.photo ? missingVehicleForm.photo.name : t('vehicle.upload_photo') }}</span><input type="file" accept="image/*" @change="missingVehicleForm.photo = ($event.target as HTMLInputElement).files?.[0] ?? null" /></label>
                 <p v-if="missingVehicleError" class="text-sm text-red-400">{{ missingVehicleError }}</p><button type="submit" :disabled="missingVehicleSending" class="rounded-lg bg-amber-400 px-4 py-3 font-semibold text-black">{{ missingVehicleSending ? t('vehicle.form_sending') : t('vehicle.form_submit') }}</button>
             </form>
         </div>
@@ -3690,6 +3684,8 @@ watch(
 }
 .form-input { width: 100%; border: 1px solid #404040; border-radius: 0.5rem; background: #121212; padding: 0.75rem 1rem; color: white; }
 .form-input::placeholder { color: #737373; }
+.form-input-error { border-color: #ef4444; box-shadow: 0 0 0 1px #ef4444; }
+.form-input-error::placeholder { color: #f87171; }
 .upload-photo-button { position: relative; display: flex; min-height: 3.5rem; cursor: pointer; align-items: center; justify-content: center; border: 1px dashed #737373; border-radius: 0.5rem; padding: 0.75rem 1rem; color: #d4d4d4; text-align: center; }
 .upload-photo-button:hover, .upload-photo-selected { border-color: #fbbf24; background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
 .upload-photo-button input { position: absolute; inset: 0; height: 100%; width: 100%; cursor: pointer; opacity: 0; }
