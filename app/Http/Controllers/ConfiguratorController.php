@@ -136,12 +136,15 @@ class ConfiguratorController extends Controller
                     'yearTo' => $product->year_to,
                 ]);
             })->values(),
-            'vehicles' => $screenProducts->map(fn (ConfiguratorProduct $product) => [
+            'vehicles' => $screenProducts->map(function (ConfiguratorProduct $product) {
+                $vehicleFields = $this->vehicleFields($product);
+
+                return [
                 'id' => $product->id,
                 'handle' => $product->handle,
                 'title' => $product->title,
-                'brand' => $product->brand,
-                'model' => $product->model,
+                'brand' => $vehicleFields['brand'],
+                'model' => $vehicleFields['model'],
                 'yearFrom' => $product->year_from,
                 'yearTo' => $product->year_to,
                 'image' => $product->image_url,
@@ -155,7 +158,8 @@ class ConfiguratorController extends Controller
                         'price' => (float) $variant->price,
                         'image' => $variant->image_url ?: $product->image_url,
                     ])->sortBy('price')->values(),
-            ])->values(),
+                ];
+            })->values(),
             'cameraOptions' => $this->cameraOptions($cameraProducts),
             'speakerOptions' => $this->speakerOptions($speakerProducts),
             'installationOptions' => $this->installationOptions($installationProducts),
@@ -196,6 +200,38 @@ class ConfiguratorController extends Controller
             ->where('uuid', $uuid)
             ->first()
             ?->configuration;
+    }
+
+    /** @return array{brand: ?string, model: ?string} */
+    private function vehicleFields(ConfiguratorProduct $product): array
+    {
+        if (preg_match('/(?:^|\|)\s*\d+\s*[:：]/u', (string) $product->model)) {
+            return ['brand' => $product->brand, 'model' => $product->model];
+        }
+
+        static $multibrandEntries = null;
+        $multibrandEntries ??= require config_path('vehicle-multibrand.php');
+        $entries = $multibrandEntries[$product->id] ?? [];
+        if (! is_array($entries) || $entries === []) {
+            return ['brand' => $product->brand, 'model' => $product->model];
+        }
+
+        $brands = collect($entries)->pluck('brand')->filter()->unique()->values();
+        $models = collect($entries)
+            ->filter(fn ($entry) => is_array($entry) && isset($entry['brand'], $entry['model']))
+            ->map(function (array $entry) use ($brands) {
+                $brandIndex = $brands->search($entry['brand']);
+
+                return $brandIndex === false ? null : ($brandIndex + 1).':'.$entry['model'];
+            })
+            ->filter()
+            ->unique()
+            ->values();
+
+        return [
+            'brand' => $brands->implode(' | '),
+            'model' => $models->implode(' | '),
+        ];
     }
 
     private function cameraOptions($products): array

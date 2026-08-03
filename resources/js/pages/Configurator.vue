@@ -205,13 +205,41 @@ const vehicleFieldValues = (value: string | null | undefined): string[] => {
     )];
 };
 
-const vehicleModels = vehicleFieldValues;
 const vehicleBrands = vehicleFieldValues;
 
-const supportsVehicleModel = (
+const indexedVehicleModel = (value: string): { brandIndex: number | null; model: string } => {
+    const match = value.match(/^\s*(\d+)\s*[:：]\s*(.+?)\s*$/u);
+
+    return match
+        ? { brandIndex: Number(match[1]) - 1, model: match[2].trim() }
+        : { brandIndex: null, model: value.replace(/^\s*\d+\s*[:：]\s*/u, '').trim() };
+};
+
+const vehicleBrandModelEntries = (
+    brandList: string | null | undefined,
     modelList: string | null | undefined,
+): Array<{ brand: string; model: string }> => {
+    const availableBrands = vehicleBrands(brandList);
+
+    return vehicleFieldValues(modelList).flatMap((modelValue) => {
+        const { brandIndex, model } = indexedVehicleModel(modelValue);
+        if (brandIndex !== null) {
+            const brand = availableBrands[brandIndex];
+
+            return brand && model ? [{ brand, model }] : [];
+        }
+
+        return model ? availableBrands.map((brand) => ({ brand, model })) : [];
+    });
+};
+
+const supportsVehicleCombination = (
+    brandList: string | null | undefined,
+    modelList: string | null | undefined,
+    selectedBrand: string | null,
     selectedModel: string | null,
-) => selectedModel === null || vehicleModels(modelList).includes(selectedModel);
+) => selectedBrand === null || selectedModel === null || vehicleBrandModelEntries(brandList, modelList)
+    .some((entry) => entry.brand === selectedBrand && entry.model === selectedModel);
 
 const supportsVehicleBrand = (
     brandList: string | null | undefined,
@@ -220,32 +248,28 @@ const supportsVehicleBrand = (
 
 const compatibilityEntries = computed(() => [
     ...props.vehicles.flatMap((vehicle) =>
-        vehicleBrands(vehicle.brand).flatMap((brand) =>
-            vehicleModels(vehicle.model).map((model) => ({
-                brand,
-                model,
-                yearFrom: vehicle.yearFrom,
-                yearTo: vehicle.yearTo,
-            })),
-        ),
+        vehicleBrandModelEntries(vehicle.brand, vehicle.model).map(({ brand, model }) => ({
+            brand,
+            model,
+            yearFrom: vehicle.yearFrom,
+            yearTo: vehicle.yearTo,
+        })),
     ),
     ...props.cameraOptions
         .filter((camera) => !camera.isStandard)
         .flatMap((camera) =>
-            vehicleBrands(camera.brand).flatMap((brand) =>
-                vehicleModels(camera.model).map((model) => ({
-                    brand,
-                    model,
-                    yearFrom: camera.yearFrom ?? null,
-                    yearTo: camera.yearTo ?? null,
-                })),
-            ),
+            vehicleBrandModelEntries(camera.brand, camera.model).map(({ brand, model }) => ({
+                brand,
+                model,
+                yearFrom: camera.yearFrom ?? null,
+                yearTo: camera.yearTo ?? null,
+            })),
         ),
 ]);
 
 const brands = computed(() => [
     ...new Set(compatibilityEntries.value.map((entry) => entry.brand).filter(Boolean)),
-]);
+].sort((first, second) => first.localeCompare(second, props.locale, { sensitivity: 'base' })));
 
 const resolveAvailableBrand = (value: string | null | undefined): string | null => {
     const normalized = value?.trim().toLocaleLowerCase();
@@ -456,7 +480,7 @@ const models = computed(() => {
                         year <= entry.yearTo
                     );
                 })
-                .map((entry) => entry.model)
+                .map((entry) => indexedVehicleModel(entry.model).model)
                 .filter(Boolean),
         ),
     ];
@@ -470,7 +494,12 @@ const brandVehicles = computed(() =>
 
 const matchingVehicles = computed(() =>
     brandVehicles.value.filter(
-        (vehicle) => supportsVehicleModel(vehicle.model, selectedModel.value),
+        (vehicle) => supportsVehicleCombination(
+            vehicle.brand,
+            vehicle.model,
+            selectedBrand.value,
+            selectedModel.value,
+        ),
     ),
 );
 
@@ -936,6 +965,9 @@ onMounted(async () => {
     document.documentElement.lang = props.locale;
     const params = new URLSearchParams(window.location.search);
     const incomingBrand = resolveAvailableBrand(params.get('marca') ?? params.get('brand'));
+    if (params.get('form') === 'autoradio') {
+        openMissingVehicleForm();
+    }
     const sharedConfigurationRestored = await restoreSharedConfiguration();
     if (!sharedConfigurationRestored) {
         await restoreConfiguratorState();
@@ -1107,8 +1139,12 @@ const visibleCameraOptions = computed(() => {
         }
 
         return (
-            supportsVehicleBrand(option.brand, selectedBrand.value) &&
-            supportsVehicleModel(option.model, selectedModel.value) &&
+            supportsVehicleCombination(
+                option.brand,
+                option.model,
+                selectedBrand.value,
+                selectedModel.value,
+            ) &&
             selectedYear.value >= option.yearFrom &&
             selectedYear.value <= option.yearTo
         );
