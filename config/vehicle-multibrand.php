@@ -49,7 +49,6 @@ return [
     ],
     2822 => [
         ['brand' => 'FIAT', 'model' => '500'],
-        ['brand' => 'ABARTH', 'model' => '500'],
     ],
     2830 => [
         ['brand' => 'CITROEN', 'model' => 'Berlingo'],

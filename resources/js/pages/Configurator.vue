@@ -383,11 +383,30 @@ const updateMobileQuoteTotals = () => {
         quoteTotals.value.getBoundingClientRect().top > window.innerHeight - fixedHeight;
 };
 const missingVehicleForm = ref({ first_name: '', last_name: '', email: '', phone: '', province: '', brand: '', model: '', year: '', comment: '', photo: null as File | null });
-type MissingVehicleField = 'first_name' | 'last_name' | 'email' | 'phone' | 'province' | 'brand' | 'model' | 'year';
+type MissingVehicleField = 'first_name' | 'last_name' | 'email' | 'phone' | 'province' | 'brand' | 'model' | 'year' | 'comment' | 'photo';
 const missingVehicleFieldErrors = ref<Partial<Record<MissingVehicleField, boolean>>>({});
+const missingVehicleFields: MissingVehicleField[] = ['first_name', 'last_name', 'email', 'phone', 'province', 'brand', 'model', 'year', 'comment', 'photo'];
+const missingVehiclePhotoMaxBytes = 2 * 1024 * 1024;
 
 const clearMissingVehicleFieldError = (field: MissingVehicleField) => {
     delete missingVehicleFieldErrors.value[field];
+};
+
+const selectMissingVehiclePhoto = (event: Event) => {
+    const input = event.target as HTMLInputElement;
+    const photo = input.files?.[0] ?? null;
+    clearMissingVehicleFieldError('photo');
+    missingVehicleError.value = '';
+
+    if (photo && photo.size > missingVehiclePhotoMaxBytes) {
+        missingVehicleForm.value.photo = null;
+        missingVehicleFieldErrors.value.photo = true;
+        missingVehicleError.value = 'La foto supera el límite máximo de 2 MB.';
+        input.value = '';
+        return;
+    }
+
+    missingVehicleForm.value.photo = photo;
 };
 
 const openMissingVehicleForm = () => {
@@ -410,8 +429,29 @@ const submitMissingVehicleForm = async () => {
     if (missingVehicleForm.value.year && (!Number.isInteger(year) || year < 1900 || year > 2100)) {
         fieldErrors.year = true;
     }
+    const maximumLengths: Partial<Record<MissingVehicleField, number>> = {
+        first_name: 100,
+        last_name: 100,
+        email: 255,
+        phone: 50,
+        province: 100,
+        brand: 100,
+        model: 255,
+        comment: 5000,
+    };
+    Object.entries(maximumLengths).forEach(([field, maximum]) => {
+        if (String(missingVehicleForm.value[field as keyof typeof missingVehicleForm.value] ?? '').length > maximum) {
+            fieldErrors[field as MissingVehicleField] = true;
+        }
+    });
+    if (missingVehicleForm.value.photo && missingVehicleForm.value.photo.size > missingVehiclePhotoMaxBytes) {
+        fieldErrors.photo = true;
+    }
     missingVehicleFieldErrors.value = fieldErrors;
     if (Object.keys(fieldErrors).length > 0) {
+        missingVehicleError.value = fieldErrors.photo
+            ? 'La foto supera el límite máximo de 2 MB.'
+            : 'Revisa los campos marcados en rojo: uno o más valores no son válidos o son demasiado largos.';
         return;
     }
     missingVehicleSending.value = true;
@@ -430,11 +470,15 @@ const submitMissingVehicleForm = async () => {
             const errorBody = await response.json().catch(() => ({}));
             if (errorBody.errors && typeof errorBody.errors === 'object') {
                 const serverFieldErrors: Partial<Record<MissingVehicleField, boolean>> = {};
-                requiredFields.forEach((field) => {
+                missingVehicleFields.forEach((field) => {
                     if (field in errorBody.errors) serverFieldErrors[field] = true;
                 });
                 if (Object.keys(serverFieldErrors).length > 0) {
                     missingVehicleFieldErrors.value = serverFieldErrors;
+                    const firstError = Object.values(errorBody.errors).flat().find((message) => typeof message === 'string');
+                    missingVehicleError.value = typeof firstError === 'string'
+                        ? firstError
+                        : 'Revisa los campos marcados en rojo.';
                     return;
                 }
             }
@@ -973,8 +1017,16 @@ onMounted(async () => {
         await restoreConfiguratorState();
 
         if (incomingBrand) {
+            selectedYear.value = null;
+            selectedModel.value = null;
+            selectedScreenVariantIds.value = [];
+            selectedCameraKeys.value = [];
+            selectedSpeakerCategory.value = '';
+            selectedSpeakerSizeByCategory.value = {};
+            selectedSpeakerKeys.value = [];
+            selectedInstallationKey.value = null;
             selectedBrand.value = incomingBrand;
-            openSteps.value = Array.from(new Set([...openSteps.value, 'vehicle']));
+            openSteps.value = ['vehicle'];
             await nextTick();
         }
     }
@@ -2271,6 +2323,21 @@ watch(
 watch(selectedBrand, (nextBrand, previousBrand) => {
     if (previousBrand !== null && nextBrand !== previousBrand) {
         selectedYear.value = null;
+        selectedScreenVariantIds.value = [];
+        selectedCameraKeys.value = [];
+        selectedSpeakerCategory.value = '';
+        selectedSpeakerSizeByCategory.value = {};
+        selectedSpeakerKeys.value = [];
+        selectedCustomProductKeys.value = [];
+        selectedInstallationKey.value = null;
+        installationRequested.value = false;
+        selectedServiceZone.value = null;
+        selectedPrecheckMethod.value = null;
+        postalCode.value = '';
+        checkedPostalCode.value = null;
+        resolvedInstallationArea.value = null;
+        postalCodeError.value = null;
+        openSteps.value = ['vehicle'];
     }
 
     selectedModel.value = null;
@@ -2278,6 +2345,16 @@ watch(selectedBrand, (nextBrand, previousBrand) => {
 
 watch(selectedYear, () => {
     selectedModel.value = null;
+});
+
+watch(hasSelectedProducts, (hasProducts) => {
+    if (hasProducts) return;
+
+    installationRequested.value = false;
+    selectedInstallationKey.value = null;
+    selectedServiceZone.value = null;
+    selectedPrecheckMethod.value = null;
+    openSteps.value = openSteps.value.filter((step) => step !== 'installation');
 });
 
 watch(postalCode, (nextPostalCode) => {
@@ -2583,7 +2660,10 @@ watch(
                         </div>
 
                         </div>
-                        <div class="border-t border-neutral-800 pt-6">
+                        <div
+                            v-if="selectedModel && compatibleVehicles.length > 0"
+                            class="border-t border-neutral-800 pt-6"
+                        >
                             <button type="button" :class="mainStepButtonClass('screen')" @click="toggleScreenStep">{{ t('steps.screen') }}</button>
                             <div v-if="openSteps.includes('screen') || (selectedModel && compatibleVehicles.length)" class="mt-6">
                             <div v-if="selectedYear !== null && compatibleVehicles.length" class="mt-4 grid gap-5">
@@ -2681,7 +2761,10 @@ watch(
                             </div>
                         </div>
 
-                        <div class="border-t border-neutral-800 pt-6">
+                        <div
+                            v-if="selectedModel && visibleCameraOptions.length > 0"
+                            class="border-t border-neutral-800 pt-6"
+                        >
                             <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStep('camera')">{{ t('steps.camera') }}</button>
                             <div v-if="openSteps.includes('camera')" class="mt-6">
                             <div class="mt-4 grid gap-4 md:grid-cols-3">
@@ -2750,7 +2833,10 @@ watch(
                             </div>
                         </div>
 
-                        <div class="border-t border-neutral-800 pt-6">
+                        <div
+                            v-if="hasSelectedProducts"
+                            class="border-t border-neutral-800 pt-6"
+                        >
                             <button type="button" :class="mainStepButtonClass('speaker')" @click="toggleStep('speaker')">{{ t('steps.speaker') }}</button>
                             <div v-if="openSteps.includes('speaker')" class="mt-6">
                             <div class="mt-4 grid max-w-2xl gap-4">
@@ -2833,7 +2919,10 @@ watch(
                             </div>
                         </div>
 
-                        <div class="border-t border-neutral-800 pt-6">
+                        <div
+                            v-if="hasSelectedProducts"
+                            class="border-t border-neutral-800 pt-6"
+                        >
                             <button type="button" :class="mainStepButtonClass('installation')" @click="toggleStep('installation'); installationRequested = true">{{ t('steps.installation') }}</button>
                             <div v-if="openSteps.includes('installation')" class="mt-6">
                             <p v-if="hasSelectedProducts" class="mt-2 max-w-3xl text-sm leading-6 text-neutral-400">
@@ -3730,11 +3819,11 @@ watch(
             <div class="mb-6 flex items-start justify-between"><div><h2 class="text-2xl font-semibold text-amber-400">{{ t('vehicle.form_title') }}</h2><p class="mt-2 text-sm text-neutral-400">{{ t('vehicle.form_description') }}</p></div><button type="button" class="text-2xl text-neutral-400" @click="showMissingVehicleForm = false">×</button></div>
             <div v-if="missingVehicleSent" class="rounded-lg border border-green-500/40 bg-green-500/10 p-4 text-green-300">{{ t('vehicle.form_success') }}</div>
             <form v-else novalidate class="grid gap-4" @submit.prevent="submitMissingVehicleForm">
-                <div class="grid gap-4 sm:grid-cols-2"><input v-model="missingVehicleForm.first_name" required :placeholder="t('vehicle.first_name')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.first_name }" @input="clearMissingVehicleFieldError('first_name')" /><input v-model="missingVehicleForm.last_name" required :placeholder="t('vehicle.last_name')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.last_name }" @input="clearMissingVehicleFieldError('last_name')" /></div>
-                <input v-model="missingVehicleForm.email" required type="email" :placeholder="t('vehicle.email')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.email }" @input="clearMissingVehicleFieldError('email')" /><input v-model="missingVehicleForm.phone" required :placeholder="t('vehicle.phone')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.phone }" @input="clearMissingVehicleFieldError('phone')" /><input v-model="missingVehicleForm.province" required :placeholder="t('vehicle.province')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.province }" @input="clearMissingVehicleFieldError('province')" />
-                <div class="grid gap-4 sm:grid-cols-2"><input v-model="missingVehicleForm.brand" required :placeholder="t('fields.brand')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.brand }" @input="clearMissingVehicleFieldError('brand')" /><input v-model="missingVehicleForm.model" required :placeholder="t('fields.model')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.model }" @input="clearMissingVehicleFieldError('model')" /></div>
-                <input v-model="missingVehicleForm.year" required type="number" min="1900" max="2100" :placeholder="t('vehicle.year')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.year }" @input="clearMissingVehicleFieldError('year')" /><textarea v-model="missingVehicleForm.comment" rows="3" :placeholder="t('vehicle.comment')" class="form-input"></textarea>
-                <label class="upload-photo-button" :class="{ 'upload-photo-selected': missingVehicleForm.photo }"><span>{{ missingVehicleForm.photo ? missingVehicleForm.photo.name : t('vehicle.upload_photo') }}</span><input type="file" accept="image/*" @change="missingVehicleForm.photo = ($event.target as HTMLInputElement).files?.[0] ?? null" /></label>
+                <div class="grid gap-4 sm:grid-cols-2"><input v-model="missingVehicleForm.first_name" required maxlength="100" :placeholder="t('vehicle.first_name')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.first_name }" @input="clearMissingVehicleFieldError('first_name')" /><input v-model="missingVehicleForm.last_name" required maxlength="100" :placeholder="t('vehicle.last_name')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.last_name }" @input="clearMissingVehicleFieldError('last_name')" /></div>
+                <input v-model="missingVehicleForm.email" required maxlength="255" type="email" :placeholder="t('vehicle.email')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.email }" @input="clearMissingVehicleFieldError('email')" /><input v-model="missingVehicleForm.phone" required maxlength="50" :placeholder="t('vehicle.phone')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.phone }" @input="clearMissingVehicleFieldError('phone')" /><input v-model="missingVehicleForm.province" required maxlength="100" :placeholder="t('vehicle.province')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.province }" @input="clearMissingVehicleFieldError('province')" />
+                <div class="grid gap-4 sm:grid-cols-2"><input v-model="missingVehicleForm.brand" required maxlength="100" :placeholder="t('fields.brand')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.brand }" @input="clearMissingVehicleFieldError('brand')" /><input v-model="missingVehicleForm.model" required maxlength="255" :placeholder="t('fields.model')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.model }" @input="clearMissingVehicleFieldError('model')" /></div>
+                <input v-model="missingVehicleForm.year" required type="number" min="1900" max="2100" :placeholder="t('vehicle.year')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.year }" @input="clearMissingVehicleFieldError('year')" /><textarea v-model="missingVehicleForm.comment" maxlength="5000" rows="3" :placeholder="t('vehicle.comment')" class="form-input" :class="{ 'form-input-error': missingVehicleFieldErrors.comment }" @input="clearMissingVehicleFieldError('comment')"></textarea>
+                <label class="upload-photo-button" :class="{ 'upload-photo-selected': missingVehicleForm.photo, 'form-input-error': missingVehicleFieldErrors.photo }"><span>{{ missingVehicleForm.photo ? missingVehicleForm.photo.name : t('vehicle.upload_photo') }}</span><input type="file" accept="image/*" @change="selectMissingVehiclePhoto" /></label>
                 <p v-if="missingVehicleError" class="text-sm text-red-400">{{ missingVehicleError }}</p><button type="submit" :disabled="missingVehicleSending" class="rounded-lg bg-amber-400 px-4 py-3 font-semibold text-black">{{ missingVehicleSending ? t('vehicle.form_sending') : t('vehicle.form_submit') }}</button>
             </form>
         </div>

@@ -8,6 +8,7 @@ use App\Models\MissingVehicleRequest;
 use App\Models\SharedConfiguration;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -23,27 +24,28 @@ class ConfiguratorController extends Controller
             'phone' => ['required', 'string', 'max:50'],
             'province' => ['required', 'string', 'max:100'],
             'brand' => ['required', 'string', 'max:100'],
-            'model' => ['required', 'string', 'max:100'],
+            'model' => ['required', 'string', 'max:255'],
             'year' => ['required', 'integer', 'between:1900,2100'],
             'comment' => ['nullable', 'string', 'max:5000'],
-            'photo' => ['nullable', 'image', 'max:10240'],
+            'photo' => ['nullable', 'image', 'max:2048'],
         ]);
 
         $photo = $request->file('photo');
         $photoPath = $photo?->store('missing-vehicle-requests', 'public');
+        $storedPhotoPath = $photoPath ? Storage::disk('public')->path($photoPath) : null;
         MissingVehicleRequest::create([...$data, 'photo_path' => $photoPath]);
         unset($data['photo']);
         $body = view('emails.missing-vehicle-request', ['requestData' => $data])->render();
 
         try {
-            Mail::html($body, function ($message) use ($data, $photo) {
+            Mail::html($body, function ($message) use ($data, $photo, $storedPhotoPath) {
                 $message
                     ->to(config('mail.notification_to'))
                     ->replyTo($data['email'], $data['first_name'].' '.$data['last_name'])
                     ->subject('Nuova richiesta autoradio: '.$data['brand'].' '.$data['model']);
 
-                if ($photo) {
-                    $message->attach($photo->getRealPath(), [
+                if ($photo && $storedPhotoPath) {
+                    $message->attach($storedPhotoPath, [
                         'as' => $photo->getClientOriginalName(),
                         'mime' => $photo->getMimeType(),
                     ]);
