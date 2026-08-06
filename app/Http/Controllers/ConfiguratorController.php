@@ -152,14 +152,28 @@ class ConfiguratorController extends Controller
                 'image' => $product->image_url,
                 'variants' => $product->variants
                     ->filter(fn ($variant) => filled($variant->option_value))
-                    ->map(fn ($variant) => [
-                        'id' => $variant->id,
-                        'title' => $variant->option_value,
-                        'sku' => $variant->sku,
-                        'shopifyVariantId' => $variant->shopify_variant_id,
-                        'price' => (float) $variant->price,
-                        'image' => $variant->image_url ?: $product->image_url,
-                    ])->sortBy('price')->values(),
+                    ->groupBy(fn ($variant) => mb_strtolower(trim((string) $variant->option_value)))
+                    ->map(function ($matchingVariants) use ($product) {
+                        $choices = $matchingVariants->map(fn ($variant) => [
+                            'id' => $variant->id,
+                            'title' => $variant->option_value,
+                            'color' => filled($variant->meta['option2'] ?? null)
+                                ? trim((string) $variant->meta['option2'])
+                                : null,
+                            'sku' => $variant->sku,
+                            'shopifyVariantId' => $variant->shopify_variant_id,
+                            'price' => (float) $variant->price,
+                            'image' => $variant->image_url ?: $product->image_url,
+                        ])->values();
+                        $default = $choices->first();
+
+                        return [
+                            ...$default,
+                            'colorOptions' => $choices->filter(fn ($choice) => filled($choice['color']))->values(),
+                        ];
+                    })
+                    ->sortBy('price')
+                    ->values(),
                 ];
             })->values(),
             'cameraOptions' => $this->cameraOptions($cameraProducts),

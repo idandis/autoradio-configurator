@@ -12,6 +12,7 @@ import {
     SlidersHorizontal,
     Tags,
     Users,
+    UserRoundSearch,
 } from '@lucide/vue';
 import AppLogoIcon from '@/components/AppLogoIcon.vue';
 import NavFooter from '@/components/NavFooter.vue';
@@ -67,6 +68,7 @@ const mainNavItems: NavItem[] = [
     },
     { title: 'Moduli inviati', href: '/missing-vehicle-requests', icon: ClipboardList },
     { title: 'Statistiche', href: '/configuration-statistics', icon: Activity },
+    { title: 'Visitatori', href: '/visitor-statistics', icon: UserRoundSearch },
 ];
 
 const footerNavItems: NavItem[] = [

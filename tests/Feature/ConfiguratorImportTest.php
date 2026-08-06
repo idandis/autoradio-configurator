@@ -8,6 +8,7 @@ use App\Services\ConfiguratorCsvImporter;
 use App\Services\ShopifyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Inertia\Testing\AssertableInertia as Assert;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xls;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
@@ -75,6 +76,33 @@ CSV;
             'sku' => 'YARIS-64',
             'option_value' => '8core 4-64GB',
         ]);
+    }
+
+    public function test_second_variant_option_is_exposed_as_a_color_selector_without_duplicate_configurations(): void
+    {
+        $csv = <<<'CSV'
+Handle,Title,Type,Tags,Option1 Name,Variant Option1 Value,Variant Option2 Value,Variant ID,Variant SKU,Variant Price,Image Src,CAM (product.metafields.custom.cam),DIN (product.metafields.custom.dimensioni_schermo),PULGADAS (product.metafields.custom.pulgadas),MARCA DE COCHE (product.metafields.custom.radio_type),Product.custom.modello_auto,Product.custom.anno
+mercedes-screen,Mercedes W203,Radio AM/FM,MERCEDES,Variantes,8core 8GB 256GB,Gris,1111111111,GRAY,499.00,https://example.com/screen.jpg,,,9,MERCEDES,Clase C,2002-2005
+mercedes-screen,,,,,8core 8GB 256GB,Marrón,2222222222,BROWN,499.00,https://example.com/screen.jpg,,,,,Clase C,
+CSV;
+
+        app(ConfiguratorCsvImporter::class)->import(
+            UploadedFile::fake()->createWithContent('colors.csv', $csv)->getPathname(),
+        );
+
+        $variants = ConfiguratorProduct::where('handle', 'mercedes-screen')->firstOrFail()->variants;
+        $this->assertCount(2, $variants);
+        $this->assertSame(['Gris', 'Marrón'], $variants->pluck('meta')->pluck('option2')->all());
+
+        $this->get('/configurator')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Configurator')
+            ->has('vehicles', 1)
+            ->has('vehicles.0.variants', 1)
+            ->where('vehicles.0.variants.0.title', '8core 8GB 256GB')
+            ->has('vehicles.0.variants.0.colorOptions', 2)
+            ->where('vehicles.0.variants.0.colorOptions.0.color', 'Gris')
+            ->where('vehicles.0.variants.0.colorOptions.1.color', 'Marrón')
+        );
     }
 
     public function test_csv_import_supports_new_export_format(): void

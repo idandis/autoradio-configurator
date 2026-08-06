@@ -36,6 +36,7 @@ return [
         'zoom' => 'Ampliar imagen de la pantalla',
         'missing' => 'Parece que la pantalla para tu modelo aún no está cargada en nuestro configurador. ¡Escríbenos y la actualizaremos enseguida!',
         'label' => 'Pantalla',
+        'color' => 'Color',
     ],
     'camera' => [
         'standard' => 'Cámara trasera estándar',

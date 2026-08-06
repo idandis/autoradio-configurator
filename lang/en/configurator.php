@@ -35,6 +35,7 @@ return [
         'zoom' => 'Enlarge screen image',
         'missing' => 'It looks like the screen for your model has not been added to our configurator yet. Contact us and we’ll update it right away!',
         'label' => 'Screen',
+        'color' => 'Color',
     ],
     'camera' => [
         'standard' => 'Standard rear camera',

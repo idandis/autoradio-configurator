@@ -153,6 +153,7 @@ class ConfigurationStatisticsController extends Controller
         $valueExpression = 'COALESCE(configuration_value, product_price, 0)';
 
         return ConfigurationStatistic::query()
+            ->whereIn('event_type', self::EVENTS)
             ->when($filters['search'] !== '', function (Builder $query) use ($filters): void {
                 $search = '%'.$filters['search'].'%';
                 $query->where(function (Builder $nested) use ($search): void {

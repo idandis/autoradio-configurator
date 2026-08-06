@@ -318,7 +318,7 @@ class ConfiguratorCsvImporter
                 'price' => $price,
                 'image_url' => $imageUrl,
                 'meta' => [
-                    'option2' => $this->value($row, ['Option2 Value']),
+                    'option2' => $this->value($row, ['Variant Option2 Value', 'Option2 Value']),
                     'variant_image' => $this->value($row, ['Variant Image']),
                     'variant_cost' => $this->value($row, ['Variant Cost']),
                     'regional_prices' => [

@@ -17,6 +17,8 @@ const form = useForm({
     mode: 'add' as 'replace' | 'add',
 });
 
+const migrationForm = useForm({});
+
 const updateFile = (event: Event) => {
     const target = event.target as HTMLInputElement | null;
 
@@ -26,6 +28,14 @@ const updateFile = (event: Event) => {
 const submit = () => {
     form.post('/dashboard/import-csv', {
         forceFormData: true,
+    });
+};
+
+const migrateDatabase = () => {
+    if (!window.confirm('Applicare ora tutti gli aggiornamenti disponibili al database?')) return;
+
+    migrationForm.post('/dashboard/database/migrate', {
+        preserveScroll: true,
     });
 };
 </script>
@@ -133,6 +143,23 @@ const submit = () => {
                         <code class="ml-1 rounded bg-muted px-1.5 py-0.5 text-foreground">
                             php artisan configurator:import-csv /percorso/file.csv --add
                         </code>
+                    </div>
+                    <div class="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+                        <h3 class="text-sm font-medium">Aggiornamenti database</h3>
+                        <p class="mt-2 text-xs leading-5 text-muted-foreground">
+                            Utilizza questo comando dopo aver pubblicato una versione che contiene nuove migrazioni.
+                        </p>
+                        <p v-if="migrationForm.errors.database" class="mt-3 text-xs text-destructive">
+                            {{ migrationForm.errors.database }}
+                        </p>
+                        <button
+                            type="button"
+                            class="mt-4 w-full rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="migrationForm.processing"
+                            @click="migrateDatabase"
+                        >
+                            {{ migrationForm.processing ? 'Aggiornamento in corso…' : 'Aggiorna database' }}
+                        </button>
                     </div>
                 </div>
             </aside>

@@ -36,6 +36,7 @@ return [
         'zoom' => 'Ingrandisci immagine schermo',
         'missing' => 'Sembra che lo schermo per il tuo modello non sia ancora caricato nel nostro configuratore: scrivici e lo aggiorneremo subito!',
         'label' => 'Schermo',
+        'color' => 'Colore',
     ],
     'camera' => [
         'standard' => 'Telecamera posteriore standard',

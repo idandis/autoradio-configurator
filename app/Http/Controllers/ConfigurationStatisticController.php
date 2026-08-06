@@ -13,7 +13,7 @@ class ConfigurationStatisticController extends Controller
     {
         $data = $request->validate([
             'session_uuid' => ['nullable', 'uuid'],
-            'event_type' => ['required', 'in:quote_downloaded,checkout_clicked'],
+            'event_type' => ['required', 'in:configurator_entered,quote_downloaded,checkout_clicked'],
             'brand' => ['nullable', 'string', 'max:255'],
             'model' => ['nullable', 'string', 'max:255'],
             'year' => ['nullable', 'integer', 'between:1900,2100'],
@@ -35,6 +35,24 @@ class ConfigurationStatisticController extends Controller
             'utm_campaign' => ['nullable', 'string', 'max:255'],
             'device_type' => ['nullable', 'in:desktop,tablet,mobile'],
         ]);
+
+        if ($data['event_type'] === 'configurator_entered') {
+            if (! filled($data['session_uuid'] ?? null)) {
+                return response()->json(['message' => 'A visitor identifier is required.'], 422);
+            }
+
+            if (ConfigurationStatistic::query()
+                ->where('session_uuid', $data['session_uuid'])
+                ->where('event_type', 'configurator_entered')
+                ->exists()) {
+                return response()->json(status: 204);
+            }
+
+            $data = array_merge($data, $this->geography($request));
+            ConfigurationStatistic::create($data);
+
+            return response()->json(status: 201);
+        }
 
         $configurationKey = hash('sha256', json_encode([
             'session_uuid' => $data['session_uuid'] ?? null,
@@ -84,5 +102,28 @@ class ConfigurationStatisticController extends Controller
         ConfigurationStatistic::create($data);
 
         return response()->json(status: 201);
+    }
+
+    private function geography(Request $request): array
+    {
+        $countryCode = strtoupper((string) $this->header($request, ['CF-IPCountry', 'X-Vercel-IP-Country']));
+
+        return [
+            'country_code' => preg_match('/^[A-Z]{2}$/', $countryCode) ? $countryCode : null,
+            'region' => $this->header($request, ['X-Vercel-IP-Country-Region', 'CloudFront-Viewer-Country-Region']),
+            'city' => $this->header($request, ['X-Vercel-IP-City', 'CloudFront-Viewer-City']),
+        ];
+    }
+
+    private function header(Request $request, array $names): ?string
+    {
+        foreach ($names as $name) {
+            $value = trim(urldecode((string) $request->header($name)));
+            if ($value !== '' && $value !== 'XX') {
+                return mb_substr($value, 0, 255);
+            }
+        }
+
+        return null;
     }
 }

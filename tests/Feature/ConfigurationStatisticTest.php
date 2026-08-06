@@ -44,6 +44,56 @@ class ConfigurationStatisticTest extends TestCase
         Carbon::setTestNow();
     }
 
+    public function test_visitor_is_recorded_once_with_proxy_geography_and_without_ip(): void
+    {
+        $payload = [
+            'session_uuid' => '46f0b7b8-25ed-4ca8-a06a-71c453c9f31d',
+            'event_type' => 'configurator_entered',
+            'installation_selected' => false,
+            'camera_selected' => false,
+            'language' => 'it',
+            'device_type' => 'mobile',
+        ];
+        $headers = [
+            'CF-IPCountry' => 'ES',
+            'X-Vercel-IP-Country-Region' => 'CN',
+            'X-Vercel-IP-City' => 'Las%20Palmas',
+        ];
+
+        $this->withHeaders($headers)->postJson('/configurator/statistics', $payload)->assertCreated();
+        $this->withHeaders($headers)->postJson('/configurator/statistics', $payload)->assertNoContent();
+
+        $visitor = ConfigurationStatistic::sole();
+        $this->assertSame('ES', $visitor->country_code);
+        $this->assertSame('CN', $visitor->region);
+        $this->assertSame('Las Palmas', $visitor->city);
+        $this->assertArrayNotHasKey('ip', $visitor->getAttributes());
+    }
+
+    public function test_visitor_dashboard_is_admin_only_and_has_visitor_statistics(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $nonAdmin = User::factory()->create(['is_admin' => false]);
+        ConfigurationStatistic::create([
+            'session_uuid' => '56f0b7b8-25ed-4ca8-a06a-71c453c9f31d',
+            'event_type' => 'configurator_entered',
+            'installation_selected' => false,
+            'camera_selected' => false,
+            'country_code' => 'ES',
+            'city' => 'Telde',
+            'device_type' => 'mobile',
+        ]);
+
+        $this->actingAs($nonAdmin)->get('/visitor-statistics')->assertForbidden();
+        $this->actingAs($admin)->get('/visitor-statistics')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('VisitorStatistics')
+            ->has('visitors.data', 1)
+            ->where('stats.total', 1)
+            ->where('analysis.countries.0.label', 'ES')
+            ->where('analysis.countries.0.value', 1)
+        );
+    }
+
     public function test_admin_can_filter_paginated_statistics(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);

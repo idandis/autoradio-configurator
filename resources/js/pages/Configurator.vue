@@ -2,13 +2,18 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, usePage } from '@inertiajs/vue3';
 
-type Variant = {
+type VariantChoice = {
     id: number;
     title: string;
+    color: string | null;
     sku: string | null;
     shopifyVariantId: string | null;
     price: number;
     image: string | null;
+};
+
+type Variant = VariantChoice & {
+    colorOptions: VariantChoice[];
 };
 
 type Vehicle = {
@@ -639,32 +644,61 @@ const selectedVehicle = computed(
     () =>
         compatibleVehicles.value.find((vehicle) =>
             vehicle.variants.some(
-                (variant) => selectedScreenVariantIds.value.includes(variant.id),
+                (variant) => screenVariantChoices(variant).some((choice) =>
+                    selectedScreenVariantIds.value.includes(choice.id),
+                ),
             ),
         ) ?? null,
 );
 
 const selectedScreens = computed(() =>
     compatibleVehicles.value.flatMap((vehicle) =>
-        vehicle.variants.filter((variant) =>
-            selectedScreenVariantIds.value.includes(variant.id),
+        vehicle.variants.flatMap((variant) =>
+            screenVariantChoices(variant).filter((choice) =>
+                selectedScreenVariantIds.value.includes(choice.id),
+            ),
         ),
     ),
 );
 
-const toggleScreenVariant = (variantId: number) => {
-    selectedScreenVariantIds.value = selectedScreenVariantIds.value.includes(variantId)
-        ? selectedScreenVariantIds.value.filter((selectedId) => selectedId !== variantId)
-        : [...selectedScreenVariantIds.value, variantId];
+const screenVariantChoices = (variant: Variant): VariantChoice[] =>
+    variant.colorOptions.length > 0 ? variant.colorOptions : [variant];
+
+const selectedScreenChoice = (variant: Variant): VariantChoice =>
+    screenVariantChoices(variant).find((choice) => selectedScreenVariantIds.value.includes(choice.id))
+        ?? screenVariantChoices(variant)[0];
+
+const isScreenVariantSelected = (variant: Variant) =>
+    screenVariantChoices(variant).some((choice) => selectedScreenVariantIds.value.includes(choice.id));
+
+const toggleScreenVariant = (variant: Variant) => {
+    const choiceIds = screenVariantChoices(variant).map((choice) => choice.id);
+    const withoutGroup = selectedScreenVariantIds.value.filter((selectedId) => !choiceIds.includes(selectedId));
+    selectedScreenVariantIds.value = isScreenVariantSelected(variant)
+        ? withoutGroup
+        : [...withoutGroup, selectedScreenChoice(variant).id];
+};
+
+const selectScreenColor = (variant: Variant, event: Event) => {
+    const variantId = Number((event.target as HTMLSelectElement).value);
+    const choiceIds = screenVariantChoices(variant).map((choice) => choice.id);
+    selectedScreenVariantIds.value = [
+        ...selectedScreenVariantIds.value.filter((selectedId) => !choiceIds.includes(selectedId)),
+        variantId,
+    ];
 };
 
 const vehicleForScreenVariant = (variantId: number) =>
     compatibleVehicles.value.find((vehicle) =>
-        vehicle.variants.some((variant) => variant.id === variantId),
+        vehicle.variants.some((variant) =>
+            screenVariantChoices(variant).some((choice) => choice.id === variantId),
+        ),
     ) ?? null;
 
 const screenImage = (vehicle: Vehicle) =>
-    vehicle.image ?? vehicle.variants.find((variant) => variant.image)?.image ?? null;
+    vehicle.image
+    ?? vehicle.variants.flatMap(screenVariantChoices).find((variant) => variant.image)?.image
+    ?? null;
 
 const screenProductUrl = (vehicle: Vehicle) =>
     storefrontUrl(`/products/${encodeURIComponent(vehicle.handle)}`);
@@ -795,7 +829,9 @@ const restoreConfiguratorState = async () => {
         selectedModel.value = modelIsValid ? state.selectedModel : null;
 
         const availableVariantIds = new Set(
-            props.vehicles.flatMap((vehicle) => vehicle.variants.map((variant) => variant.id)),
+            props.vehicles.flatMap((vehicle) =>
+                vehicle.variants.flatMap((variant) => screenVariantChoices(variant).map((choice) => choice.id)),
+            ),
         );
         const availableCameraKeys = new Set(props.cameraOptions.map((option) => option.key));
         const availableSpeakerKeys = new Set(props.speakerOptions.map((option) => option.key));
@@ -878,11 +914,13 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
     selectedScreenVariantIds.value = configuration.screens.flatMap((screen) => {
         const vehicle = compatibleVehicles.value.find((candidate) => candidate.handle === screen.product);
         const token = screen.variant;
-        const variant = vehicle?.variants.find((candidate) =>
-            String(candidate.id) === token
-            || candidate.shopifyVariantId === token
-            || candidate.sku === token
-        );
+        const variant = vehicle?.variants
+            .flatMap(screenVariantChoices)
+            .find((candidate) =>
+                String(candidate.id) === token
+                || candidate.shopifyVariantId === token
+                || candidate.sku === token
+            );
 
         return variant ? [variant.id] : [];
     });
@@ -1007,6 +1045,7 @@ watch(
 
 onMounted(async () => {
     document.documentElement.lang = props.locale;
+    void trackVisitorEntry();
     const params = new URLSearchParams(window.location.search);
     const incomingBrand = resolveAvailableBrand(params.get('marca') ?? params.get('brand'));
     if (params.get('form') === 'autoradio') {
@@ -1575,10 +1614,16 @@ const goToSelectedProduct = async (
         installationRequested.value = true;
     }
 
+    const scrollKey = type === 'screen'
+        ? compatibleVehicles.value
+            .flatMap((vehicle) => vehicle.variants)
+            .find((variant) => screenVariantChoices(variant).some((choice) => choice.id === Number(key)))?.id ?? key
+        : key;
+
     await nextTick();
     window.requestAnimationFrame(() => {
         document
-            .getElementById(`product-${type}-${key}`)
+            .getElementById(`product-${type}-${scrollKey}`)
             ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 };
@@ -1705,6 +1750,24 @@ const statisticSessionUuid = () => {
     }
 };
 
+const visitorUuid = () => {
+    try {
+        const storageKey = 'autoradiocanario-visitor-id';
+        const existing = window.localStorage.getItem(storageKey);
+        if (existing) return existing;
+
+        const uuid = window.crypto?.randomUUID?.() ?? 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+            const random = Math.floor(Math.random() * 16);
+            const value = character === 'x' ? random : (random & 0x3) | 0x8;
+            return value.toString(16);
+        });
+        window.localStorage.setItem(storageKey, uuid);
+        return uuid;
+    } catch {
+        return statisticSessionUuid();
+    }
+};
+
 const statisticReferrer = () => {
     if (!document.referrer) return null;
 
@@ -1713,6 +1776,36 @@ const statisticReferrer = () => {
         return `${referrer.origin}${referrer.pathname}`.slice(0, 2048);
     } catch {
         return null;
+    }
+};
+
+const trackVisitorEntry = async () => {
+    try {
+        const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
+        const searchParams = new URLSearchParams(window.location.search);
+        await fetch('/configurator/statistics', {
+            method: 'POST',
+            headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+            },
+            credentials: 'same-origin',
+            keepalive: true,
+            body: JSON.stringify({
+                session_uuid: visitorUuid(),
+                event_type: 'configurator_entered',
+                installation_selected: false,
+                camera_selected: false,
+                language: props.locale,
+                referrer: statisticReferrer(),
+                utm_source: searchParams.get('utm_source'),
+                utm_campaign: searchParams.get('utm_campaign'),
+                device_type: window.innerWidth < 768 ? 'mobile' : window.innerWidth < 1024 ? 'tablet' : 'desktop',
+            }),
+        });
+    } catch {
+        // Visitor analytics are best-effort and must never affect the configurator.
     }
 };
 
@@ -1725,7 +1818,7 @@ const statisticProduct = computed(() => {
                 productId: product.id,
                 variantId: screen.id,
                 productTitle: product.title,
-                variantTitle: screen.title,
+                variantTitle: [screen.title, screen.color].filter(Boolean).join(' / '),
                 productPrice: screen.price,
                 productType: 'screen',
                 vehicleSpecific: true,
@@ -1867,7 +1960,9 @@ const sharedConfigurationPayload = computed<SharedConfigurationPayload | null>((
 
     const screens = selectedScreenVariantIds.value.flatMap((variantId) => {
         const vehicle = vehicleForScreenVariant(variantId);
-        const variant = vehicle?.variants.find((candidate) => candidate.id === variantId);
+        const variant = vehicle?.variants
+            .flatMap(screenVariantChoices)
+            .find((candidate) => candidate.id === variantId);
 
         return vehicle && variant ? [{
             product: vehicle.handle,
@@ -2044,7 +2139,9 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
                 screen.sku ||
                 vehicle?.handle ||
                 'PANTALLA',
-            description: `${vehicle?.title ?? t('print.screen')} — ${t('print.variant', { variant: screen.title })}`,
+            description: `${vehicle?.title ?? t('print.screen')} — ${t('print.variant', {
+                variant: [screen.title, screen.color].filter(Boolean).join(' / '),
+            })}`,
             quantity: 1,
             price: screen.price,
         });
@@ -2401,7 +2498,9 @@ watch(
         }
 
         const availableVariantIds = new Set(
-            vehicles.flatMap((vehicle) => vehicle.variants.map((variant) => variant.id)),
+            vehicles.flatMap((vehicle) =>
+                vehicle.variants.flatMap((variant) => screenVariantChoices(variant).map((choice) => choice.id)),
+            ),
         );
         selectedScreenVariantIds.value = selectedScreenVariantIds.value.filter((variantId) =>
             availableVariantIds.has(variantId),
@@ -2715,31 +2814,43 @@ watch(
                                             @pointerleave="stopVariantAutoScroll"
                                         >
                                             <div class="grid gap-2">
-                                                <button
+                                                <div
                                                     v-for="variant in vehicle.variants"
                                                     :key="variant.id"
                                                     :id="`product-screen-${variant.id}`"
-                                                    type="button"
-                                                    @click="toggleScreenVariant(variant.id)"
-                                                    class="group flex min-h-10 w-full items-center justify-between gap-4 rounded-lg border px-3 py-2 text-left text-sm font-medium leading-tight transition"
+                                                    class="group flex min-h-10 w-full items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium leading-tight transition"
                                                     :class="
-                                                        selectedScreenVariantIds.includes(variant.id)
+                                                        isScreenVariantSelected(variant)
                                                             ? 'border-amber-400 bg-amber-400 text-black'
                                                             : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400/10'
                                                     "
                                                 >
-                                                    <span class="min-w-0 flex-1 truncate">{{ variant.title }}</span>
+                                                    <button type="button" class="min-w-0 flex-1 truncate text-left" @click="toggleScreenVariant(variant)">
+                                                        {{ variant.title }}
+                                                    </button>
+                                                    <label v-if="variant.colorOptions.length > 1" class="flex shrink-0 items-center gap-1.5 text-xs">
+                                                        <span class="sr-only">{{ t('screen.color') }}</span>
+                                                        <select
+                                                            :value="selectedScreenChoice(variant).id"
+                                                            class="rounded border border-current bg-[#121212] px-2 py-1 text-amber-400"
+                                                            @change="selectScreenColor(variant, $event)"
+                                                        >
+                                                            <option v-for="choice in variant.colorOptions" :key="choice.id" :value="choice.id">
+                                                                {{ choice.color }}
+                                                            </option>
+                                                        </select>
+                                                    </label>
                                                     <span
                                                         class="shrink-0 whitespace-nowrap text-xs"
                                                         :class="
-                                                            selectedScreenVariantIds.includes(variant.id)
+                                                            isScreenVariantSelected(variant)
                                                                 ? 'text-black/70'
                                                                 : 'text-amber-400'
                                                         "
                                                     >
-                                                        {{ variant.price.toFixed(2) }} €
+                                                        {{ selectedScreenChoice(variant).price.toFixed(2) }} €
                                                     </span>
-                                                </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -3277,7 +3388,9 @@ watch(
                                     >
                                         {{ screen.title }}
                                     </button>
-                                    <p class="text-sm text-neutral-500">{{ t('screen.label') }}</p>
+                                    <p class="text-sm text-neutral-500">
+                                        {{ t('screen.label') }}<span v-if="screen.color"> · {{ t('screen.color') }}: {{ screen.color }}</span>
+                                    </p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
                                     {{ screen.price.toFixed(2) }} €

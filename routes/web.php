@@ -9,6 +9,7 @@ use App\Http\Controllers\ConfigurationStatisticController;
 use App\Http\Controllers\ConfigurationStatisticsController;
 use App\Http\Controllers\CustomersController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DatabaseMigrationController;
 use App\Http\Controllers\ImportedProductsController;
 use App\Http\Controllers\InstallationZonesController;
 use App\Http\Controllers\ModelsController;
@@ -17,6 +18,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuoteNumberController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\SharedConfigurationController;
+use App\Http\Controllers\VisitorStatisticsController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -47,6 +49,8 @@ Route::post('/configurator/statistics', [ConfigurationStatisticController::class
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/configuration-statistics', ConfigurationStatisticsController::class)
         ->name('configuration-statistics.index');
+    Route::get('/visitor-statistics', VisitorStatisticsController::class)
+        ->name('visitor-statistics.index');
     Route::get('/configuration-statistics/export/{format}', [ConfigurationStatisticsController::class, 'export'])
         ->whereIn('format', ['csv', 'xlsx', 'pdf'])
         ->name('configuration-statistics.export');
@@ -61,6 +65,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         ->middleware('throttle:30,1')
         ->name('configurator.shared-configurations.store');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::post('/dashboard/database/migrate', DatabaseMigrationController::class)
+        ->middleware('throttle:3,10')
+        ->name('dashboard.database.migrate');
     Route::post('/dashboard/import-csv', [ConfiguratorImportController::class, 'store'])->name('dashboard.import');
     Route::get('/brands', BrandsController::class)->name('brands.index');
     Route::get('/models', ModelsController::class)->name('models.index');
@@ -83,6 +90,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::patch('/customers/{customer}/supplier-refunds/{supplierRefund}', [CustomersController::class, 'updateSupplierRefund'])->name('customers.supplier-refunds.update');
     Route::delete('/customers/{customer}/supplier-refunds/{supplierRefund}', [CustomersController::class, 'destroySupplierRefund'])->name('customers.supplier-refunds.destroy');
     Route::get('/missing-vehicle-requests', MissingVehicleRequestsController::class)->name('missing-vehicle-requests.index');
+    Route::get('/missing-vehicle-requests/{missingVehicleRequest}/photo', [MissingVehicleRequestsController::class, 'photo'])->name('missing-vehicle-requests.photo');
     Route::delete('/missing-vehicle-requests/{missingVehicleRequest}', [MissingVehicleRequestsController::class, 'destroy'])->name('missing-vehicle-requests.destroy');
     Route::patch('/imported-products/{product}/price', [ImportedProductsController::class, 'updatePrice'])->name('imported-products.price');
     Route::delete('/imported-products/{product}', [ImportedProductsController::class, 'destroy'])->name('imported-products.destroy');
