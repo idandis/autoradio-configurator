@@ -1826,14 +1826,16 @@ const checkoutUrl = computed(() => {
     const cartPath = checkoutLineItems.value
         .map((item) => `${item.variantId}:${item.quantity}`)
         .join(',');
-
-    const cartUrl = `/cart/${cartPath}?checkout`;
+    const localePrefix = props.locale === 'es' ? '' : `/${props.locale}`;
+    const parameters = new URLSearchParams();
 
     if (effectiveDiscountCode.value) {
-        return `https://www.autoradiocanario.com/discount/${encodeURIComponent(effectiveDiscountCode.value)}?redirect=${encodeURIComponent(cartUrl)}`;
+        parameters.set('discount', effectiveDiscountCode.value);
     }
 
-    return `https://www.autoradiocanario.com${cartUrl}`;
+    const query = parameters.toString();
+
+    return `https://www.autoradiocanario.com${localePrefix}/cart/${cartPath}${query ? `?${query}` : ''}`;
 });
 
 const statisticSessionUuid = () => {
@@ -1851,24 +1853,6 @@ const statisticSessionUuid = () => {
         return uuid;
     } catch {
         return null;
-    }
-};
-
-const visitorUuid = () => {
-    try {
-        const storageKey = 'autoradiocanario-visitor-id';
-        const existing = window.localStorage.getItem(storageKey);
-        if (existing) return existing;
-
-        const uuid = window.crypto?.randomUUID?.() ?? 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
-            const random = Math.floor(Math.random() * 16);
-            const value = character === 'x' ? random : (random & 0x3) | 0x8;
-            return value.toString(16);
-        });
-        window.localStorage.setItem(storageKey, uuid);
-        return uuid;
-    } catch {
-        return statisticSessionUuid();
     }
 };
 
@@ -1897,7 +1881,7 @@ const trackVisitorEntry = async () => {
             credentials: 'same-origin',
             keepalive: true,
             body: JSON.stringify({
-                session_uuid: visitorUuid(),
+                session_uuid: statisticSessionUuid(),
                 event_type: 'configurator_entered',
                 installation_selected: false,
                 camera_selected: false,

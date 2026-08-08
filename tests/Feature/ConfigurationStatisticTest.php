@@ -14,6 +14,13 @@ class ConfigurationStatisticTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        $this->withHeader('User-Agent', 'Mozilla/5.0 Safari/605.1.15');
+    }
+
     public function test_commercial_event_is_recorded_without_personal_data(): void
     {
         $payload = $this->payload();
@@ -45,8 +52,16 @@ class ConfigurationStatisticTest extends TestCase
         Carbon::setTestNow();
     }
 
-    public function test_visitor_is_recorded_once_with_proxy_geography_and_without_ip(): void
+    public function test_visitor_is_recorded_once_with_real_ip_geography_and_without_ip(): void
     {
+        Http::fake([
+            'https://ipwho.is/81.45.10.20*' => Http::response([
+                'success' => true,
+                'country_code' => 'ES',
+                'region' => 'Canary Islands',
+                'city' => 'Las Palmas',
+            ]),
+        ]);
         $payload = [
             'session_uuid' => '46f0b7b8-25ed-4ca8-a06a-71c453c9f31d',
             'event_type' => 'configurator_entered',
@@ -56,17 +71,18 @@ class ConfigurationStatisticTest extends TestCase
             'device_type' => 'mobile',
         ];
         $headers = [
-            'CF-IPCountry' => 'ES',
-            'X-Vercel-IP-Country-Region' => 'CN',
-            'X-Vercel-IP-City' => 'Las%20Palmas',
+            'CF-Connecting-IP' => '81.45.10.20',
+            'X-Forwarded-For' => '81.45.10.20, 162.158.10.20',
         ];
 
-        $this->withHeaders($headers)->postJson('/configurator/statistics', $payload)->assertCreated();
-        $this->withHeaders($headers)->postJson('/configurator/statistics', $payload)->assertNoContent();
+        $this->withServerVariables(['REMOTE_ADDR' => '162.158.10.20'])
+            ->withHeaders($headers)->postJson('/configurator/statistics', $payload)->assertCreated();
+        $this->withServerVariables(['REMOTE_ADDR' => '162.158.10.20'])
+            ->withHeaders($headers)->postJson('/configurator/statistics', $payload)->assertNoContent();
 
         $visitor = ConfigurationStatistic::sole();
         $this->assertSame('ES', $visitor->country_code);
-        $this->assertSame('CN', $visitor->region);
+        $this->assertSame('Canary Islands', $visitor->region);
         $this->assertSame('Las Palmas', $visitor->city);
         $this->assertArrayNotHasKey('ip', $visitor->getAttributes());
     }
@@ -89,7 +105,11 @@ class ConfigurationStatisticTest extends TestCase
         ];
         ConfigurationStatistic::create($payload);
 
-        $this->withHeader('X-Forwarded-For', '8.8.8.8')
+        $this->withServerVariables(['REMOTE_ADDR' => '162.158.10.20'])
+            ->withHeaders([
+                'CF-Connecting-IP' => '8.8.8.8',
+                'X-Forwarded-For' => '8.8.8.8, 162.158.10.20',
+            ])
             ->postJson('/configurator/statistics', $payload)
             ->assertNoContent();
 
@@ -100,6 +120,75 @@ class ConfigurationStatisticTest extends TestCase
             'city' => 'Las Palmas de Gran Canaria',
         ]);
         $this->assertDatabaseCount('configuration_statistics', 1);
+    }
+
+    public function test_cloudflare_proxy_ip_is_never_geolocated_or_counted_as_a_second_visit(): void
+    {
+        Http::fake([
+            'https://ipwho.is/81.45.10.20*' => Http::response([
+                'success' => true,
+                'country_code' => 'ES',
+                'region' => 'Canary Islands',
+                'city' => 'Las Palmas de Gran Canaria',
+            ]),
+            '*' => Http::response([
+                'success' => true,
+                'country_code' => 'US',
+                'region' => 'California',
+                'city' => 'San Jose',
+            ]),
+        ]);
+
+        $headers = [
+            'User-Agent' => 'Mozilla/5.0 (iPhone) Safari/604.1',
+            'CF-IPCountry' => 'ES',
+            'CF-Connecting-IP' => '81.45.10.20',
+            'X-Forwarded-For' => '81.45.10.20, 172.68.1.10',
+        ];
+        $payload = [
+            'session_uuid' => '76f0b7b8-25ed-4ca8-a06a-71c453c9f31d',
+            'event_type' => 'configurator_entered',
+            'installation_selected' => false,
+            'camera_selected' => false,
+            'language' => 'es',
+            'device_type' => 'mobile',
+        ];
+
+        $this->withServerVariables(['REMOTE_ADDR' => '172.68.1.10'])
+            ->withHeaders($headers)
+            ->postJson('/configurator/statistics', $payload)
+            ->assertCreated();
+
+        $this->withServerVariables(['REMOTE_ADDR' => '172.68.1.10'])
+            ->withHeaders($headers)
+            ->postJson('/configurator/statistics', [
+                ...$payload,
+                'session_uuid' => '86f0b7b8-25ed-4ca8-a06a-71c453c9f31d',
+            ])
+            ->assertNoContent();
+
+        $this->assertDatabaseCount('configuration_statistics', 1);
+        $this->assertDatabaseHas('configuration_statistics', [
+            'country_code' => 'ES',
+            'region' => 'Canary Islands',
+            'city' => 'Las Palmas de Gran Canaria',
+        ]);
+        Http::assertSentCount(1);
+        Http::assertSent(fn ($request) => str_contains($request->url(), '81.45.10.20'));
+    }
+
+    public function test_bot_entry_is_not_recorded(): void
+    {
+        $this->withHeader('User-Agent', 'Googlebot/2.1')
+            ->postJson('/configurator/statistics', [
+                'session_uuid' => '96f0b7b8-25ed-4ca8-a06a-71c453c9f31d',
+                'event_type' => 'configurator_entered',
+                'installation_selected' => false,
+                'camera_selected' => false,
+            ])
+            ->assertNoContent();
+
+        $this->assertDatabaseCount('configuration_statistics', 0);
     }
 
     public function test_visitor_dashboard_is_admin_only_and_has_visitor_statistics(): void

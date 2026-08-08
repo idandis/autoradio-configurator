@@ -44,27 +44,50 @@ class ConfigurationStatisticController extends Controller
                 return response()->json(['message' => 'A visitor identifier is required.'], 422);
             }
 
+            if ($this->isAutomatedTraffic($request)) {
+                return response()->json(status: 204);
+            }
+
             $existingVisitor = ConfigurationStatistic::query()
                 ->where('session_uuid', $data['session_uuid'])
                 ->where('event_type', 'configurator_entered')
                 ->first();
 
             if ($existingVisitor) {
+                if (! $existingVisitor->visit_key) {
+                    $existingVisitor->visit_key = $this->visitKey($data['session_uuid']);
+                }
+
                 if (! $existingVisitor->country_code || ! $existingVisitor->region || ! $existingVisitor->city) {
                     $existingVisitor->fill(array_filter(
                         $this->geography($request),
                         fn ($value, string $key) => blank($existingVisitor->{$key}) && filled($value),
                         ARRAY_FILTER_USE_BOTH,
-                    ))->save();
+                    ));
                 }
+
+                $existingVisitor->save();
 
                 return response()->json(status: 204);
             }
 
-            $data = array_merge($data, $this->geography($request));
-            ConfigurationStatistic::create($data);
+            // A browser session can occasionally issue the mount request twice
+            // with two freshly generated UUIDs. Collapse that short burst before
+            // doing an external geolocation lookup.
+            $browserSessionKey = 'configuration-statistic:entry-session:'.hash_hmac(
+                'sha256',
+                $request->session()->getId(),
+                (string) config('app.key'),
+            );
+            if (! Cache::add($browserSessionKey, true, now()->addSeconds(30))) {
+                return response()->json(status: 204);
+            }
 
-            return response()->json(status: 201);
+            $visitKey = $this->visitKey($data['session_uuid']);
+            $data = array_merge($data, $this->geography($request), ['visit_key' => $visitKey]);
+            $visitor = ConfigurationStatistic::firstOrCreate(['visit_key' => $visitKey], $data);
+
+            return response()->json(status: $visitor->wasRecentlyCreated ? 201 : 204);
         }
 
         $configurationKey = hash('sha256', json_encode([
@@ -119,32 +142,31 @@ class ConfigurationStatisticController extends Controller
 
     private function geography(Request $request): array
     {
-        $countryCode = strtoupper((string) $this->header($request, ['CF-IPCountry', 'X-Vercel-IP-Country']));
-        $proxyGeography = [
-            'country_code' => preg_match('/^[A-Z]{2}$/', $countryCode) ? $countryCode : null,
-            'region' => $this->header($request, ['X-Vercel-IP-Country-Region', 'CloudFront-Viewer-Country-Region']),
-            'city' => $this->header($request, ['X-Vercel-IP-City', 'CloudFront-Viewer-City']),
-        ];
-        $fallbackGeography = in_array(null, $proxyGeography, true)
-            ? $this->visitorGeolocation->locate($request)
-            : [];
+        $geography = $this->visitorGeolocation->locate($request);
 
         return [
-            'country_code' => $proxyGeography['country_code'] ?? $fallbackGeography['country_code'] ?? null,
-            'region' => $proxyGeography['region'] ?? $fallbackGeography['region'] ?? null,
-            'city' => $proxyGeography['city'] ?? $fallbackGeography['city'] ?? null,
+            'country_code' => $geography['country_code'] ?? null,
+            'region' => $geography['region'] ?? null,
+            'city' => $geography['city'] ?? null,
         ];
     }
 
-    private function header(Request $request, array $names): ?string
+    private function visitKey(string $sessionUuid): string
     {
-        foreach ($names as $name) {
-            $value = trim(urldecode((string) $request->header($name)));
-            if ($value !== '' && $value !== 'XX') {
-                return mb_substr($value, 0, 255);
-            }
+        return hash_hmac('sha256', $sessionUuid, (string) config('app.key'));
+    }
+
+    private function isAutomatedTraffic(Request $request): bool
+    {
+        $userAgent = strtolower((string) $request->userAgent());
+
+        if ($userAgent === '') {
+            return true;
         }
 
-        return null;
+        return preg_match(
+            '/(?:bot|crawler|spider|slurp|headless|lighthouse|pagespeed|uptime|monitoring|healthcheck|curl|wget|python-requests|guzzlehttp|go-http-client|postmanruntime|facebookexternalhit|whatsapp|telegrambot|discordbot)/i',
+            $userAgent,
+        ) === 1;
     }
 }

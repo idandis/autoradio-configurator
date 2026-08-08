@@ -52,24 +52,66 @@ class VisitorGeolocation
         }
     }
 
-    private function publicIp(Request $request): ?string
+    public function publicIp(Request $request): ?string
     {
-        $forwardedFor = explode(',', (string) $request->header('X-Forwarded-For'));
-        $candidates = [
-            $request->header('CF-Connecting-IP'),
-            $request->header('X-Real-IP'),
-            ...$forwardedFor,
-            $request->ip(),
-        ];
+        $remoteAddress = trim((string) $request->server('REMOTE_ADDR'));
+        $fromCloudflare = $this->isCloudflareIp($remoteAddress);
+
+        // Cloudflare owns CF-Connecting-IP. Never accept it from an arbitrary
+        // client, otherwise the analytics endpoint could be trivially spoofed.
+        $candidates = $fromCloudflare
+            ? [$request->header('CF-Connecting-IP'), ...$request->getClientIps()]
+            : [$request->ip()];
 
         foreach ($candidates as $candidate) {
             $ip = trim((string) $candidate);
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            if ($this->isPublicIp($ip) && ! $this->isCloudflareIp($ip)) {
                 return $ip;
             }
         }
 
         return null;
+    }
+
+    public function isCloudflareIp(?string $ip): bool
+    {
+        if (! $this->isValidIp((string) $ip)) {
+            return false;
+        }
+
+        foreach (config('cloudflare.proxies', []) as $network) {
+            [$subnet, $prefix] = array_pad(explode('/', $network, 2), 2, null);
+            $address = inet_pton((string) $ip);
+            $subnetAddress = inet_pton($subnet);
+
+            if ($address === false || $subnetAddress === false || strlen($address) !== strlen($subnetAddress)) {
+                continue;
+            }
+
+            $bits = (int) ($prefix ?? (strlen($address) * 8));
+            $bytes = intdiv($bits, 8);
+            $remainder = $bits % 8;
+
+            if (substr($address, 0, $bytes) !== substr($subnetAddress, 0, $bytes)) {
+                continue;
+            }
+
+            if ($remainder === 0 || ((ord($address[$bytes]) ^ ord($subnetAddress[$bytes])) & (0xff << (8 - $remainder))) === 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isPublicIp(string $ip): bool
+    {
+        return filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) !== false;
+    }
+
+    private function isValidIp(string $ip): bool
+    {
+        return filter_var($ip, FILTER_VALIDATE_IP) !== false;
     }
 
     private function value(mixed $value, int $maxLength = 255): ?string
