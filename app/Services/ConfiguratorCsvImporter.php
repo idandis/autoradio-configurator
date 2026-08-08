@@ -94,6 +94,7 @@ class ConfiguratorCsvImporter
         }
 
         $this->variantCatalog = $this->loadVariantCatalog($grouped);
+        $this->loadMissingPublicVariantOptions($grouped);
 
         $stats = [
             'screen_products' => 0,
@@ -318,7 +319,10 @@ class ConfiguratorCsvImporter
                 'price' => $price,
                 'image_url' => $imageUrl,
                 'meta' => [
-                    'option2' => $this->value($row, ['Variant Option2 Value', 'Option2 Value']),
+                    'option2' => $this->value($row, ['Variant Option2 Value', 'Option2 Value'])
+                        ?? ($enriched['option2'] ?? null),
+                    'option3' => $this->value($row, ['Variant Option3 Value', 'Option3 Value'])
+                        ?? ($enriched['option3'] ?? null),
                     'variant_image' => $this->value($row, ['Variant Image']),
                     'variant_cost' => $this->value($row, ['Variant Cost']),
                     'regional_prices' => [
@@ -836,5 +840,45 @@ class ConfiguratorCsvImporter
         }
 
         return $this->shopifyService->getVariantsByIds($variantIds);
+    }
+
+    private function loadMissingPublicVariantOptions(array $grouped): void
+    {
+        foreach ($grouped as $handle => $rows) {
+            $rowsByFirstOption = collect($rows)
+                ->filter(function (array $row): bool {
+                    return $this->normalizeShopifyVariantId(
+                        $this->value($row, ['Variant ID', 'Variant Id']),
+                    ) !== null && filled($this->value($row, ['Variant Option1 Value', 'Option1 Value']));
+                })
+                ->groupBy(fn (array $row) => mb_strtolower(trim((string) (
+                    $this->value($row, ['Variant Option1 Value', 'Option1 Value']) ?? ''
+                ))));
+            $hasUnresolvedDuplicateOptions = $rowsByFirstOption->contains(function ($matchingRows): bool {
+                if ($matchingRows->count() < 2) {
+                    return false;
+                }
+
+                return $matchingRows->contains(fn (array $row) => $this->value($row, [
+                    'Variant Option2 Value',
+                    'Option2 Value',
+                ]) === null);
+            });
+
+            if (! $hasUnresolvedDuplicateOptions) {
+                continue;
+            }
+
+            try {
+                foreach ($this->shopifyService->getPublicVariantOptions($handle) as $variantId => $options) {
+                    $this->variantCatalog[$variantId] = array_merge(
+                        $this->variantCatalog[$variantId] ?? [],
+                        $options,
+                    );
+                }
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
     }
 }

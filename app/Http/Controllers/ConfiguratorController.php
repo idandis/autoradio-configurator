@@ -255,40 +255,52 @@ class ConfiguratorController extends Controller
         $options = [];
 
         foreach ($products as $product) {
-            $cameraVariant = $product->handle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave'
-                ? ($product->variants->first(fn ($variant) => mb_strtolower(trim((string) ($variant->option_value ?: $variant->title))) === '1080p ahd3d')
-                    ?? $product->variants->first())
-                : $product->variants->first();
+            $cameraVariants = $product->variants
+                ->filter(fn ($variant) => $variant->price !== null || filled($variant->shopify_variant_id))
+                ->sortBy('price')
+                ->values();
+            $defaultVariant = $cameraVariants->first();
+            $variantOptions = $cameraVariants->map(fn ($variant) => [
+                'id' => $variant->id,
+                'title' => $variant->option_value ?: $variant->title,
+                'color' => null,
+                'sku' => $variant->sku,
+                'shopifyVariantId' => $variant->shopify_variant_id,
+                'price' => (float) ($variant->price ?? $product->price_min),
+                'image' => $variant->image_url ?: $product->image_url,
+            ])->values();
 
             $options[] = [
-                'key' => $product->handle,
-                'productId' => $product->id,
-                'variantId' => $cameraVariant?->id,
-                'title' => $product->handle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave'
-                    ? 'Cámara 360° estandar'
-                    : $product->title,
-                'productTitle' => $product->title,
-                'variantTitle' => $cameraVariant?->option_value ?: $cameraVariant?->title,
-                'price' => (float) ($cameraVariant?->price ?? $product->price_min),
-                'image' => $product->image_url,
-                'shopifyVariantId' => $cameraVariant?->shopify_variant_id,
-                'sku' => $cameraVariant?->sku,
-                'isStandard' => in_array($product->handle, [
-                    'camara-trasera-estandar',
-                    'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna',
-                    'camara-360-para-radios-de-coche-android-con-vista-de-ave',
-                ], true),
-                'isStandardFront' => $product->handle === 'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna',
-                'isFront' => $product->handle === 'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna' || $product->subtype === 'front',
-                'isRear' => $product->handle !== 'camara-360-para-radios-de-coche-android-con-vista-de-ave' &&
-                    ($product->handle === 'camara-trasera-estandar'
-                    || $product->subtype === 'rear'
-                    || ($product->subtype === 'ahd' && preg_match('/traser|rear/', mb_strtolower($product->title)) === 1)),
-                'brand' => $product->brand,
-                'model' => $product->model,
-                'yearFrom' => $product->year_from,
-                'yearTo' => $product->year_to,
-            ];
+                    'key' => $product->handle,
+                    'productHandle' => $product->handle,
+                    'productId' => $product->id,
+                    'variantId' => $defaultVariant?->id,
+                    'title' => $product->handle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave'
+                        ? 'Cámara 360° estandar'
+                        : $product->title,
+                    'productTitle' => $product->title,
+                    'variantTitle' => $defaultVariant?->option_value ?: $defaultVariant?->title,
+                    'price' => (float) ($defaultVariant?->price ?? $product->price_min),
+                    'image' => $product->image_url,
+                    'shopifyVariantId' => $defaultVariant?->shopify_variant_id,
+                    'sku' => $defaultVariant?->sku,
+                    'variants' => $variantOptions,
+                    'isStandard' => in_array($product->handle, [
+                        'camara-trasera-estandar',
+                        'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna',
+                        'camara-360-para-radios-de-coche-android-con-vista-de-ave',
+                    ], true),
+                    'isStandardFront' => $product->handle === 'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna',
+                    'isFront' => $product->handle === 'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna' || $product->subtype === 'front',
+                    'isRear' => $product->handle !== 'camara-360-para-radios-de-coche-android-con-vista-de-ave' &&
+                        ($product->handle === 'camara-trasera-estandar'
+                        || $product->subtype === 'rear'
+                        || ($product->subtype === 'ahd' && preg_match('/traser|rear/', mb_strtolower($product->title)) === 1)),
+                    'brand' => $product->brand,
+                    'model' => $product->model,
+                    'yearFrom' => $product->year_from,
+                    'yearTo' => $product->year_to,
+                ];
         }
 
         return $options;

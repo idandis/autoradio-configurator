@@ -3,12 +3,15 @@
 namespace App\Http\Controllers;
 
 use App\Models\ConfigurationStatistic;
+use App\Services\VisitorGeolocation;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 
 class ConfigurationStatisticController extends Controller
 {
+    public function __construct(private readonly VisitorGeolocation $visitorGeolocation) {}
+
     public function store(Request $request): JsonResponse
     {
         $data = $request->validate([
@@ -41,10 +44,20 @@ class ConfigurationStatisticController extends Controller
                 return response()->json(['message' => 'A visitor identifier is required.'], 422);
             }
 
-            if (ConfigurationStatistic::query()
+            $existingVisitor = ConfigurationStatistic::query()
                 ->where('session_uuid', $data['session_uuid'])
                 ->where('event_type', 'configurator_entered')
-                ->exists()) {
+                ->first();
+
+            if ($existingVisitor) {
+                if (! $existingVisitor->country_code || ! $existingVisitor->region || ! $existingVisitor->city) {
+                    $existingVisitor->fill(array_filter(
+                        $this->geography($request),
+                        fn ($value, string $key) => blank($existingVisitor->{$key}) && filled($value),
+                        ARRAY_FILTER_USE_BOTH,
+                    ))->save();
+                }
+
                 return response()->json(status: 204);
             }
 
@@ -107,11 +120,19 @@ class ConfigurationStatisticController extends Controller
     private function geography(Request $request): array
     {
         $countryCode = strtoupper((string) $this->header($request, ['CF-IPCountry', 'X-Vercel-IP-Country']));
-
-        return [
+        $proxyGeography = [
             'country_code' => preg_match('/^[A-Z]{2}$/', $countryCode) ? $countryCode : null,
             'region' => $this->header($request, ['X-Vercel-IP-Country-Region', 'CloudFront-Viewer-Country-Region']),
             'city' => $this->header($request, ['X-Vercel-IP-City', 'CloudFront-Viewer-City']),
+        ];
+        $fallbackGeography = in_array(null, $proxyGeography, true)
+            ? $this->visitorGeolocation->locate($request)
+            : [];
+
+        return [
+            'country_code' => $proxyGeography['country_code'] ?? $fallbackGeography['country_code'] ?? null,
+            'region' => $proxyGeography['region'] ?? $fallbackGeography['region'] ?? null,
+            'city' => $proxyGeography['city'] ?? $fallbackGeography['city'] ?? null,
         ];
     }
 

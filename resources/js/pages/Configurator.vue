@@ -30,6 +30,7 @@ type Vehicle = {
 
 type SimpleOption = {
     key: string;
+    productHandle?: string;
     productId?: number | null;
     variantId?: number | null;
     title: string;
@@ -50,6 +51,7 @@ type SimpleOption = {
     model?: string | null;
     yearFrom?: number | null;
     yearTo?: number | null;
+    variants?: VariantChoice[];
 };
 
 type InstallationZone = {
@@ -175,6 +177,11 @@ const customQuoteCopy = computed(() => ({
     it: { button: 'Preventivo custom', title: 'Preventivo custom', help: 'Aggiungi tutti i prodotti che vuoi e crea il preventivo quando hai finito.', search: 'Cerca prodotto, variante o SKU…', selected: 'Prodotti aggiunti', empty: 'Nessun prodotto trovato', add: 'Aggiungi', added: 'Aggiunto', remove: 'Rimuovi', cancel: 'Annulla', create: 'Crea preventivo' },
     en: { button: 'Custom quote', title: 'Custom quote', help: 'Add all the products you need, then create the quote when finished.', search: 'Search by product, variant or SKU…', selected: 'Added products', empty: 'No products found', add: 'Add', added: 'Added', remove: 'Remove', cancel: 'Cancel', create: 'Create quote' },
 })[props.locale]);
+const adminDiscountCopy = computed(() => ({
+    es: { title: 'Descuento personalizado', help: 'El código debe existir en Shopify. El valor solo se usa para calcular este presupuesto.', code: 'Código Shopify', codePlaceholder: 'Ej. CLIENTE10', type: 'Tipo de descuento', percentage: 'Porcentaje', fixed: 'Importe fijo', value: 'Valor', special: 'Descuento especial' },
+    it: { title: 'Sconto personalizzato', help: 'Il codice deve essere già presente in Shopify. Il valore serve a calcolare questo preventivo.', code: 'Codice Shopify', codePlaceholder: 'Es. CLIENTE10', type: 'Tipo di sconto', percentage: 'Percentuale', fixed: 'Importo fisso', value: 'Valore', special: 'Sconto speciale' },
+    en: { title: 'Custom discount', help: 'The code must already exist in Shopify. The value is used to calculate this quote.', code: 'Shopify code', codePlaceholder: 'E.g. CLIENT10', type: 'Discount type', percentage: 'Percentage', fixed: 'Fixed amount', value: 'Value', special: 'Special discount' },
+})[props.locale]);
 const paymentMethods = [
     { name: 'American Express', icon: 'americanexpress', color: '016FD0', fallback: 'AMEX' },
     { name: 'Apple Pay', icon: 'applepay', color: '000000', fallback: 'Apple Pay' },
@@ -288,6 +295,7 @@ const selectedModel = ref<string | null>(null);
 const selectedYear = ref<number | null>(null);
 const selectedScreenVariantIds = ref<number[]>([]);
 const selectedCameraKeys = ref<string[]>([]);
+const selectedCameraVariantIds = ref<Record<string, number>>({});
 const selectedSpeakerCategory = ref<string>('');
 const selectedSpeakerSizeByCategory = ref<Record<string, string>>({});
 const selectedSpeakerKeys = ref<string[]>([]);
@@ -840,9 +848,25 @@ const restoreConfiguratorState = async () => {
         selectedScreenVariantIds.value = Array.isArray(state.selectedScreenVariantIds)
             ? state.selectedScreenVariantIds.filter((id: unknown) => typeof id === 'number' && availableVariantIds.has(id))
             : [];
-        selectedCameraKeys.value = Array.isArray(state.selectedCameraKeys)
-            ? state.selectedCameraKeys.filter((key: unknown) => typeof key === 'string' && availableCameraKeys.has(key))
+        const storedCameraKeys = Array.isArray(state.selectedCameraKeys)
+            ? state.selectedCameraKeys.filter((key: unknown): key is string => typeof key === 'string')
             : [];
+        selectedCameraKeys.value = storedCameraKeys
+            .map((key) => key.replace(/--variant-\d+$/, ''))
+            .filter((key) => availableCameraKeys.has(key));
+        selectedCameraVariantIds.value = typeof state.selectedCameraVariantIds === 'object' && state.selectedCameraVariantIds !== null
+            ? Object.fromEntries(Object.entries(state.selectedCameraVariantIds).filter(([key, id]) =>
+                availableCameraKeys.has(key)
+                && typeof id === 'number'
+                && props.cameraOptions.find((option) => option.key === key)?.variants?.some((variant) => variant.id === id),
+            ))
+            : {};
+        storedCameraKeys.forEach((key) => {
+            const match = key.match(/^(.*)--variant-(\d+)$/);
+            if (match && availableCameraKeys.has(match[1])) {
+                selectedCameraVariantIds.value[match[1]] = Number(match[2]);
+            }
+        });
         selectedSpeakerKeys.value = Array.isArray(state.selectedSpeakerKeys)
             ? state.selectedSpeakerKeys.filter((key: unknown) => typeof key === 'string' && availableSpeakerKeys.has(key))
             : [];
@@ -926,7 +950,15 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
     });
 
     const visibleCameraKeys = new Set(visibleCameraOptions.value.map((camera) => camera.key));
-    selectedCameraKeys.value = configuration.cameras.filter((key) => visibleCameraKeys.has(key));
+    selectedCameraKeys.value = configuration.cameras
+        .map((key) => key.replace(/--variant-\d+$/, ''))
+        .filter((key) => visibleCameraKeys.has(key));
+    configuration.cameras.forEach((key) => {
+        const match = key.match(/^(.*)--variant-(\d+)$/);
+        if (match && visibleCameraKeys.has(match[1])) {
+            selectedCameraVariantIds.value[match[1]] = Number(match[2]);
+        }
+    });
     const speakerKeys = new Set(props.speakerOptions.map((speaker) => speaker.key));
     selectedSpeakerKeys.value = configuration.speakers.filter((key) => speakerKeys.has(key));
     const customKeys = new Set(props.customProducts.map((product) => product.key));
@@ -1002,6 +1034,7 @@ const persistConfiguratorState = () => {
                 selectedYear: selectedYear.value,
                 selectedScreenVariantIds: selectedScreenVariantIds.value,
                 selectedCameraKeys: selectedCameraKeys.value,
+                selectedCameraVariantIds: selectedCameraVariantIds.value,
                 selectedSpeakerCategory: selectedSpeakerCategory.value,
                 selectedSpeakerSizeByCategory: selectedSpeakerSizeByCategory.value,
                 selectedSpeakerKeys: selectedSpeakerKeys.value,
@@ -1027,6 +1060,7 @@ watch(
         selectedYear,
         selectedScreenVariantIds,
         selectedCameraKeys,
+        selectedCameraVariantIds,
         selectedSpeakerCategory,
         selectedSpeakerSizeByCategory,
         selectedSpeakerKeys,
@@ -1204,8 +1238,24 @@ watch(selectedBrandImageUrl, () => {
     failedBrandImage.value = null;
 });
 
+const cameraOptionsWithSelectedVariants = computed(() => props.cameraOptions.map((option) => {
+    const variants = option.variants ?? [];
+    const selectedVariant = variants.find((variant) => variant.id === selectedCameraVariantIds.value[option.key])
+        ?? variants[0];
+
+    return selectedVariant ? {
+        ...option,
+        variantId: selectedVariant.id,
+        variantTitle: selectedVariant.title,
+        price: selectedVariant.price,
+        image: option.image,
+        shopifyVariantId: selectedVariant.shopifyVariantId,
+        sku: selectedVariant.sku,
+    } : option;
+}));
+
 const visibleCameraOptions = computed(() => {
-    return props.cameraOptions.filter((option) => {
+    return cameraOptionsWithSelectedVariants.value.filter((option) => {
         if (option.isStandard) {
             return true;
         }
@@ -1242,6 +1292,13 @@ const visibleCameraOptions = computed(() => {
     });
 });
 
+const selectCameraVariant = (camera: SimpleOption, event: Event) => {
+    selectedCameraVariantIds.value = {
+        ...selectedCameraVariantIds.value,
+        [camera.key]: Number((event.target as HTMLSelectElement).value),
+    };
+};
+
 const hasSpecificCameraOption = computed(() =>
     visibleCameraOptions.value.some((camera) => !camera.isStandard),
 );
@@ -1253,8 +1310,11 @@ const selectedCameras = computed(() =>
 );
 
 const toggleCamera = (key: string) => {
-    const is360 = key === 'camara-360-para-radios-de-coche-android-con-vista-de-ave';
-    const has360 = selectedCameraKeys.value.includes('camara-360-para-radios-de-coche-android-con-vista-de-ave');
+    const camera = visibleCameraOptions.value.find((option) => option.key === key);
+    const is360 = camera?.productHandle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave';
+    const has360 = selectedCameras.value.some(
+        (option) => option.productHandle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave',
+    );
 
     if (is360) {
         selectedCameraKeys.value = has360 ? [] : [key];
@@ -1262,11 +1322,18 @@ const toggleCamera = (key: string) => {
     }
 
     const without360 = selectedCameraKeys.value.filter(
-        (selectedKey) => selectedKey !== 'camara-360-para-radios-de-coche-android-con-vista-de-ave',
+        (selectedKey) => props.cameraOptions.find((option) => option.key === selectedKey)?.productHandle
+            !== 'camara-360-para-radios-de-coche-android-con-vista-de-ave',
     );
     selectedCameraKeys.value = without360.includes(key)
         ? without360.filter((selectedKey) => selectedKey !== key)
-        : [...without360, key];
+        : [
+            ...without360.filter(
+                (selectedKey) => props.cameraOptions.find((option) => option.key === selectedKey)?.productHandle
+                    !== camera?.productHandle,
+            ),
+            key,
+        ];
 };
 
 const speakerCategories = computed(() =>
@@ -1458,7 +1525,7 @@ const requiredInstallationCombination = computed(() => {
     const hasCamera = selectedCameras.value.length > 0;
     const hasSpeaker = selectedSpeakers.value.length > 0;
     const hasCamera360 = selectedCameras.value.some(
-        (camera) => camera.key === 'camara-360-para-radios-de-coche-android-con-vista-de-ave',
+        (camera) => camera.productHandle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave',
     );
 
     if (hasCamera && hasSpeaker) return null;
@@ -1663,11 +1730,48 @@ const amountUntilNextDiscount = computed(() =>
         ? Math.max(0, nextDiscount.value.threshold - productsSubtotal.value)
         : 0,
 );
-const discountAmount = computed(() =>
-    activeDiscount.value
+const quoteDiscountCode = ref('');
+const quoteDiscountType = ref<'percentage' | 'fixed'>('percentage');
+const quoteDiscountValue = ref('');
+const customDiscount = computed(() => {
+    const code = quoteDiscountCode.value.trim();
+    const value = Number.parseFloat(String(quoteDiscountValue.value).replace(',', '.'));
+
+    if (!code || !Number.isFinite(value) || value <= 0) {
+        return null;
+    }
+
+    return {
+        code,
+        type: quoteDiscountType.value,
+        value: quoteDiscountType.value === 'percentage' ? Math.min(value, 100) : value,
+    };
+});
+const effectiveDiscountCode = computed(() => customDiscount.value?.code ?? activeDiscount.value?.code ?? null);
+const discountAmount = computed(() => {
+    if (customDiscount.value) {
+        const amount = customDiscount.value.type === 'percentage'
+            ? productsSubtotal.value * (customDiscount.value.value / 100)
+            : customDiscount.value.value;
+
+        return Math.min(productsSubtotal.value, amount);
+    }
+
+    return activeDiscount.value
         ? productsSubtotal.value * (activeDiscount.value.percentage / 100)
-        : 0,
-);
+        : 0;
+});
+const discountLabel = computed(() => {
+    if (customDiscount.value) {
+        const value = customDiscount.value.type === 'percentage'
+            ? `${customDiscount.value.value}%`
+            : euroFormatter.value.format(customDiscount.value.value);
+
+        return `${adminDiscountCopy.value.special} ${value}`;
+    }
+
+    return t('quote.discount', { percentage: activeDiscount.value?.percentage ?? 0 });
+});
 const onlineTotal = computed(() => productsSubtotal.value - discountAmount.value);
 const estimatedTotal = computed(() => onlineTotal.value + installationCost.value);
 
@@ -1725,8 +1829,8 @@ const checkoutUrl = computed(() => {
 
     const cartUrl = `/cart/${cartPath}?checkout`;
 
-    if (activeDiscount.value) {
-        return `https://www.autoradiocanario.com/discount/${activeDiscount.value.code}?redirect=${encodeURIComponent(cartUrl)}`;
+    if (effectiveDiscountCode.value) {
+        return `https://www.autoradiocanario.com/discount/${encodeURIComponent(effectiveDiscountCode.value)}?redirect=${encodeURIComponent(cartUrl)}`;
     }
 
     return `https://www.autoradiocanario.com${cartUrl}`;
@@ -1975,7 +2079,11 @@ const sharedConfigurationPayload = computed<SharedConfigurationPayload | null>((
         model: selectedModel.value,
         year: selectedYear.value,
         screens,
-        cameras: [...selectedCameraKeys.value],
+        cameras: selectedCameras.value.map((camera) =>
+            (camera.variants?.length ?? 0) > 1 && camera.variantId
+                ? `${camera.key}--variant-${camera.variantId}`
+                : camera.key,
+        ),
         speakers: [...selectedSpeakerKeys.value],
         customProducts: [...selectedCustomProductKeys.value],
         installation: selectedInstallationKey.value,
@@ -2196,12 +2304,10 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         });
     }
 
-    if (activeDiscount.value && discountAmount.value > 0) {
+    if (effectiveDiscountCode.value && discountAmount.value > 0) {
         items.push({
-            code: activeDiscount.value.code,
-            description: t('print.online_discount', {
-                percentage: activeDiscount.value.percentage,
-            }),
+            code: effectiveDiscountCode.value,
+            description: discountLabel.value,
             quantity: 1,
             price: -discountAmount.value,
         });
@@ -2347,7 +2453,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
     </section>
     <section class="totals">
         <div class="total-row"><div>${escapeHtml(t('quote.products_online'))}</div><div class="amount">${euroFormatter.value.format(productsSubtotal.value)}</div></div>
-        ${discountAmount.value > 0 ? `<div class="total-row"><div>${escapeHtml(t('quote.discount', { percentage: activeDiscount.value?.percentage ?? 0 }))}</div><div class="amount">−${euroFormatter.value.format(discountAmount.value)}</div></div>` : ''}
+        ${discountAmount.value > 0 ? `<div class="total-row"><div>${escapeHtml(discountLabel.value)}</div><div class="amount">−${euroFormatter.value.format(discountAmount.value)}</div></div>` : ''}
         ${installationCost.value > 0 ? `<div class="total-row"><div>${escapeHtml(t('quote.installation_direct'))}</div><div class="amount">${euroFormatter.value.format(installationCost.value)}</div></div>` : ''}
         <div class="total-row"><div>${escapeHtml(t('quote.estimated_total'))}</div><div class="amount">${euroFormatter.value.format(estimatedTotal.value)}</div></div>
         <div class="total-row"><div>${escapeHtml(t('quote.online_total'))}</div><div class="amount">${euroFormatter.value.format(onlineTotal.value)}</div></div>
@@ -2893,7 +2999,7 @@ watch(
                                     <button
                                         type="button"
                                         @click="toggleCamera(camera.key)"
-                                        class="grid h-full min-w-0 w-full max-w-full grid-cols-[minmax(0,1fr)] gap-0 overflow-hidden rounded-xl p-0 text-left"
+                                        class="block min-w-0 w-full max-w-full overflow-hidden rounded-t-xl p-0 text-left"
                                     >
                                         <div
                                             v-if="camera.image"
@@ -2906,12 +3012,30 @@ watch(
                                                 class="absolute inset-0 h-full w-full object-contain object-center"
                                             />
                                         </div>
-                                        <div class="flex min-w-0 w-full max-w-full items-center justify-start gap-1 overflow-hidden p-2">
-                                            <p class="min-w-0 flex-1 truncate whitespace-nowrap text-xs font-medium">{{ camera.isStandardFront ? t('camera.standard_front') : camera.title }}</p>
-                                            <p class="shrink-0 whitespace-nowrap text-sm font-semibold">
-                                                {{ camera.price.toFixed(2) }} €
-                                            </p>
-                                        </div>
+                                    </button>
+
+                                    <div v-if="camera.variants && camera.variants.length > 1" class="px-2 pt-2">
+                                        <select
+                                            :value="camera.variantId ?? camera.variants[0].id"
+                                            class="w-full rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-white outline-none focus:border-amber-400"
+                                            @click.stop
+                                            @change="selectCameraVariant(camera, $event)"
+                                        >
+                                            <option v-for="variant in camera.variants" :key="variant.id" :value="variant.id">
+                                                {{ variant.title }}
+                                            </option>
+                                        </select>
+                                    </div>
+
+                                    <button
+                                        type="button"
+                                        class="flex min-w-0 w-full max-w-full items-center justify-start gap-1 overflow-hidden rounded-b-xl p-2 text-left"
+                                        @click="toggleCamera(camera.key)"
+                                    >
+                                        <p class="min-w-0 flex-1 truncate whitespace-nowrap text-xs font-medium">{{ camera.isStandardFront ? t('camera.standard_front') : camera.title }}</p>
+                                        <p class="shrink-0 whitespace-nowrap text-sm font-semibold">
+                                            {{ camera.price.toFixed(2) }} €
+                                        </p>
                                     </button>
 
                                     <div
@@ -2922,7 +3046,7 @@ watch(
                                     </div>
 
                                     <a
-                                        :href="productUrl(camera.key)"
+                                        :href="productUrl(camera.productHandle ?? camera.key)"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         class="absolute left-1/2 top-3 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-amber-400 bg-[#121212]/90 px-3 py-2 text-xs font-semibold text-amber-400 shadow-lg backdrop-blur transition hover:bg-amber-400 hover:text-black"
@@ -3346,12 +3470,15 @@ watch(
                         v-if="selectedScreens.length || selectedCameras.length || selectedSpeakers.length"
                         class="mt-4 rounded-xl border px-4 py-3 text-sm"
                         :class="
-                            activeDiscount
+                            customDiscount || activeDiscount
                                 ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
                                 : 'border-amber-400/40 bg-amber-400/10 text-amber-300'
                         "
                     >
-                        <template v-if="!activeDiscount && nextDiscount">
+                        <template v-if="customDiscount">
+                            {{ discountLabel }}
+                        </template>
+                        <template v-else-if="!activeDiscount && nextDiscount">
                             {{ t('quote.discount_remaining', {
                                 amount: amountUntilNextDiscount.toFixed(2),
                                 percentage: nextDiscount.percentage,
@@ -3499,7 +3626,7 @@ watch(
                                 v-if="discountAmount > 0"
                                 class="mt-2 flex items-center justify-between text-sm text-emerald-400"
                             >
-                                <span>{{ t('quote.discount', { percentage: activeDiscount?.percentage ?? 0 }) }}</span>
+                                <span>{{ discountLabel }}</span>
                                 <span>−{{ discountAmount.toFixed(2) }} €</span>
                             </div>
                             <div class="mt-3 flex items-center justify-between border-t border-neutral-800 pt-3">
@@ -3847,7 +3974,7 @@ watch(
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
             @click.self="showQuoteModal = false"
         >
-            <section class="w-full max-w-lg rounded-2xl border border-neutral-700 bg-[#121212] p-6 shadow-2xl">
+            <section class="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-neutral-700 bg-[#121212] p-6 shadow-2xl">
                 <div class="flex items-start justify-between gap-4">
                     <div>
                         <h2 class="text-xl font-semibold text-white">{{ t('actions.create_quote') }}</h2>
@@ -3866,6 +3993,46 @@ watch(
                 </div>
 
                 <div class="mt-6 grid gap-4">
+                    <fieldset class="grid gap-3 rounded-xl border border-amber-400/30 bg-amber-400/5 p-4">
+                        <legend class="px-1 text-sm font-semibold text-amber-400">{{ adminDiscountCopy.title }}</legend>
+                        <p class="text-xs text-neutral-400">{{ adminDiscountCopy.help }}</p>
+                        <label class="grid gap-2 text-sm text-neutral-300">
+                            {{ adminDiscountCopy.code }}
+                            <input
+                                v-model.trim="quoteDiscountCode"
+                                type="text"
+                                maxlength="255"
+                                autocomplete="off"
+                                class="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 uppercase text-white"
+                                :placeholder="adminDiscountCopy.codePlaceholder"
+                            />
+                        </label>
+                        <div class="grid gap-3 sm:grid-cols-2">
+                            <label class="grid gap-2 text-sm text-neutral-300">
+                                {{ adminDiscountCopy.type }}
+                                <select
+                                    v-model="quoteDiscountType"
+                                    class="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white"
+                                >
+                                    <option value="percentage">{{ adminDiscountCopy.percentage }}</option>
+                                    <option value="fixed">{{ adminDiscountCopy.fixed }}</option>
+                                </select>
+                            </label>
+                            <label class="grid gap-2 text-sm text-neutral-300">
+                                {{ adminDiscountCopy.value }} ({{ quoteDiscountType === 'percentage' ? '%' : '€' }})
+                                <input
+                                    v-model="quoteDiscountValue"
+                                    type="number"
+                                    min="0"
+                                    :max="quoteDiscountType === 'percentage' ? 100 : undefined"
+                                    step="0.01"
+                                    inputmode="decimal"
+                                    class="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white"
+                                    placeholder="0"
+                                />
+                            </label>
+                        </div>
+                    </fieldset>
                     <label class="grid gap-2 text-sm text-neutral-300">
                         {{ t('quote_form.client') }} *
                         <input

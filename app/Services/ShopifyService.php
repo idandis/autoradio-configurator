@@ -204,4 +204,38 @@ class ShopifyService
 
         return $result;
     }
+
+    /**
+     * Recupera le opzioni variante dalla scheda pubblica Shopify, utile quando
+     * l'export non include le colonne Option2/Option3.
+     */
+    public function getPublicVariantOptions(string $handle): array
+    {
+        $storefrontUrl = rtrim((string) config(
+            'services.shopify.storefront_url',
+            'https://www.autoradiocanario.com',
+        ), '/');
+
+        if ($storefrontUrl === '') {
+            $storefrontUrl = 'https://www.autoradiocanario.com';
+        }
+
+        $response = Http::acceptJson()
+            ->connectTimeout(3)
+            ->timeout(8)
+            ->retry(2, 200, throw: false)
+            ->get($storefrontUrl.'/products/'.rawurlencode($handle).'.js');
+
+        if (! $response->successful()) {
+            return [];
+        }
+
+        return collect($response->json('variants', []))
+            ->filter(fn ($variant) => is_array($variant) && filled($variant['id'] ?? null))
+            ->mapWithKeys(fn (array $variant) => [(string) $variant['id'] => [
+                'option2' => filled($variant['option2'] ?? null) ? trim((string) $variant['option2']) : null,
+                'option3' => filled($variant['option3'] ?? null) ? trim((string) $variant['option3']) : null,
+            ]])
+            ->all();
+    }
 }

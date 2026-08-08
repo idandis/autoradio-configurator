@@ -6,6 +6,7 @@ use App\Models\ConfigurationStatistic;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -68,6 +69,37 @@ class ConfigurationStatisticTest extends TestCase
         $this->assertSame('CN', $visitor->region);
         $this->assertSame('Las Palmas', $visitor->city);
         $this->assertArrayNotHasKey('ip', $visitor->getAttributes());
+    }
+
+    public function test_existing_visitor_without_geography_is_enriched_by_ip_lookup(): void
+    {
+        Http::fake([
+            'https://ipwho.is/*' => Http::response([
+                'success' => true,
+                'country_code' => 'ES',
+                'region' => 'Canary Islands',
+                'city' => 'Las Palmas de Gran Canaria',
+            ]),
+        ]);
+        $payload = [
+            'session_uuid' => '66f0b7b8-25ed-4ca8-a06a-71c453c9f31d',
+            'event_type' => 'configurator_entered',
+            'installation_selected' => false,
+            'camera_selected' => false,
+        ];
+        ConfigurationStatistic::create($payload);
+
+        $this->withHeader('X-Forwarded-For', '8.8.8.8')
+            ->postJson('/configurator/statistics', $payload)
+            ->assertNoContent();
+
+        $this->assertDatabaseHas('configuration_statistics', [
+            'session_uuid' => $payload['session_uuid'],
+            'country_code' => 'ES',
+            'region' => 'Canary Islands',
+            'city' => 'Las Palmas de Gran Canaria',
+        ]);
+        $this->assertDatabaseCount('configuration_statistics', 1);
     }
 
     public function test_visitor_dashboard_is_admin_only_and_has_visitor_statistics(): void

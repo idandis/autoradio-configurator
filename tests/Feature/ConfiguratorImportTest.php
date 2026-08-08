@@ -8,6 +8,7 @@ use App\Services\ConfiguratorCsvImporter;
 use App\Services\ShopifyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xls;
@@ -103,6 +104,32 @@ CSV;
             ->where('vehicles.0.variants.0.colorOptions.0.color', 'Gris')
             ->where('vehicles.0.variants.0.colorOptions.1.color', 'Marrón')
         );
+    }
+
+    public function test_missing_color_column_is_enriched_from_public_shopify_variants(): void
+    {
+        Http::fake([
+            'https://www.autoradiocanario.com/products/mercedes-public-colors.js' => Http::response([
+                'variants' => [
+                    ['id' => 1111111111, 'option1' => '8core 8GB', 'option2' => 'Gris', 'option3' => null],
+                    ['id' => 2222222222, 'option1' => '8core 8GB', 'option2' => 'Marrón', 'option3' => null],
+                ],
+            ]),
+        ]);
+
+        $csv = <<<'CSV'
+Handle,Title,Type,Tags,Option1 Name,Variant Option1 Value,Variant ID,Variant SKU,Variant Price,Image Src,CAM (product.metafields.custom.cam),DIN (product.metafields.custom.dimensioni_schermo),PULGADAS (product.metafields.custom.pulgadas),MARCA DE COCHE (product.metafields.custom.radio_type),Product.custom.modello_auto,Product.custom.anno
+mercedes-public-colors,Mercedes W203,Radio AM/FM,MERCEDES,Variantes,8core 8GB,1111111111,GRAY,499.00,https://example.com/screen.jpg,,,9,MERCEDES,Clase C,2002-2005
+mercedes-public-colors,,,,,8core 8GB,2222222222,BROWN,499.00,https://example.com/screen.jpg,,,,,Clase C,
+CSV;
+
+        app(ConfiguratorCsvImporter::class)->import(
+            UploadedFile::fake()->createWithContent('colors-without-option2.csv', $csv),
+        );
+
+        $variants = ConfiguratorProduct::where('handle', 'mercedes-public-colors')->firstOrFail()->variants;
+        $this->assertSame(['Gris', 'Marrón'], $variants->pluck('meta')->pluck('option2')->all());
+        Http::assertSentCount(1);
     }
 
     public function test_csv_import_supports_new_export_format(): void
