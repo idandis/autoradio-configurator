@@ -108,6 +108,7 @@ const props = defineProps<{
     translations: TranslationTree;
     customProducts: CustomProduct[];
     vehicles: Vehicle[];
+    universalScreens: Vehicle[];
     cameraOptions: SimpleOption[];
     speakerOptions: SpeakerOption[];
     installationOptions: SimpleOption[];
@@ -137,6 +138,14 @@ const t = (key: string, replacements: Record<string, string | number> = {}) => {
             translated.replaceAll(`:${placeholder}`, String(replacement)),
         value,
     );
+};
+
+const displayVariantTitle = (title: string | null | undefined) => {
+    if (!title) return title ?? null;
+
+    return /^default title$/i.test(title.trim())
+        ? t('screen.single_variant')
+        : title;
 };
 
 const storefrontUrl = (path: string) => {
@@ -293,6 +302,8 @@ const resolveAvailableBrand = (value: string | null | undefined): string | null 
 const selectedBrand = ref<string | null>(null);
 const selectedModel = ref<string | null>(null);
 const selectedYear = ref<number | null>(null);
+const customerBudget = ref('');
+const showUniversalScreens = ref(false);
 const selectedScreenVariantIds = ref<number[]>([]);
 const selectedCameraKeys = ref<string[]>([]);
 const selectedCameraVariantIds = ref<Record<string, number>>({});
@@ -505,7 +516,7 @@ const submitMissingVehicleForm = async () => {
     }
 };
 const selectedPrecheckMethod = ref<'self' | 'installer' | null>(null);
-const selectedServiceZone = ref<'north' | 'capital' | 'south' | null>(null);
+const selectedServiceZone = ref<'north' | 'capital' | 'south' | 'tenerife' | 'fuerteventura' | 'lanzarote' | null>(null);
 const postalCode = ref('');
 const checkedPostalCode = ref<string | null>(null);
 const postalCodeError = ref<string | null>(null);
@@ -607,7 +618,7 @@ const toggleScreenStep = async () => {
         && selectedBrand.value !== null
         && selectedYear.value !== null
         && selectedModel.value !== null
-        && compatibleVehicles.value.length > 0;
+        && affordableSpecificScreens.value.length > 0;
 
     if (!canJumpToFirstScreen) {
         toggleStep('screen');
@@ -621,7 +632,7 @@ const toggleScreenStep = async () => {
     await nextTick();
     window.requestAnimationFrame(() => {
         document
-            .getElementById(`screen-product-${compatibleVehicles.value[0].id}`)
+            .getElementById(`screen-product-${affordableSpecificScreens.value[0].id}`)
             ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 };
@@ -650,7 +661,7 @@ const selectedCompatibilityEntry = computed(() => {
 
 const selectedVehicle = computed(
     () =>
-        compatibleVehicles.value.find((vehicle) =>
+        selectableScreenVehicles.value.find((vehicle) =>
             vehicle.variants.some(
                 (variant) => screenVariantChoices(variant).some((choice) =>
                     selectedScreenVariantIds.value.includes(choice.id),
@@ -660,7 +671,7 @@ const selectedVehicle = computed(
 );
 
 const selectedScreens = computed(() =>
-    compatibleVehicles.value.flatMap((vehicle) =>
+    selectableScreenVehicles.value.flatMap((vehicle) =>
         vehicle.variants.flatMap((variant) =>
             screenVariantChoices(variant).filter((choice) =>
                 selectedScreenVariantIds.value.includes(choice.id),
@@ -674,12 +685,63 @@ const screenVariantChoices = (variant: Variant): VariantChoice[] =>
 
 const selectedScreenChoice = (variant: Variant): VariantChoice =>
     screenVariantChoices(variant).find((choice) => selectedScreenVariantIds.value.includes(choice.id))
+        ?? screenVariantChoices(variant).find((choice) => !isScreenChoiceOverBudget(choice))
         ?? screenVariantChoices(variant)[0];
+
+const normalizedBudget = computed(() => {
+    const value = Number.parseFloat(customerBudget.value.replace(',', '.'));
+
+    return Number.isFinite(value) && value > 0 ? value : null;
+});
+
+const isScreenChoiceOverBudget = (choice: VariantChoice) =>
+    normalizedBudget.value !== null && choice.price > normalizedBudget.value;
+
+const isScreenVariantOverBudget = (variant: Variant) =>
+    screenVariantChoices(variant).every(isScreenChoiceOverBudget);
+
+const isRecommendedScreenVariant = (variant: Variant) => {
+    const title = variant.title.toLocaleLowerCase().replaceAll(/\s+/g, '');
+
+    return title.includes('8core')
+        && title.includes('4g')
+        && title.includes('64g');
+};
+
+const screenHasAffordableVariant = (screen: Vehicle) =>
+    screen.variants.some((variant) => !isScreenVariantOverBudget(variant));
+
+const affordableSpecificScreens = computed(() =>
+    compatibleVehicles.value.filter(screenHasAffordableVariant),
+);
+
+const affordableUniversalScreens = computed(() =>
+    props.universalScreens.filter(screenHasAffordableVariant),
+);
+
+const hasNoSpecificScreenForBudget = computed(() =>
+    normalizedBudget.value !== null
+    && selectedModel.value !== null
+    && affordableSpecificScreens.value.length === 0,
+);
+
+const displayedScreenVehicles = computed(() =>
+    hasNoSpecificScreenForBudget.value && showUniversalScreens.value
+        ? affordableUniversalScreens.value
+        : affordableSpecificScreens.value,
+);
+
+const selectableScreenVehicles = computed(() => [
+    ...compatibleVehicles.value,
+    ...props.universalScreens,
+]);
 
 const isScreenVariantSelected = (variant: Variant) =>
     screenVariantChoices(variant).some((choice) => selectedScreenVariantIds.value.includes(choice.id));
 
 const toggleScreenVariant = (variant: Variant) => {
+    if (isScreenVariantOverBudget(variant)) return;
+
     const choiceIds = screenVariantChoices(variant).map((choice) => choice.id);
     const withoutGroup = selectedScreenVariantIds.value.filter((selectedId) => !choiceIds.includes(selectedId));
     selectedScreenVariantIds.value = isScreenVariantSelected(variant)
@@ -689,6 +751,9 @@ const toggleScreenVariant = (variant: Variant) => {
 
 const selectScreenColor = (variant: Variant, event: Event) => {
     const variantId = Number((event.target as HTMLSelectElement).value);
+    const choice = screenVariantChoices(variant).find((candidate) => candidate.id === variantId);
+    if (!choice || isScreenChoiceOverBudget(choice)) return;
+
     const choiceIds = screenVariantChoices(variant).map((choice) => choice.id);
     selectedScreenVariantIds.value = [
         ...selectedScreenVariantIds.value.filter((selectedId) => !choiceIds.includes(selectedId)),
@@ -697,7 +762,7 @@ const selectScreenColor = (variant: Variant, event: Event) => {
 };
 
 const vehicleForScreenVariant = (variantId: number) =>
-    compatibleVehicles.value.find((vehicle) =>
+    selectableScreenVehicles.value.find((vehicle) =>
         vehicle.variants.some((variant) =>
             screenVariantChoices(variant).some((choice) => choice.id === variantId),
         ),
@@ -833,11 +898,12 @@ const restoreConfiguratorState = async () => {
         selectedBrand.value = brand;
         await nextTick();
         selectedYear.value = year;
+        customerBudget.value = typeof state.customerBudget === 'string' ? state.customerBudget : '';
         await nextTick();
         selectedModel.value = modelIsValid ? state.selectedModel : null;
 
         const availableVariantIds = new Set(
-            props.vehicles.flatMap((vehicle) =>
+            [...props.vehicles, ...props.universalScreens].flatMap((vehicle) =>
                 vehicle.variants.flatMap((variant) => screenVariantChoices(variant).map((choice) => choice.id)),
             ),
         );
@@ -886,7 +952,7 @@ const restoreConfiguratorState = async () => {
         selectedPrecheckMethod.value = ['self', 'installer'].includes(state.selectedPrecheckMethod)
             ? state.selectedPrecheckMethod
             : null;
-        selectedServiceZone.value = ['north', 'capital', 'south'].includes(state.selectedServiceZone)
+        selectedServiceZone.value = ['north', 'capital', 'south', 'tenerife', 'fuerteventura', 'lanzarote'].includes(state.selectedServiceZone)
             ? state.selectedServiceZone
             : null;
         postalCode.value = typeof state.postalCode === 'string' ? state.postalCode : '';
@@ -936,7 +1002,7 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
     await nextTick();
 
     selectedScreenVariantIds.value = configuration.screens.flatMap((screen) => {
-        const vehicle = compatibleVehicles.value.find((candidate) => candidate.handle === screen.product);
+        const vehicle = selectableScreenVehicles.value.find((candidate) => candidate.handle === screen.product);
         const token = screen.variant;
         const variant = vehicle?.variants
             .flatMap(screenVariantChoices)
@@ -971,8 +1037,8 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
     }
 
     const sharedServiceZone = configuration.serviceZone;
-    selectedServiceZone.value = ['north', 'capital', 'south'].includes(sharedServiceZone ?? '')
-        ? sharedServiceZone as 'north' | 'capital' | 'south'
+    selectedServiceZone.value = ['north', 'capital', 'south', 'tenerife', 'fuerteventura', 'lanzarote'].includes(sharedServiceZone ?? '')
+        ? sharedServiceZone as 'north' | 'capital' | 'south' | 'tenerife' | 'fuerteventura' | 'lanzarote'
         : null;
     const sharedPrecheck = configuration.precheck;
     selectedPrecheckMethod.value = ['self', 'installer'].includes(sharedPrecheck ?? '')
@@ -1032,6 +1098,7 @@ const persistConfiguratorState = () => {
                 selectedBrand: selectedBrand.value,
                 selectedModel: selectedModel.value,
                 selectedYear: selectedYear.value,
+                customerBudget: customerBudget.value,
                 selectedScreenVariantIds: selectedScreenVariantIds.value,
                 selectedCameraKeys: selectedCameraKeys.value,
                 selectedCameraVariantIds: selectedCameraVariantIds.value,
@@ -1058,6 +1125,7 @@ watch(
         selectedBrand,
         selectedModel,
         selectedYear,
+        customerBudget,
         selectedScreenVariantIds,
         selectedCameraKeys,
         selectedCameraVariantIds,
@@ -1246,7 +1314,7 @@ const cameraOptionsWithSelectedVariants = computed(() => props.cameraOptions.map
     return selectedVariant ? {
         ...option,
         variantId: selectedVariant.id,
-        variantTitle: selectedVariant.title,
+        variantTitle: displayVariantTitle(selectedVariant.title),
         price: selectedVariant.price,
         image: option.image,
         shopifyVariantId: selectedVariant.shopifyVariantId,
@@ -1293,10 +1361,27 @@ const visibleCameraOptions = computed(() => {
 });
 
 const selectCameraVariant = (camera: SimpleOption, event: Event) => {
-    selectedCameraVariantIds.value = {
+    const variantId = Number((event.target as HTMLSelectElement).value);
+    const variant = camera.variants?.find((candidate) => candidate.id === variantId);
+    const nextVariantIds = {
         ...selectedCameraVariantIds.value,
-        [camera.key]: Number((event.target as HTMLSelectElement).value),
+        [camera.key]: variantId,
     };
+
+    if (selectedCameraKeys.value.includes(camera.key) && variant && normalizedBudget.value !== null) {
+        const projectedTotal = estimatedTotal.value - camera.price + variant.price;
+        if (projectedTotal > normalizedBudget.value) {
+            pendingCameraSelection.value = {
+                keys: [...selectedCameraKeys.value],
+                overage: projectedTotal - normalizedBudget.value,
+                variantIds: nextVariantIds,
+            };
+            (event.target as HTMLSelectElement).value = String(camera.variantId ?? camera.variants?.[0]?.id ?? '');
+            return;
+        }
+    }
+
+    selectedCameraVariantIds.value = nextVariantIds;
 };
 
 const hasSpecificCameraOption = computed(() =>
@@ -1309,7 +1394,13 @@ const selectedCameras = computed(() =>
     ),
 );
 
-const toggleCamera = (key: string) => {
+const pendingCameraSelection = ref<{
+    keys: string[];
+    overage: number;
+    variantIds?: Record<string, number>;
+} | null>(null);
+
+const cameraKeysAfterToggle = (key: string) => {
     const camera = visibleCameraOptions.value.find((option) => option.key === key);
     const is360 = camera?.productHandle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave';
     const has360 = selectedCameras.value.some(
@@ -1317,15 +1408,14 @@ const toggleCamera = (key: string) => {
     );
 
     if (is360) {
-        selectedCameraKeys.value = has360 ? [] : [key];
-        return;
+        return has360 ? [] : [key];
     }
 
     const without360 = selectedCameraKeys.value.filter(
         (selectedKey) => props.cameraOptions.find((option) => option.key === selectedKey)?.productHandle
             !== 'camara-360-para-radios-de-coche-android-con-vista-de-ave',
     );
-    selectedCameraKeys.value = without360.includes(key)
+    return without360.includes(key)
         ? without360.filter((selectedKey) => selectedKey !== key)
         : [
             ...without360.filter(
@@ -1335,6 +1425,46 @@ const toggleCamera = (key: string) => {
             key,
         ];
 };
+
+const toggleCamera = (key: string) => {
+    const nextKeys = cameraKeysAfterToggle(key);
+    const isAdding = !selectedCameraKeys.value.includes(key) && nextKeys.includes(key);
+    const currentCameraTotal = selectedCameras.value.reduce((sum, camera) => sum + camera.price, 0);
+    const nextCameraTotal = visibleCameraOptions.value
+        .filter((camera) => nextKeys.includes(camera.key))
+        .reduce((sum, camera) => sum + camera.price, 0);
+    const projectedTotal = estimatedTotal.value - currentCameraTotal + nextCameraTotal;
+
+    if (isAdding && normalizedBudget.value !== null && projectedTotal > normalizedBudget.value) {
+        pendingCameraSelection.value = {
+            keys: nextKeys,
+            overage: projectedTotal - normalizedBudget.value,
+        };
+        return;
+    }
+
+    selectedCameraKeys.value = nextKeys;
+};
+
+const confirmCameraOverBudget = () => {
+    if (!pendingCameraSelection.value) return;
+    if (pendingCameraSelection.value.variantIds) {
+        selectedCameraVariantIds.value = pendingCameraSelection.value.variantIds;
+    }
+    selectedCameraKeys.value = pendingCameraSelection.value.keys;
+    pendingCameraSelection.value = null;
+};
+
+watch(normalizedBudget, () => {
+    if (normalizedBudget.value === null) return;
+
+    selectedScreenVariantIds.value = selectedScreenVariantIds.value.filter((variantId) =>
+        [...props.vehicles, ...props.universalScreens]
+            .flatMap((vehicle) => vehicle.variants)
+            .flatMap(screenVariantChoices)
+            .some((choice) => choice.id === variantId && !isScreenChoiceOverBudget(choice)),
+    );
+});
 
 const speakerCategories = computed(() =>
     [
@@ -1457,6 +1587,28 @@ const isGranCanaria = computed(() =>
         .includes('gran canaria') ?? false,
 );
 
+const isTenerife = computed(() =>
+    matchedInstallationZone.value?.name
+        .toLocaleLowerCase()
+        .includes('tenerife') ?? false,
+);
+
+const isFuerteventura = computed(() =>
+    matchedInstallationZone.value?.name
+        .toLocaleLowerCase()
+        .includes('fuerteventura') ?? false,
+);
+
+const isLanzarote = computed(() =>
+    matchedInstallationZone.value?.name
+        .toLocaleLowerCase()
+        .includes('lanzarote') ?? false,
+);
+
+const hasThreeStepInstallationFlow = computed(() =>
+    isGranCanaria.value || isTenerife.value || isFuerteventura.value || isLanzarote.value,
+);
+
 const precheckProduct = computed(() =>
     props.installationOptions.find((option) =>
         option.subtype === 'precheck' ||
@@ -1476,7 +1628,7 @@ const serviceZones = computed(() => [
     { key: 'south' as const, label: t('installation.zone_south') },
 ]);
 
-const toggleServiceZone = (zone: 'north' | 'capital' | 'south') => {
+const toggleServiceZone = (zone: 'north' | 'capital' | 'south' | 'tenerife' | 'fuerteventura' | 'lanzarote') => {
     selectedServiceZone.value = selectedServiceZone.value === zone ? null : zone;
     selectedPrecheckMethod.value = null;
     selectedInstallationKey.value = null;
@@ -1500,7 +1652,7 @@ const requiresPrecheck = computed(
     () => selectedScreens.value.length > 0,
 );
 const showsInstallationZoneStep = computed(
-    () => Boolean(checkedPostalCode.value && isGranCanaria.value && hasSelectedProducts.value),
+    () => Boolean(checkedPostalCode.value && hasThreeStepInstallationFlow.value && hasSelectedProducts.value),
 );
 const precheckStepNumber = computed(
     () => showsInstallationZoneStep.value ? 2 : 1,
@@ -1563,7 +1715,7 @@ const visibleInstallationOptions = computed(() => {
     if (
         !matchedInstallationZone.value ||
         (hasSelectedProducts.value && !requiredInstallationCombination.value) ||
-        (hasSelectedProducts.value && isGranCanaria.value && !selectedServiceZone.value) ||
+        (hasSelectedProducts.value && hasThreeStepInstallationFlow.value && !selectedServiceZone.value) ||
         (requiresPrecheck.value && !selectedPrecheckMethod.value)
     ) {
         return [];
@@ -1682,7 +1834,7 @@ const goToSelectedProduct = async (
     }
 
     const scrollKey = type === 'screen'
-        ? compatibleVehicles.value
+        ? selectableScreenVehicles.value
             .flatMap((vehicle) => vehicle.variants)
             .find((variant) => screenVariantChoices(variant).some((choice) => choice.id === Number(key)))?.id ?? key
         : key;
@@ -1906,7 +2058,7 @@ const statisticProduct = computed(() => {
                 productId: product.id,
                 variantId: screen.id,
                 productTitle: product.title,
-                variantTitle: [screen.title, screen.color].filter(Boolean).join(' / '),
+                variantTitle: [displayVariantTitle(screen.title), screen.color].filter(Boolean).join(' / '),
                 productPrice: screen.price,
                 productType: 'screen',
                 vehicleSpecific: true,
@@ -1986,7 +2138,7 @@ const trackConfigurationEvent = async (eventType: 'quote_downloaded' | 'checkout
         ...selectedCustomProducts.value
             .filter((product) => product.category === 'installation')
             .map((product) => product.variantTitle
-                ? `${product.title} — ${product.variantTitle}`
+                ? `${product.title} — ${displayVariantTitle(product.variantTitle)}`
                 : product.title),
     ].filter(Boolean).join(' + ');
     const searchParams = new URLSearchParams(window.location.search);
@@ -2232,7 +2384,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
                 vehicle?.handle ||
                 'PANTALLA',
             description: `${vehicle?.title ?? t('print.screen')} — ${t('print.variant', {
-                variant: [screen.title, screen.color].filter(Boolean).join(' / '),
+                variant: [displayVariantTitle(screen.title), screen.color].filter(Boolean).join(' / '),
             })}`,
             quantity: 1,
             price: screen.price,
@@ -2261,7 +2413,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         items.push({
             code: product.sku || product.shopifyVariantId || product.key,
             description: (product.variantTitle
-                ? `${product.title} — ${product.variantTitle}`
+                ? `${product.title} — ${displayVariantTitle(product.variantTitle)}`
                 : product.title) + (product.category === 'installation'
                 ? ` — ${t('quote.installation_direct')}`
                 : ''),
@@ -2579,16 +2731,8 @@ watch(
 watch(
     compatibleVehicles,
     (vehicles) => {
-        if (
-            selectedModel.value !== null &&
-            vehicles.length > 0 &&
-            !openSteps.value.includes('screen')
-        ) {
-            openSteps.value = [...openSteps.value, 'screen'];
-        }
-
         const availableVariantIds = new Set(
-            vehicles.flatMap((vehicle) =>
+            selectableScreenVehicles.value.flatMap((vehicle) =>
                 vehicle.variants.flatMap((variant) => screenVariantChoices(variant).map((choice) => choice.id)),
             ),
         );
@@ -2598,6 +2742,10 @@ watch(
     },
     { immediate: true },
 );
+
+watch([selectedBrand, selectedModel, selectedYear, normalizedBudget], () => {
+    showUniversalScreens.value = false;
+});
 
 watch(
     selectedScreens,
@@ -2772,13 +2920,27 @@ watch(
                     <p class="mx-auto mt-2 max-w-sm text-sm leading-5 text-neutral-400 sm:mx-0 sm:mt-3 sm:max-w-3xl sm:text-base sm:leading-normal">
                         {{ t('intro.description') }}
                     </p>
-                    <button
-                        type="button"
-                        @click="openMissingVehicleForm"
-                        class="mt-4 inline-flex items-center justify-center rounded-lg border border-amber-400 px-4 py-3 text-center text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black"
-                    >
-                        {{ t('vehicle.missing') }}
-                    </button>
+                    <div class="mt-4 grid gap-4 md:grid-cols-[minmax(0,508px)_minmax(280px,335px)] md:items-center md:gap-20">
+                        <button
+                            type="button"
+                            @click="openMissingVehicleForm"
+                            class="inline-flex min-h-12 items-center justify-center rounded-lg border border-amber-400 px-4 py-3 text-center text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black"
+                        >
+                            {{ t('vehicle.missing') }}
+                        </button>
+                        <div class="relative">
+                            <label for="customer-budget" class="sr-only">{{ t('budget.label') }}</label>
+                            <input
+                                id="customer-budget"
+                                v-model="customerBudget"
+                                type="text"
+                                inputmode="decimal"
+                                class="min-h-12 w-full rounded-lg border border-neutral-700 bg-[#121212] px-4 py-3 pr-10 text-sm text-white outline-none transition placeholder:text-neutral-400 focus:border-amber-400"
+                                :placeholder="t('budget.placeholder')"
+                            />
+                            <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400">€</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -2850,14 +3012,29 @@ watch(
 
                         </div>
                         <div
-                            v-if="selectedModel && compatibleVehicles.length > 0"
+                            v-if="selectedModel"
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button type="button" :class="mainStepButtonClass('screen')" @click="toggleScreenStep">{{ t('steps.screen') }}</button>
-                            <div v-if="openSteps.includes('screen') || (selectedModel && compatibleVehicles.length)" class="mt-6">
-                            <div v-if="selectedYear !== null && compatibleVehicles.length" class="mt-4 grid gap-5">
+                            <div v-if="openSteps.includes('screen')" class="mt-6">
+                            <div v-if="hasNoSpecificScreenForBudget && !showUniversalScreens" class="rounded-xl border border-neutral-700 bg-[#121212] p-5">
+                                <p class="text-sm leading-6 text-neutral-200">{{ t('budget.no_specific_screen') }}</p>
+                                <div class="mt-4 flex flex-wrap gap-3">
+                                    <button type="button" class="rounded-lg bg-amber-400 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300" @click="showUniversalScreens = true">
+                                        {{ t('budget.show_universal_yes') }}
+                                    </button>
+                                    <button type="button" class="rounded-lg border border-neutral-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800" @click="toggleStep('screen')">
+                                        {{ t('budget.show_universal_no') }}
+                                    </button>
+                                </div>
+                            </div>
+                            <p v-else-if="hasNoSpecificScreenForBudget && showUniversalScreens && affordableUniversalScreens.length === 0" class="rounded-xl border border-neutral-700 bg-[#121212] p-5 text-sm text-neutral-300">
+                                {{ t('budget.no_universal_screen') }}
+                            </p>
+                            <div v-else-if="selectedYear !== null && displayedScreenVehicles.length" class="mt-4 grid gap-5">
+                                <p v-if="showUniversalScreens" class="text-sm font-semibold text-amber-400">{{ t('budget.universal_results') }}</p>
                                 <article
-                                    v-for="vehicle in compatibleVehicles"
+                                    v-for="vehicle in displayedScreenVehicles"
                                     :key="vehicle.id"
                                     :id="`screen-product-${vehicle.id}`"
                                     class="grid gap-5 rounded-xl border p-4 transition lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
@@ -2908,16 +3085,25 @@ watch(
                                                     v-for="variant in vehicle.variants"
                                                     :key="variant.id"
                                                     :id="`product-screen-${variant.id}`"
-                                                    class="group flex min-h-10 w-full items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium leading-tight transition"
+                                                    class="group relative flex min-h-10 w-full items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium leading-tight transition"
+                                                    :title="isScreenVariantOverBudget(variant) ? t('budget.variant_over') : undefined"
                                                     :class="
-                                                        isScreenVariantSelected(variant)
+                                                        isScreenVariantOverBudget(variant)
+                                                            ? 'cursor-not-allowed border-neutral-700 bg-neutral-900 text-neutral-500 grayscale'
+                                                            : isScreenVariantSelected(variant)
                                                             ? 'border-amber-400 bg-amber-400 text-black'
                                                             : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400/10'
                                                     "
                                                 >
-                                                    <button type="button" class="min-w-0 flex-1 truncate text-left" @click="toggleScreenVariant(variant)">
-                                                        {{ variant.title }}
+                                                    <button type="button" class="min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed" :disabled="isScreenVariantOverBudget(variant)" @click="toggleScreenVariant(variant)">
+                                                        {{ displayVariantTitle(variant.title) }}
                                                     </button>
+                                                    <span
+                                                        v-if="isRecommendedScreenVariant(variant)"
+                                                        class="inline-flex shrink-0 -rotate-2 rounded-sm bg-emerald-400 px-2 py-0.5 text-[9px] font-black uppercase tracking-wide text-black shadow-sm"
+                                                    >
+                                                        {{ t('screen.recommended') }}
+                                                    </span>
                                                     <label v-if="variant.colorOptions.length > 1" class="flex shrink-0 items-center gap-1.5 text-xs">
                                                         <span class="sr-only">{{ t('screen.color') }}</span>
                                                         <select
@@ -2925,7 +3111,7 @@ watch(
                                                             class="rounded border border-current bg-[#121212] px-2 py-1 text-amber-400"
                                                             @change="selectScreenColor(variant, $event)"
                                                         >
-                                                            <option v-for="choice in variant.colorOptions" :key="choice.id" :value="choice.id">
+                                                            <option v-for="choice in variant.colorOptions" :key="choice.id" :value="choice.id" :disabled="isScreenChoiceOverBudget(choice)">
                                                                 {{ choice.color }}
                                                             </option>
                                                         </select>
@@ -2933,7 +3119,9 @@ watch(
                                                     <span
                                                         class="shrink-0 whitespace-nowrap text-xs"
                                                         :class="
-                                                            isScreenVariantSelected(variant)
+                                                            isScreenVariantOverBudget(variant)
+                                                                ? 'text-neutral-500'
+                                                                : isScreenVariantSelected(variant)
                                                                 ? 'text-black/70'
                                                                 : 'text-amber-400'
                                                         "
@@ -3006,7 +3194,7 @@ watch(
                                             @change="selectCameraVariant(camera, $event)"
                                         >
                                             <option v-for="variant in camera.variants" :key="variant.id" :value="variant.id">
-                                                {{ variant.title }}
+                                                {{ displayVariantTitle(variant.title) }}
                                             </option>
                                         </select>
                                     </div>
@@ -3191,19 +3379,19 @@ watch(
                             </div>
 
                             <div class="mt-4 grid gap-5 lg:grid-cols-[1.05fr_.95fr]">
-                            <div v-if="checkedPostalCode && isGranCanaria && hasSelectedProducts" class="contents">
+                            <div v-if="checkedPostalCode && hasThreeStepInstallationFlow && hasSelectedProducts" class="contents">
                                 <div v-if="hasSelectedProducts" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
                                     <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
                                         {{ t('installation.zone_step', { step: 1 }) }}
                                     </p>
-                                    <h3 class="mt-2 text-xl font-semibold text-white">
+                                    <h3 v-if="isGranCanaria" class="mt-2 text-xl font-semibold text-white">
                                         {{ t('installation.zone_question') }}
                                     </h3>
-                                    <p class="mt-2 text-sm leading-6 text-neutral-400">
+                                    <p v-if="isGranCanaria" class="mt-2 text-sm leading-6 text-neutral-400">
                                         {{ t('installation.zone_help') }}
                                     </p>
 
-                                    <div class="relative mx-auto mt-5 max-w-sm overflow-hidden rounded-xl">
+                                    <div v-if="isGranCanaria" class="relative mx-auto mt-5 max-w-sm overflow-hidden rounded-xl">
                                         <img
                                             src="/images/installation/gran-canaria-zones.png"
                                             :alt="t('installation.map_label')"
@@ -3235,7 +3423,7 @@ watch(
                                         />
                                     </div>
 
-                                    <div class="mt-4 grid gap-2">
+                                    <div v-if="isGranCanaria" class="mt-4 grid gap-2">
                                         <button
                                             v-for="zone in serviceZones"
                                             :key="zone.key"
@@ -3247,6 +3435,67 @@ watch(
                                             {{ zone.label }}
                                         </button>
                                     </div>
+
+                                    <template v-else-if="isTenerife">
+                                        <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.tenerife_zone_title') }}</h3>
+                                        <p class="mt-2 text-sm leading-6 text-neutral-400">{{ t('installation.tenerife_zone_help') }}</p>
+                                        <button
+                                            type="button"
+                                            class="relative mx-auto mt-5 block max-w-sm overflow-hidden rounded-xl border transition"
+                                            :class="selectedServiceZone === 'tenerife' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
+                                            @click="toggleServiceZone('tenerife')"
+                                        >
+                                            <img src="/images/installation/tenerife-san-isidro-zone.png" :alt="t('installation.tenerife_map_label')" class="h-auto w-full" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="mt-4 w-full rounded-lg border px-4 py-3 text-left text-sm font-medium transition"
+                                            :class="selectedServiceZone === 'tenerife' ? 'border-amber-400 bg-amber-400 text-black' : 'border-neutral-700 bg-neutral-900 text-neutral-200 hover:border-amber-400'"
+                                            @click="toggleServiceZone('tenerife')"
+                                        >
+                                            {{ t('installation.tenerife_zone_option') }}
+                                        </button>
+                                    </template>
+                                    <template v-else-if="isFuerteventura">
+                                        <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.fuerteventura_zone_title') }}</h3>
+                                        <p class="mt-2 text-sm leading-6 text-neutral-400">{{ t('installation.fuerteventura_zone_help') }}</p>
+                                        <button
+                                            type="button"
+                                            class="relative mx-auto mt-5 block max-w-sm overflow-hidden rounded-xl border transition"
+                                            :class="selectedServiceZone === 'fuerteventura' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
+                                            @click="toggleServiceZone('fuerteventura')"
+                                        >
+                                            <img src="/images/installation/fuerteventura-zone.png" :alt="t('installation.fuerteventura_map_label')" class="h-auto w-full" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="mt-4 w-full rounded-lg border px-4 py-3 text-left text-sm font-medium transition"
+                                            :class="selectedServiceZone === 'fuerteventura' ? 'border-amber-400 bg-amber-400 text-black' : 'border-neutral-700 bg-neutral-900 text-neutral-200 hover:border-amber-400'"
+                                            @click="toggleServiceZone('fuerteventura')"
+                                        >
+                                            {{ t('installation.fuerteventura_zone_option') }}
+                                        </button>
+                                    </template>
+                                    <template v-else>
+                                        <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.lanzarote_zone_title') }}</h3>
+                                        <p class="mt-2 text-sm leading-6 text-neutral-400">{{ t('installation.lanzarote_zone_help') }}</p>
+                                        <button
+                                            type="button"
+                                            class="relative mx-auto mt-5 block max-w-sm overflow-hidden rounded-xl border transition"
+                                            :class="selectedServiceZone === 'lanzarote' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
+                                            @click="toggleServiceZone('lanzarote')"
+                                        >
+                                            <img src="/images/installation/lanzarote-zone.png" :alt="t('installation.lanzarote_map_label')" class="h-auto w-full" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="mt-4 w-full rounded-lg border px-4 py-3 text-left text-sm font-medium transition"
+                                            :class="selectedServiceZone === 'lanzarote' ? 'border-amber-400 bg-amber-400 text-black' : 'border-neutral-700 bg-neutral-900 text-neutral-200 hover:border-amber-400'"
+                                            @click="toggleServiceZone('lanzarote')"
+                                        >
+                                            {{ t('installation.lanzarote_zone_option') }}
+                                        </button>
+                                    </template>
                                 </div>
 
                                 <div v-if="requiresPrecheck" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
@@ -3313,7 +3562,7 @@ watch(
                                         hasSelectedProducts &&
                                         checkedPostalCode &&
                                         matchedInstallationZone &&
-                                        (!isGranCanaria || selectedServiceZone) &&
+                                        (!hasThreeStepInstallationFlow || selectedServiceZone) &&
                                         (selectedPrecheckMethod || !requiresPrecheck)
                                     )
                                 "
@@ -3497,7 +3746,7 @@ watch(
                                         class="text-left font-medium text-neutral-100 underline decoration-transparent underline-offset-4 transition hover:text-amber-400 hover:decoration-amber-400 focus-visible:text-amber-400 focus-visible:decoration-amber-400"
                                         @click="goToSelectedProduct('screen', screen.id)"
                                     >
-                                        {{ screen.title }}
+                                        {{ displayVariantTitle(screen.title) }}
                                     </button>
                                     <p class="text-sm text-neutral-500">
                                         {{ t('screen.label') }}<span v-if="screen.color"> · {{ t('screen.color') }}: {{ screen.color }}</span>
@@ -3555,7 +3804,7 @@ watch(
                             >
                                 <div class="min-w-0">
                                     <p class="font-medium text-neutral-100">
-                                        {{ product.title }}<span v-if="product.variantTitle"> — {{ product.variantTitle }}</span>
+                                        {{ product.title }}<span v-if="product.variantTitle"> — {{ displayVariantTitle(product.variantTitle) }}</span>
                                     </p>
                                     <p class="text-sm text-neutral-500">{{ product.sku || product.category }}</p>
                                 </div>
@@ -3883,6 +4132,29 @@ watch(
         </div>
 
         <div
+            v-if="pendingCameraSelection"
+            class="fixed inset-0 z-[85] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+            role="alertdialog"
+            aria-modal="true"
+            @click.self="pendingCameraSelection = null"
+        >
+            <section class="w-full max-w-md rounded-2xl border border-neutral-700 bg-[#181818] p-6 shadow-2xl">
+                <h2 class="text-xl font-semibold text-white">{{ t('budget.camera_title') }}</h2>
+                <p class="mt-3 text-sm leading-6 text-neutral-300">
+                    {{ t('budget.camera_message', { amount: pendingCameraSelection.overage.toFixed(2) }) }}
+                </p>
+                <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <button type="button" class="rounded-lg border border-neutral-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-neutral-800" @click="pendingCameraSelection = null">
+                        {{ t('budget.cancel') }}
+                    </button>
+                    <button type="button" class="rounded-lg bg-amber-400 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-300" @click="confirmCameraOverBudget">
+                        {{ t('budget.proceed') }}
+                    </button>
+                </div>
+            </section>
+        </div>
+
+        <div
             v-if="isAdmin && showCustomQuoteModal"
             class="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4"
             @click.self="showCustomQuoteModal = false"
@@ -3910,7 +4182,7 @@ watch(
                     </p>
                     <div class="flex max-h-28 flex-wrap gap-2 overflow-y-auto">
                         <div v-for="product in selectedCustomProducts" :key="`selected-${product.key}`" class="flex items-center gap-2 rounded-lg bg-neutral-800 px-3 py-2 text-xs text-white">
-                            <span class="max-w-64 truncate">{{ product.title }}<template v-if="product.variantTitle"> — {{ product.variantTitle }}</template></span>
+                            <span class="max-w-64 truncate">{{ product.title }}<template v-if="product.variantTitle"> — {{ displayVariantTitle(product.variantTitle) }}</template></span>
                             <button type="button" class="text-neutral-400 hover:text-red-400" :aria-label="customQuoteCopy.remove" @click="toggleCustomProduct(product.key)">✕</button>
                         </div>
                     </div>
@@ -3927,7 +4199,7 @@ watch(
                         <div class="min-w-0 flex-1">
                             <p class="truncate text-sm font-medium text-white">{{ product.title }}</p>
                             <p class="truncate text-xs text-neutral-400">
-                                {{ [product.variantTitle, product.sku, product.category].filter(Boolean).join(' · ') }}
+                                {{ [displayVariantTitle(product.variantTitle), product.sku, product.category].filter(Boolean).join(' · ') }}
                             </p>
                         </div>
                         <span class="shrink-0 font-semibold text-amber-400">{{ product.price.toFixed(2) }} €</span>

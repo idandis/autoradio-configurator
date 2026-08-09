@@ -215,6 +215,48 @@ class ConfigurationStatisticTest extends TestCase
         );
     }
 
+    public function test_admin_can_delete_one_or_selected_visits_without_deleting_commercial_events(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $first = ConfigurationStatistic::create([
+            ...$this->payload(),
+            'session_uuid' => 'a6f0b7b8-25ed-4ca8-a06a-71c453c9f31d',
+            'event_type' => 'configurator_entered',
+        ]);
+        $second = ConfigurationStatistic::create([
+            ...$this->payload(),
+            'session_uuid' => 'b6f0b7b8-25ed-4ca8-a06a-71c453c9f31d',
+            'event_type' => 'configurator_entered',
+        ]);
+        $commercialEvent = ConfigurationStatistic::create($this->payload());
+
+        $this->actingAs($admin)
+            ->delete(route('visitor-statistics.destroy', $first))
+            ->assertRedirect();
+
+        $this->actingAs($admin)
+            ->delete(route('visitor-statistics.destroy-selected'), [
+                'ids' => [$second->id, $commercialEvent->id],
+            ])
+            ->assertRedirect();
+
+        $this->assertDatabaseMissing('configuration_statistics', ['id' => $first->id]);
+        $this->assertDatabaseMissing('configuration_statistics', ['id' => $second->id]);
+        $this->assertDatabaseHas('configuration_statistics', ['id' => $commercialEvent->id]);
+    }
+
+    public function test_visitor_delete_route_rejects_a_commercial_event(): void
+    {
+        $admin = User::factory()->create(['is_admin' => true]);
+        $commercialEvent = ConfigurationStatistic::create($this->payload());
+
+        $this->actingAs($admin)
+            ->delete(route('visitor-statistics.destroy', $commercialEvent))
+            ->assertNotFound();
+
+        $this->assertDatabaseHas('configuration_statistics', ['id' => $commercialEvent->id]);
+    }
+
     public function test_admin_can_filter_paginated_statistics(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);

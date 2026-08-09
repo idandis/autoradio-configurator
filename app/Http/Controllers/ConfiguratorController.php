@@ -78,6 +78,22 @@ class ConfiguratorController extends Controller
             ->orderBy('model')
             ->get();
 
+        $universalScreenProducts = ConfiguratorProduct::with('variants')
+            ->where('category', 'screen')
+            ->where(function ($query) {
+                $query->whereRaw('LOWER(model) = ?', ['universal'])
+                    ->orWhere(function ($query) {
+                        $query->where(function ($query) {
+                            $query->whereNull('model')->orWhere('model', '');
+                        })->where(function ($query) {
+                            $query->whereRaw('LOWER(title) LIKE ?', ['%universal%'])
+                                ->orWhereRaw('LOWER(handle) LIKE ?', ['%universal%']);
+                        });
+                    });
+            })
+            ->orderBy('price_min')
+            ->get();
+
         $cameraProducts = ConfiguratorProduct::with('variants')
             ->where('category', 'camera')
             ->orderBy('price_min')
@@ -138,7 +154,39 @@ class ConfiguratorController extends Controller
                     'yearTo' => $product->year_to,
                 ]);
             })->values(),
-            'vehicles' => $screenProducts->map(function (ConfiguratorProduct $product) {
+            'vehicles' => $this->screenOptions($screenProducts),
+            'universalScreens' => $this->screenOptions($universalScreenProducts),
+            'cameraOptions' => $this->cameraOptions($cameraProducts),
+            'speakerOptions' => $this->speakerOptions($speakerProducts),
+            'installationOptions' => $this->installationOptions($installationProducts),
+            'installationZones' => InstallationZone::query()
+                ->where('active', true)
+                ->with(['postalCodes', 'products'])
+                ->orderBy('name')
+                ->get()
+                ->map(fn (InstallationZone $zone) => [
+                    'id' => $zone->id,
+                    'name' => $zone->name,
+                    'postalRanges' => $zone->postalCodes->map(fn ($range) => [
+                        'from' => $range->postal_code_from,
+                        'to' => $range->postal_code_to,
+                    ])->values(),
+                    'productHandles' => $zone->products->pluck('product_handle')->values(),
+                ])->values(),
+            'vehicleImages' => collect(glob(public_path('images/vehicles-dark/*.{png,jpg,jpeg,webp}'), GLOB_BRACE) ?: [])
+                ->map(fn (string $path) => basename($path))
+                ->sort()
+                ->values(),
+            'brandImages' => collect(glob(public_path('images/brands/*.{png,jpg,jpeg,webp}'), GLOB_BRACE) ?: [])
+                ->map(fn (string $path) => basename($path))
+                ->sort()
+                ->values(),
+        ]);
+    }
+
+    private function screenOptions($products)
+    {
+        return $products->map(function (ConfiguratorProduct $product) {
                 $vehicleFields = $this->vehicleFields($product);
 
                 return [
@@ -175,33 +223,7 @@ class ConfiguratorController extends Controller
                     ->sortBy('price')
                     ->values(),
                 ];
-            })->values(),
-            'cameraOptions' => $this->cameraOptions($cameraProducts),
-            'speakerOptions' => $this->speakerOptions($speakerProducts),
-            'installationOptions' => $this->installationOptions($installationProducts),
-            'installationZones' => InstallationZone::query()
-                ->where('active', true)
-                ->with(['postalCodes', 'products'])
-                ->orderBy('name')
-                ->get()
-                ->map(fn (InstallationZone $zone) => [
-                    'id' => $zone->id,
-                    'name' => $zone->name,
-                    'postalRanges' => $zone->postalCodes->map(fn ($range) => [
-                        'from' => $range->postal_code_from,
-                        'to' => $range->postal_code_to,
-                    ])->values(),
-                    'productHandles' => $zone->products->pluck('product_handle')->values(),
-                ])->values(),
-            'vehicleImages' => collect(glob(public_path('images/vehicles-dark/*.{png,jpg,jpeg,webp}'), GLOB_BRACE) ?: [])
-                ->map(fn (string $path) => basename($path))
-                ->sort()
-                ->values(),
-            'brandImages' => collect(glob(public_path('images/brands/*.{png,jpg,jpeg,webp}'), GLOB_BRACE) ?: [])
-                ->map(fn (string $path) => basename($path))
-                ->sort()
-                ->values(),
-        ]);
+            })->values();
     }
 
     private function sharedConfiguration(Request $request): ?array

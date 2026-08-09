@@ -51,6 +51,11 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         ->name('configuration-statistics.index');
     Route::get('/visitor-statistics', VisitorStatisticsController::class)
         ->name('visitor-statistics.index');
+    Route::delete('/visitor-statistics/selected', [VisitorStatisticsController::class, 'destroySelected'])
+        ->name('visitor-statistics.destroy-selected');
+    Route::delete('/visitor-statistics/{visitor}', [VisitorStatisticsController::class, 'destroy'])
+        ->whereNumber('visitor')
+        ->name('visitor-statistics.destroy');
     Route::get('/configuration-statistics/export/{format}', [ConfigurationStatisticsController::class, 'export'])
         ->whereIn('format', ['csv', 'xlsx', 'pdf'])
         ->name('configuration-statistics.export');

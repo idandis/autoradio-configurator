@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ConfigurationStatistic;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -44,6 +45,30 @@ class VisitorStatisticsController extends Controller
                 'sources' => $this->sources($query),
             ],
         ]);
+    }
+
+    public function destroy(ConfigurationStatistic $visitor): RedirectResponse
+    {
+        abort_unless($visitor->event_type === 'configurator_entered', 404);
+
+        $visitor->delete();
+
+        return back()->with('success', 'Visita eliminata.');
+    }
+
+    public function destroySelected(Request $request): RedirectResponse
+    {
+        $validated = $request->validate([
+            'ids' => ['required', 'array', 'min:1', 'max:500'],
+            'ids.*' => ['required', 'integer', 'distinct'],
+        ]);
+
+        $deleted = ConfigurationStatistic::query()
+            ->where('event_type', 'configurator_entered')
+            ->whereIn('id', $validated['ids'])
+            ->delete();
+
+        return back()->with('success', $deleted.' visite eliminate.');
     }
 
     private function filteredQuery(array $filters): Builder

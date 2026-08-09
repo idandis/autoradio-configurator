@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, Link, router } from '@inertiajs/vue3';
-import { computed, reactive } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
 
 type Item = { label: string; value: number };
 type Visitor = {
@@ -26,6 +26,27 @@ const source = (visitor: Visitor) => {
     try { return new URL(visitor.referrer).hostname; } catch { return 'Altro'; }
 };
 const maxTimeline = computed(() => Math.max(...props.analysis.timeline.map((item) => item.value), 1));
+const selectedIds = ref<number[]>([]);
+const allPageSelected = computed(() => props.visitors.data.length > 0 && props.visitors.data.every((visitor) => selectedIds.value.includes(visitor.id)));
+const togglePageSelection = () => {
+    const pageIds = props.visitors.data.map((visitor) => visitor.id);
+    selectedIds.value = allPageSelected.value
+        ? selectedIds.value.filter((id) => !pageIds.includes(id))
+        : [...new Set([...selectedIds.value, ...pageIds])];
+};
+const deleteVisitor = (visitor: Visitor) => {
+    if (!window.confirm(`Eliminare la visita del ${dateTime(visitor.created_at)}?`)) return;
+    router.delete(`/visitor-statistics/${visitor.id}`, { preserveScroll: true });
+};
+const deleteSelected = () => {
+    if (!selectedIds.value.length || !window.confirm(`Eliminare definitivamente ${selectedIds.value.length} visite selezionate?`)) return;
+    router.delete('/visitor-statistics/selected', {
+        data: { ids: selectedIds.value },
+        preserveScroll: true,
+        onSuccess: () => { selectedIds.value = []; },
+    });
+};
+watch(() => props.visitors.data, () => { selectedIds.value = []; });
 </script>
 
 <template>
@@ -53,7 +74,11 @@ const maxTimeline = computed(() => Math.max(...props.analysis.timeline.map((item
             <article v-for="group in [{title:'Paesi',items:analysis.countries},{title:'Regioni',items:analysis.regions},{title:'Città',items:analysis.cities},{title:'Dispositivi',items:analysis.devices},{title:'Lingue',items:analysis.languages},{title:'Provenienza',items:analysis.sources}]" :key="group.title" class="rounded-xl border border-sidebar-border/70 bg-card p-5"><h2 class="font-semibold">{{ group.title }}</h2><div class="mt-4 space-y-2"><div v-for="item in group.items" :key="item.label" class="flex justify-between gap-3 border-b border-sidebar-border/50 pb-2 text-sm last:border-0"><span class="truncate">{{ item.label }}</span><strong>{{ item.value }}</strong></div><p v-if="!group.items.length" class="text-sm text-muted-foreground">Nessun dato.</p></div></article>
         </section>
 
-        <section class="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card"><div class="overflow-x-auto"><table class="w-full min-w-[1050px] text-sm"><thead class="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground"><tr><th v-for="head in ['Primo ingresso','Paese','Regione','Città','Dispositivo','Lingua','Provenienza','Campagna']" :key="head" class="px-4 py-3">{{ head }}</th></tr></thead><tbody class="divide-y"><tr v-for="visitor in visitors.data" :key="visitor.id"><td class="whitespace-nowrap px-4 py-3">{{ dateTime(visitor.created_at) }}</td><td class="px-4 py-3">{{ visitor.country_code||'—' }}</td><td class="px-4 py-3">{{ visitor.region||'—' }}</td><td class="px-4 py-3">{{ visitor.city||'—' }}</td><td class="px-4 py-3 capitalize">{{ visitor.device_type||'—' }}</td><td class="px-4 py-3 uppercase">{{ visitor.language||'—' }}</td><td class="max-w-60 truncate px-4 py-3">{{ source(visitor) }}</td><td class="px-4 py-3">{{ visitor.utm_campaign||'—' }}</td></tr><tr v-if="!visitors.data.length"><td colspan="8" class="py-12 text-center text-muted-foreground">Nessun visitatore trovato.</td></tr></tbody></table></div><div class="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-4"><p class="text-sm text-muted-foreground">{{ visitors.from??0 }}–{{ visitors.to??0 }} di {{ visitors.total }}</p><nav class="flex flex-wrap gap-1"><template v-for="link in visitors.links" :key="link.label"><Link v-if="link.url" :href="link.url" preserve-state class="rounded border px-3 py-2 text-sm" :class="link.active?'bg-primary text-primary-foreground':'hover:bg-accent'"><span v-html="link.label"></span></Link><span v-else class="rounded border px-3 py-2 text-sm opacity-40" v-html="link.label"></span></template></nav></div></section>
+        <section class="overflow-hidden rounded-xl border border-sidebar-border/70 bg-card">
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3"><p class="text-sm text-muted-foreground">{{ selectedIds.length }} visite selezionate</p><button :disabled="selectedIds.length === 0" class="rounded-lg bg-destructive px-4 py-2 text-sm text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-40" @click="deleteSelected">Elimina selezionate</button></div>
+            <div class="overflow-x-auto"><table class="w-full min-w-[1150px] text-sm"><thead class="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground"><tr><th class="px-4 py-3"><input type="checkbox" :checked="allPageSelected" aria-label="Seleziona tutte le visite della pagina" @change="togglePageSelection" /></th><th v-for="head in ['Primo ingresso','Paese','Regione','Città','Dispositivo','Lingua','Provenienza','Campagna','Azioni']" :key="head" class="px-4 py-3">{{ head }}</th></tr></thead><tbody class="divide-y"><tr v-for="visitor in visitors.data" :key="visitor.id" class="hover:bg-muted/20"><td class="px-4 py-3"><input v-model="selectedIds" type="checkbox" :value="visitor.id" :aria-label="`Seleziona visita ${visitor.id}`" /></td><td class="whitespace-nowrap px-4 py-3">{{ dateTime(visitor.created_at) }}</td><td class="px-4 py-3">{{ visitor.country_code||'—' }}</td><td class="px-4 py-3">{{ visitor.region||'—' }}</td><td class="px-4 py-3">{{ visitor.city||'—' }}</td><td class="px-4 py-3 capitalize">{{ visitor.device_type||'—' }}</td><td class="px-4 py-3 uppercase">{{ visitor.language||'—' }}</td><td class="max-w-60 truncate px-4 py-3">{{ source(visitor) }}</td><td class="px-4 py-3">{{ visitor.utm_campaign||'—' }}</td><td class="px-4 py-3"><button class="text-sm text-destructive hover:underline" @click="deleteVisitor(visitor)">Elimina</button></td></tr><tr v-if="!visitors.data.length"><td colspan="10" class="py-12 text-center text-muted-foreground">Nessun visitatore trovato.</td></tr></tbody></table></div>
+            <div class="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-4"><p class="text-sm text-muted-foreground">{{ visitors.from??0 }}–{{ visitors.to??0 }} di {{ visitors.total }}</p><nav class="flex flex-wrap gap-1"><template v-for="link in visitors.links" :key="link.label"><Link v-if="link.url" :href="link.url" preserve-state class="rounded border px-3 py-2 text-sm" :class="link.active?'bg-primary text-primary-foreground':'hover:bg-accent'"><span v-html="link.label"></span></Link><span v-else class="rounded border px-3 py-2 text-sm opacity-40" v-html="link.label"></span></template></nav></div>
+        </section>
     </div>
 </template>
 
