@@ -21,6 +21,8 @@ return [
         'cancel' => 'Annulla',
         'proceed' => 'Procedi comunque',
         'no_specific_screen' => 'Non ci sono schermi specifici per il tuo modello entro questo budget. Vuoi vedere gli schermi universali che rientrano nel tuo budget?',
+        'lowest_specific_price' => 'La variante più economica ha un prezzo di :amount €.',
+        'show_lowest_variant' => 'Mostra variante',
         'show_universal_yes' => 'Sì, mostra gli universali',
         'show_universal_no' => 'No, grazie',
         'no_universal_screen' => 'Non ci sono schermi universali disponibili entro questo budget.',

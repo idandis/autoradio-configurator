@@ -21,6 +21,8 @@ return [
         'cancel' => 'Cancel',
         'proceed' => 'Continue anyway',
         'no_specific_screen' => 'There are no model-specific screens within this budget. Would you like to see universal screens within your budget?',
+        'lowest_specific_price' => 'The lowest-priced variant costs €:amount.',
+        'show_lowest_variant' => 'Show variant',
         'show_universal_yes' => 'Yes, show universal screens',
         'show_universal_no' => 'No, thanks',
         'no_universal_screen' => 'There are no universal screens available within this budget.',

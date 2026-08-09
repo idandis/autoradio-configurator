@@ -21,6 +21,8 @@ return [
         'cancel' => 'Cancelar',
         'proceed' => 'Continuar igualmente',
         'no_specific_screen' => 'No hay ninguna pantalla específica para tu modelo dentro de este presupuesto. ¿Quieres que te mostremos pantallas universales dentro de tu presupuesto?',
+        'lowest_specific_price' => 'La variante más económica tiene un precio de :amount €.',
+        'show_lowest_variant' => 'Mostrar variante',
         'show_universal_yes' => 'Sí, mostrar universales',
         'show_universal_no' => 'No, gracias',
         'no_universal_screen' => 'No hay pantallas universales disponibles dentro de este presupuesto.',
