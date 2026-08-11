@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ConfiguratorProduct;
+use App\Models\InstallationZone;
 use App\Models\SpanishPostalCode;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Str;
@@ -12,6 +13,28 @@ class ConfiguratorPostalCodeController extends Controller
     public function __invoke(string $postalCode): JsonResponse
     {
         abort_unless(preg_match('/^\d{5}$/', $postalCode), 404);
+
+        $configuredZone = InstallationZone::query()
+            ->where('active', true)
+            ->whereHas('postalCodes', fn ($query) => $query
+                ->where('postal_code_from', '<=', $postalCode)
+                ->where('postal_code_to', '>=', $postalCode))
+            ->with('products')
+            ->first();
+
+        if ($configuredZone) {
+            return response()->json([
+                'found' => true,
+                'postalCode' => $postalCode,
+                'installationArea' => [
+                    'name' => $configuredZone->name,
+                    'productHandles' => $configuredZone->products->pluck('product_handle')->values(),
+                    'productPrices' => $configuredZone->products
+                        ->filter(fn ($product) => $product->price !== null)
+                        ->mapWithKeys(fn ($product) => [$product->product_handle => (float) $product->price]),
+                ],
+            ]);
+        }
 
         $postalCodeRecord = SpanishPostalCode::query()
             ->where('postal_code', $postalCode)
@@ -48,6 +71,7 @@ class ConfiguratorPostalCodeController extends Controller
             'installationArea' => $location ? [
                 'name' => $location,
                 'productHandles' => $productHandles,
+                'productPrices' => (object) [],
             ] : null,
         ]);
     }

@@ -22,7 +22,9 @@ class VisitorStatisticsController extends Controller
                 : '',
         ];
 
-        $allVisitors = ConfigurationStatistic::query()->where('event_type', 'configurator_entered');
+        $allVisitors = $this->withoutSanJoseRelays(
+            ConfigurationStatistic::query()->where('event_type', 'configurator_entered'),
+        );
         $query = $this->filteredQuery($filters);
 
         return Inertia::render('VisitorStatistics', [
@@ -73,12 +75,23 @@ class VisitorStatisticsController extends Controller
 
     private function filteredQuery(array $filters): Builder
     {
-        return ConfigurationStatistic::query()
-            ->where('event_type', 'configurator_entered')
+        return $this->withoutSanJoseRelays(
+            ConfigurationStatistic::query()->where('event_type', 'configurator_entered'),
+        )
             ->when($filters['date_from'], fn (Builder $query, string $date) => $query->whereDate('created_at', '>=', $date))
             ->when($filters['date_to'], fn (Builder $query, string $date) => $query->whereDate('created_at', '<=', $date))
             ->when($filters['country'] !== '', fn (Builder $query) => $query->where('country_code', strtoupper($filters['country'])))
             ->when($filters['device'] !== '', fn (Builder $query) => $query->where('device_type', $filters['device']));
+    }
+
+    private function withoutSanJoseRelays(Builder $query): Builder
+    {
+        return $query->where(function (Builder $query) {
+            $query->where('country_code', '!=', 'US')
+                ->orWhereNull('country_code')
+                ->orWhereRaw('LOWER(COALESCE(region, ?)) != ?', ['', 'california'])
+                ->orWhereRaw('LOWER(COALESCE(city, ?)) != ?', ['', 'san jose']);
+        });
     }
 
     private function grouped(Builder $query, string $column): array

@@ -85,6 +85,11 @@ class ConfigurationStatisticController extends Controller
 
             $visitKey = $this->visitKey($data['session_uuid']);
             $data = array_merge($data, $this->geography($request), ['visit_key' => $visitKey]);
+
+            if ($this->isSanJoseRelayVisit($data)) {
+                return response()->json(status: 204);
+            }
+
             $visitor = ConfigurationStatistic::firstOrCreate(['visit_key' => $visitKey], $data);
 
             return response()->json(status: $visitor->wasRecentlyCreated ? 201 : 204);
@@ -154,6 +159,13 @@ class ConfigurationStatisticController extends Controller
     private function visitKey(string $sessionUuid): string
     {
         return hash_hmac('sha256', $sessionUuid, (string) config('app.key'));
+    }
+
+    private function isSanJoseRelayVisit(array $data): bool
+    {
+        return strtoupper((string) ($data['country_code'] ?? '')) === 'US'
+            && mb_strtolower((string) ($data['region'] ?? '')) === 'california'
+            && mb_strtolower((string) ($data['city'] ?? '')) === 'san jose';
     }
 
     private function isAutomatedTraffic(Request $request): bool

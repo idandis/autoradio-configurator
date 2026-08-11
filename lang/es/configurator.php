@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'page_title' => 'Configurador de Coches',
+    'page_title' => 'Configurador de autorradios',
     'title' => 'Configura tu sistema',
     'subtitle' => 'Elige el coche y añade los componentes compatibles.',
     'steps' => [
@@ -41,7 +41,10 @@ return [
     'vehicle' => [
         'missing' => '¿No encuentras tu marca, año o modelo? Escríbenos y te lo buscamos.',
         'missing_model' => '¿No encuentras tu modelo? Escríbenos y te la buscamos.',
-        'form_title' => 'Déjanos buscar tu autoradio ideal', 'form_description' => 'Completa el formulario y te contactaremos con una solución compatible.', 'first_name' => 'Nombre', 'last_name' => 'Apellido', 'email' => 'Correo electrónico', 'phone' => 'Teléfono', 'province' => 'Provincia de residencia', 'year' => 'Año de fabricación', 'comment' => 'Comentario sobre tu vehículo (opcional)', 'photo' => 'Foto de tu autoradio actual', 'upload_photo' => 'Cargar foto del autoradio (opcional)', 'form_submit' => 'Enviar', 'form_sending' => 'Enviando…', 'form_success' => 'Solicitud enviada. ¡Te contactaremos pronto!', 'form_error' => 'No se pudo enviar. Inténtalo de nuevo.', 'form_required' => 'Completa todos los campos obligatorios.',
+        'brand_not_found' => 'No encuentro mi marca',
+        'year_not_found' => 'No encuentro mi año',
+        'model_not_found' => 'No encuentro mi modelo',
+        'form_title' => 'Déjanos buscar tu autorradio ideal', 'form_description' => 'Completa el formulario y te contactaremos con una solución compatible.', 'first_name' => 'Nombre', 'last_name' => 'Apellido', 'email' => 'Correo electrónico', 'phone' => 'Teléfono', 'province' => 'Provincia de residencia', 'year' => 'Año de fabricación', 'comment' => 'Comentario sobre tu vehículo (opcional)', 'photo' => 'Foto de tu autorradio actual', 'upload_photo' => 'Cargar foto del autorradio (opcional)', 'form_submit' => 'Enviar', 'form_sending' => 'Enviando…', 'form_success' => 'Solicitud enviada. ¡Te contactaremos pronto!', 'form_error' => 'No se pudo enviar. Inténtalo de nuevo.', 'form_required' => 'Completa todos los campos obligatorios.',
         'missing_year' => '¿No encuentras el año de tu coche? Escríbenos y te lo buscamos.',
         'image_unavailable' => 'Imagen no disponible',
         'zoom' => 'Ampliar imagen del vehículo',
@@ -51,7 +54,8 @@ return [
         'product_details' => 'Detalles del producto',
         'select_vehicle' => 'Selecciona marca, año y modelo para ver las pantallas disponibles.',
         'zoom' => 'Ampliar imagen de la pantalla',
-        'missing' => 'Parece que la pantalla para tu modelo aún no está cargada en nuestro configurador. ¡Escríbenos y la actualizaremos enseguida!',
+        'missing_message' => 'Parece que la pantalla para tu modelo aún no está cargada en nuestro configurador.',
+        'missing_action' => '¡Escríbenos y la actualizaremos enseguida!',
         'label' => 'Pantalla',
         'color' => 'Color',
         'single_variant' => 'Variante única',
@@ -157,6 +161,7 @@ return [
         'installation_direct' => 'Instalación — pago directo al instalador',
         'estimated_total' => 'Total estimado',
         'online_total' => 'Total a pagar online',
+        'home_delivery' => 'Envío a domicilio · Entrega estimada en 10–15 días',
         'installation_payment_notice' => 'El coste de la instalación no está incluido en el pago online y deberá abonarse directamente al instalador el día del montaje. El precio mostrado es meramente orientativo, puede variar según el vehículo y queda siempre sujeto a la valoración y discreción del instalador.',
         'service_amount_notice' => 'El importe indicado corresponde al servicio completo contratado e incluye tanto el coste del producto como la remuneración por los servicios de intermediación, gestión, coordinación y asistencia prestados por AutoRadioCanario.',
         'discount_remaining' => 'Te faltan :amount € para obtener el :percentage% de descuento con :code.',

@@ -7,7 +7,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class InstallationZoneProduct extends Model
 {
-    protected $fillable = ['product_handle'];
+    protected $fillable = ['product_handle', 'price'];
+
+    protected $casts = ['price' => 'decimal:2'];
 
     public function zone(): BelongsTo
     {

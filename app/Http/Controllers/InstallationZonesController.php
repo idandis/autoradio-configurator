@@ -28,6 +28,9 @@ class InstallationZonesController extends Controller
                         'to' => $range->postal_code_to,
                     ])->values(),
                     'product_handles' => $zone->products->pluck('product_handle')->values(),
+                    'product_prices' => $zone->products->mapWithKeys(fn ($product) => [
+                        $product->product_handle => $product->price === null ? null : (float) $product->price,
+                    ]),
                 ]),
             'installationProducts' => ConfiguratorProduct::query()
                 ->where('category', 'installation')
@@ -78,36 +81,28 @@ class InstallationZonesController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'active' => ['required', 'boolean'],
-            'postal_ranges' => ['required', 'string'],
+            'postal_ranges' => ['required', 'array', 'min:1'],
+            'postal_ranges.*.from' => ['required', 'regex:/^\d{5}$/'],
+            'postal_ranges.*.to' => ['nullable', 'regex:/^\d{5}$/'],
             'product_handles' => ['required', 'array', 'min:1'],
             'product_handles.*' => ['required', 'string', 'exists:configurator_products,handle'],
+            'product_prices' => ['required', 'array'],
+            'product_prices.*' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
         ]);
 
-        $ranges = collect(preg_split('/\R/', $data['postal_ranges']))
-            ->map(fn (string $line) => trim($line))
-            ->filter()
-            ->map(function (string $line) {
-                if (! preg_match('/^(\d{5})(?:\s*-\s*(\d{5}))?$/', $line, $matches)) {
-                    throw ValidationException::withMessages([
-                        'postal_ranges' => "Il valore {$line} non è valido. Usa 35000 oppure 35000-35999.",
-                    ]);
-                }
-
-                $from = $matches[1];
-                $to = $matches[2] ?? $from;
+        $ranges = collect($data['postal_ranges'])
+            ->map(function (array $range) {
+                $from = $range['from'];
+                $to = $range['to'] ?: $from;
 
                 if ($from > $to) {
                     throw ValidationException::withMessages([
-                        'postal_ranges' => "L'intervallo {$line} è invertito.",
+                        'postal_ranges' => "L'intervallo {$from}-{$to} è invertito.",
                     ]);
                 }
 
                 return ['from' => $from, 'to' => $to];
             })->values()->all();
-
-        if ($ranges === []) {
-            throw ValidationException::withMessages(['postal_ranges' => 'Inserisci almeno un CAP.']);
-        }
 
         $data['name'] = trim($data['name']);
         $data['ranges'] = $ranges;
@@ -125,6 +120,7 @@ class InstallationZonesController extends Controller
         ])->all());
         $zone->products()->createMany(collect($data['product_handles'])->unique()->map(fn ($handle) => [
             'product_handle' => $handle,
+            'price' => $data['product_prices'][$handle] ?? null,
         ])->values()->all());
     }
 }

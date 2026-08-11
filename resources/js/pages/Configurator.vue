@@ -59,6 +59,7 @@ type InstallationZone = {
     name: string;
     postalRanges: Array<{ from: string; to: string }>;
     productHandles: string[];
+    productPrices: Record<string, number>;
 };
 
 type SpeakerOption = SimpleOption & {
@@ -160,7 +161,7 @@ const mobileHeaderOpen = ref(false);
 const currentYear = new Date().getFullYear();
 const headerCopy = computed(() => ({
     es: {
-        announcement: 'CONFIGURATOR DE COCHE',
+        announcement: 'CONFIGURADOR DE AUTORRADIOS',
         home: 'Home',
         contact: 'Contactos',
         about: 'Quiénes somos',
@@ -302,6 +303,29 @@ const resolveAvailableBrand = (value: string | null | undefined): string | null 
 const selectedBrand = ref<string | null>(null);
 const selectedModel = ref<string | null>(null);
 const selectedYear = ref<number | null>(null);
+const screenStepButton = ref<HTMLButtonElement | null>(null);
+const modelSelectionSection = ref<HTMLElement | null>(null);
+
+const handleVehicleYearChange = async (event: Event) => {
+    const value = (event.target as HTMLSelectElement).value;
+    handleMissingVehicleOption('year', event);
+    if (value === missingYearOption || value === '') return;
+
+    await nextTick();
+    window.requestAnimationFrame(() => {
+        modelSelectionSection.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+};
+
+const selectVehicleModel = async (model: string) => {
+    selectedModel.value = model;
+    await nextTick();
+
+    window.requestAnimationFrame(() => {
+        screenStepButton.value?.focus({ preventScroll: true });
+        screenStepButton.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+};
 const customerBudget = ref('');
 const showUniversalScreens = ref(false);
 const selectedScreenVariantIds = ref<number[]>([]);
@@ -440,6 +464,37 @@ const openMissingVehicleForm = () => {
     showMissingVehicleForm.value = true;
 };
 
+const missingBrandOption = '__missing_brand__';
+const missingYearOption = '__missing_year__';
+
+const handleMissingVehicleOption = (field: 'brand' | 'year', event: Event) => {
+    const value = (event.target as HTMLSelectElement).value;
+    if (value !== (field === 'brand' ? missingBrandOption : missingYearOption)) return;
+
+    if (field === 'brand') {
+        selectedBrand.value = null;
+    } else {
+        selectedYear.value = null;
+        missingVehicleForm.value.brand = selectedBrand.value ?? '';
+    }
+
+    openMissingVehicleForm();
+};
+
+const openMissingModelForm = () => {
+    missingVehicleForm.value.brand = selectedBrand.value ?? '';
+    missingVehicleForm.value.year = selectedYear.value === null ? '' : String(selectedYear.value);
+    missingVehicleForm.value.model = '';
+    openMissingVehicleForm();
+};
+
+const openMissingScreenForm = () => {
+    missingVehicleForm.value.brand = selectedBrand.value ?? '';
+    missingVehicleForm.value.model = selectedModel.value ?? '';
+    missingVehicleForm.value.year = selectedYear.value === null ? '' : String(selectedYear.value);
+    openMissingVehicleForm();
+};
+
 const submitMissingVehicleForm = async () => {
     const requiredFields = ['first_name', 'last_name', 'email', 'phone', 'province', 'brand', 'model', 'year'] as const;
     const fieldErrors: Partial<Record<MissingVehicleField, boolean>> = {};
@@ -523,6 +578,7 @@ const postalCodeError = ref<string | null>(null);
 const resolvedInstallationArea = ref<{
     name: string;
     productHandles: string[];
+    productPrices?: Record<string, number>;
 } | null>(null);
 
 const models = computed(() => {
@@ -718,12 +774,29 @@ onBeforeUnmount(() => {
     if (touchedOverBudgetTimer !== null) window.clearTimeout(touchedOverBudgetTimer);
 });
 
-const isRecommendedScreenVariant = (variant: Variant) => {
-    const title = variant.title.toLocaleLowerCase().replaceAll(/\s+/g, '');
+const isPreferredScreenVariant = (variant: Variant) => {
+    const title = variant.title.toLocaleLowerCase();
 
-    return title.includes('8core')
-        && title.includes('4g')
-        && title.includes('64g');
+    return /8\s*core/i.test(title)
+        && /(?:^|[^0-9])4\s*g(?:[^0-9]|$)/i.test(title)
+        && /(?:^|[^0-9])64\s*g(?:[^0-9]|$)/i.test(title);
+};
+
+const isRecommendedScreenVariant = (screen: Vehicle, variant: Variant) => {
+    const preferredVariants = screen.variants.filter(isPreferredScreenVariant);
+    if (preferredVariants.length > 0) {
+        return isPreferredScreenVariant(variant);
+    }
+
+    const lowestEightCoreVariant = screen.variants
+        .filter((candidate) => /8\s*core/i.test(candidate.title))
+        .map((candidate) => ({
+            variant: candidate,
+            price: Math.min(...screenVariantChoices(candidate).map((choice) => choice.price)),
+        }))
+        .sort((first, second) => first.price - second.price || first.variant.id - second.variant.id)[0]?.variant;
+
+    return lowestEightCoreVariant?.id === variant.id;
 };
 
 const screenHasAffordableVariant = (screen: Vehicle) =>
@@ -1606,6 +1679,7 @@ const matchedInstallationZone = computed(() => {
             name: resolvedInstallationArea.value.name,
             postalRanges: [],
             productHandles: resolvedInstallationArea.value.productHandles,
+            productPrices: resolvedInstallationArea.value.productPrices ?? {},
         };
     }
 
@@ -1780,7 +1854,10 @@ const visibleInstallationOptions = computed(() => {
         if (!uniqueOptions.has(key)) uniqueOptions.set(key, option);
     });
 
-    return [...uniqueOptions.values()];
+    return [...uniqueOptions.values()].map((option) => ({
+        ...option,
+        price: matchedInstallationZone.value!.productPrices[option.key] ?? option.price,
+    }));
 });
 
 const checkPostalCode = async () => {
@@ -2559,6 +2636,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         .total-row div { padding: 9px 10px; }
         .total-row .amount { border-left: 1px solid #b8b8b8; text-align: right; }
         .direct-notice { margin: 10px 0; line-height: 1.4; }
+        .shipping-notice { margin: 8px 0 0; border: 1px solid #e4ad00; padding: 8px 10px; background: #fff8d8; color: #292727; font-size: 10px; font-weight: 700; text-align: center; }
         .service-amount-notice { margin: 5px 0 0; font-size: 9px; line-height: 1.4; color: #292727; break-inside: avoid; page-break-inside: avoid; }
         footer { margin: 12px -12mm 0; padding: 18px 12mm; background: #0067a9; color: #fff; text-align: center; font-size: 7px; font-weight: 700; letter-spacing: 1.2px; break-inside: avoid; page-break-inside: avoid; }
         @media print {
@@ -2635,6 +2713,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         <div class="total-row"><div>${escapeHtml(t('quote.estimated_total'))}</div><div class="amount">${euroFormatter.value.format(estimatedTotal.value)}</div></div>
         <div class="total-row"><div>${escapeHtml(t('quote.online_total'))}</div><div class="amount">${euroFormatter.value.format(onlineTotal.value)}</div></div>
     </section>
+    <p class="shipping-notice">${escapeHtml(t('quote.home_delivery'))}</p>
     <footer>INFO@AUTORADIOCANARIO.COM &nbsp;&nbsp; WWW.AUTORADIOCANARIO.COM &nbsp;&nbsp; TEL./WHATSAPP: +34 694 259 117</footer>
 </main>
 <script>window.addEventListener('load', () => window.print());<\/script>
@@ -2961,14 +3040,7 @@ watch(
                     <p class="mx-auto mt-2 max-w-sm text-sm leading-5 text-neutral-400 sm:mx-0 sm:mt-3 sm:max-w-3xl sm:text-base sm:leading-normal">
                         {{ t('intro.description') }}
                     </p>
-                    <div class="mt-4 grid gap-4 md:grid-cols-[minmax(0,508px)_minmax(280px,335px)] md:items-center md:gap-20">
-                        <button
-                            type="button"
-                            @click="openMissingVehicleForm"
-                            class="inline-flex min-h-12 items-center justify-center rounded-lg border border-amber-400 px-4 py-3 text-center text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black"
-                        >
-                            {{ t('vehicle.missing') }}
-                        </button>
+                    <div class="mt-4 max-w-[508px]">
                         <div class="relative">
                             <label for="customer-budget" class="sr-only">{{ t('budget.label') }}</label>
                             <input
@@ -3000,8 +3072,12 @@ watch(
                                     id="vehicle-brand"
                                     v-model="selectedBrand"
                                     class="vehicle-option-select w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-base text-white sm:text-sm"
+                                    @change="handleMissingVehicleOption('brand', $event)"
                                 >
                                     <option :value="null">{{ t('fields.select_brand') }}</option>
+                                    <option :value="missingBrandOption" class="missing-vehicle-option">
+                                        {{ t('vehicle.brand_not_found') }}
+                                    </option>
                                     <option
                                         v-for="brand in brands"
                                         :key="brand ?? 'unknown-brand'"
@@ -3016,8 +3092,12 @@ watch(
                                 <select
                                     v-model="selectedYear"
                                     class="vehicle-option-select w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-base text-white sm:text-sm"
+                                    @change="handleVehicleYearChange"
                                 >
                                     <option :value="null">{{ t('fields.select_year') }}</option>
+                                    <option :value="missingYearOption" class="missing-vehicle-option">
+                                        {{ t('vehicle.year_not_found') }}
+                                    </option>
                                     <option
                                         v-for="year in availableYears"
                                         :key="year"
@@ -3029,7 +3109,7 @@ watch(
                             </div>
                         </div>
 
-                        <div v-if="selectedBrand && selectedYear !== null" class="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-end">
+                        <div ref="modelSelectionSection" v-if="selectedBrand && selectedYear !== null" class="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-end">
                             <div class="grid gap-3">
                                 <label class="text-sm font-medium text-neutral-300">{{ t('fields.model') }}</label>
                                 <div class="flex flex-wrap gap-2">
@@ -3037,7 +3117,7 @@ watch(
                                         v-for="model in models"
                                         :key="model ?? 'unknown-model'"
                                         type="button"
-                                        @click="selectedModel = model"
+                                        @click="selectVehicleModel(model)"
                                         class="rounded-lg border px-4 py-3 text-sm transition"
                                         :class="
                                             selectedModel === model
@@ -3046,6 +3126,13 @@ watch(
                                         "
                                     >
                                         {{ model }}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        class="rounded-lg border border-amber-400 bg-[#121212] px-4 py-3 text-sm text-amber-400 transition hover:bg-amber-400 hover:text-black"
+                                        @click="openMissingModelForm"
+                                    >
+                                        {{ t('vehicle.model_not_found') }}
                                     </button>
                                 </div>
                             </div>
@@ -3056,7 +3143,7 @@ watch(
                             v-if="selectedModel"
                             class="border-t border-neutral-800 pt-6"
                         >
-                            <button type="button" :class="mainStepButtonClass('screen')" @click="toggleScreenStep">{{ t('steps.screen') }}</button>
+                            <button ref="screenStepButton" type="button" :class="mainStepButtonClass('screen')" @click="toggleScreenStep">{{ t('steps.screen') }}</button>
                             <div v-if="openSteps.includes('screen')" class="mt-6">
                             <div v-if="hasNoSpecificScreenForBudget && !showUniversalScreens" class="rounded-xl border border-neutral-700 bg-[#121212] p-5">
                                 <p class="text-sm leading-6 text-neutral-200">{{ t('budget.no_specific_screen') }}</p>
@@ -3152,7 +3239,7 @@ watch(
                                                         {{ displayVariantTitle(variant.title) }}
                                                     </button>
                                                     <span
-                                                        v-if="isRecommendedScreenVariant(variant)"
+                                                        v-if="isRecommendedScreenVariant(vehicle, variant)"
                                                         class="pointer-events-none absolute left-2 top-0 z-10 inline-flex -translate-y-1/2 -rotate-2 rounded-sm bg-emerald-400 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-black shadow-sm sm:px-2 sm:text-[9px]"
                                                     >
                                                         {{ t('screen.recommended') }}
@@ -3194,16 +3281,17 @@ watch(
                                     </div>
                                 </article>
                             </div>
-                            <p
+                            <div
                                 v-else-if="selectedBrand && selectedModel && selectedYear"
-                                class="mt-4 text-sm text-neutral-300"
+                                class="mt-4 flex flex-col items-center gap-3 text-center text-sm"
                             >
+                                <p class="text-neutral-300">{{ t('screen.missing_message') }}</p>
                                 <button
                                     type="button"
-                                    class="font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
-                                    @click="openMissingVehicleForm"
-                                >{{ t('screen.missing') }}</button>
-                            </p>
+                                    class="rounded-lg bg-amber-400 px-5 py-3 font-semibold text-black transition hover:bg-amber-300"
+                                    @click="openMissingScreenForm"
+                                >{{ t('screen.missing_action') }}</button>
+                            </div>
                             <p v-else class="mt-4 text-sm text-neutral-500">
                                 {{ t('screen.select_vehicle') }}
                             </p>
@@ -3936,6 +4024,16 @@ watch(
                             </div>
                         </div>
 
+                        <div class="flex items-center justify-center gap-2 rounded-lg border border-amber-400/60 bg-amber-400/10 px-3 py-2 text-center text-xs font-semibold text-amber-300">
+                            <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M10 17h4V5H2v12h3" />
+                                <path d="M14 9h4l4 4v4h-3" />
+                                <circle cx="7.5" cy="17.5" r="2.5" />
+                                <circle cx="16.5" cy="17.5" r="2.5" />
+                            </svg>
+                            <span>{{ t('quote.home_delivery') }}</span>
+                        </div>
+
                         <label class="flex cursor-pointer items-start gap-2 px-1 text-xs leading-5 text-neutral-400">
                             <input
                                 v-model="checkoutConsentAccepted"
@@ -4003,6 +4101,16 @@ watch(
                                 <span>{{ t('quote.installation_direct') }}</span>
                                 <span>{{ installationCost.toFixed(2) }} €</span>
                             </div>
+                        </div>
+
+                        <div class="flex items-center justify-center gap-2 rounded-lg border border-amber-400/60 bg-amber-400/10 px-3 py-2 text-center text-xs font-semibold text-amber-300">
+                            <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                <path d="M10 17h4V5H2v12h3" />
+                                <path d="M14 9h4l4 4v4h-3" />
+                                <circle cx="7.5" cy="17.5" r="2.5" />
+                                <circle cx="16.5" cy="17.5" r="2.5" />
+                            </svg>
+                            <span>{{ t('quote.home_delivery') }}</span>
                         </div>
 
                         <label class="flex cursor-pointer items-start gap-2 px-1 text-xs leading-5 text-neutral-400">
@@ -4438,6 +4546,7 @@ watch(
 .upload-photo-button { position: relative; display: flex; min-height: 3.5rem; cursor: pointer; align-items: center; justify-content: center; border: 1px dashed #737373; border-radius: 0.5rem; padding: 0.75rem 1rem; color: #d4d4d4; text-align: center; }
 .upload-photo-button:hover, .upload-photo-selected { border-color: #fbbf24; background: rgba(251, 191, 36, 0.12); color: #fbbf24; }
 .upload-photo-button input { position: absolute; inset: 0; height: 100%; width: 100%; cursor: pointer; opacity: 0; }
+.missing-vehicle-option { background: #fbbf24; color: #000; font-weight: 700; }
 
 @media (max-width: 639px) {
     .vehicle-option-select {

@@ -172,6 +172,9 @@ class ConfiguratorController extends Controller
                         'to' => $range->postal_code_to,
                     ])->values(),
                     'productHandles' => $zone->products->pluck('product_handle')->values(),
+                    'productPrices' => $zone->products
+                        ->filter(fn ($product) => $product->price !== null)
+                        ->mapWithKeys(fn ($product) => [$product->product_handle => (float) $product->price]),
                 ])->values(),
             'vehicleImages' => collect(glob(public_path('images/vehicles-dark/*.{png,jpg,jpeg,webp}'), GLOB_BRACE) ?: [])
                 ->map(fn (string $path) => basename($path))
