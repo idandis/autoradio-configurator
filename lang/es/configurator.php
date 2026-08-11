@@ -60,6 +60,8 @@ return [
         'color' => 'Color',
         'single_variant' => 'Variante única',
         'recommended' => 'Recomendada',
+        'available_option' => 'Tenemos una opción disponible. Desplázate hacia abajo para verla.',
+        'available_options' => 'Tenemos :count opciones disponibles. Desplázate hacia abajo para verlas todas.',
     ],
     'camera' => [
         'standard' => 'Cámara trasera estándar',

@@ -382,6 +382,19 @@ const toggleStep = (step: string) => {
         ? openSteps.value.filter((openStep) => openStep !== step)
         : [...openSteps.value, step];
 };
+const centerConfiguratorTarget = async (targetId: string, focus = false) => {
+    await nextTick();
+    window.requestAnimationFrame(() => {
+        const target = document.getElementById(targetId);
+        if (focus) target?.focus({ preventScroll: true });
+        target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+};
+const toggleStepAndCenter = async (step: string, targetId: string, focus = false) => {
+    const isOpening = !openSteps.value.includes(step);
+    toggleStep(step);
+    if (isOpening) await centerConfiguratorTarget(targetId, focus);
+};
 const stepHasSelections = (step: string) => {
     switch (step) {
         case 'vehicle':
@@ -416,7 +429,7 @@ const quotePanel = ref<HTMLElement | null>(null);
 const showMobileQuoteTotals = ref(false);
 const summaryMode = ref(false);
 const updateMobileQuoteTotals = () => {
-    if (!quoteTotals.value || !mobileQuoteTotals.value || window.innerWidth >= 1024) {
+    if (!hasSelectedProducts.value || !quoteTotals.value || !mobileQuoteTotals.value || window.innerWidth >= 1024) {
         showMobileQuoteTotals.value = false;
         return;
     }
@@ -479,6 +492,14 @@ const handleMissingVehicleOption = (field: 'brand' | 'year', event: Event) => {
     }
 
     openMissingVehicleForm();
+};
+
+const handleVehicleBrandChange = async (event: Event) => {
+    const value = (event.target as HTMLSelectElement).value;
+    handleMissingVehicleOption('brand', event);
+    if (value === missingBrandOption || value === '') return;
+
+    await centerConfiguratorTarget('vehicle-year', true);
 };
 
 const openMissingModelForm = () => {
@@ -677,7 +698,15 @@ const toggleScreenStep = async () => {
         && affordableSpecificScreens.value.length > 0;
 
     if (!canJumpToFirstScreen) {
+        const isOpening = !openSteps.value.includes('screen');
         toggleStep('screen');
+        if (isOpening) {
+            await nextTick();
+            const firstScreenId = displayedScreenVehicles.value[0]
+                ? `screen-product-${displayedScreenVehicles.value[0].id}`
+                : 'screen-step-content';
+            await centerConfiguratorTarget(firstScreenId);
+        }
         return;
     }
 
@@ -843,6 +872,15 @@ const displayedScreenVehicles = computed(() =>
     hasNoSpecificScreenForBudget.value && showUniversalScreens.value
         ? affordableUniversalScreens.value
         : affordableSpecificScreens.value,
+);
+
+const displayedScreenOptionCount = computed(() =>
+    displayedScreenVehicles.value.reduce(
+        (total, vehicle) => total + vehicle.variants.filter(
+            (variant) => !isScreenVariantOverBudget(variant),
+        ).length,
+        0,
+    ),
 );
 
 const selectableScreenVehicles = computed(() => [
@@ -1604,15 +1642,21 @@ const selectedSpeakerSizes = computed(() =>
     selectedSpeakerSizeByCategory.value[selectedSpeakerCategory.value] ?? '',
 );
 
-const toggleSpeakerCategory = (category: string) => {
-    selectedSpeakerCategory.value = selectedSpeakerCategory.value === category ? '' : category;
+const toggleSpeakerCategory = async (category: string) => {
+    const isSelecting = selectedSpeakerCategory.value !== category;
+    selectedSpeakerCategory.value = isSelecting ? category : '';
+
+    if (isSelecting) await centerConfiguratorTarget('speaker-size-step');
 };
 
-const toggleSpeakerSize = (size: string) => {
+const toggleSpeakerSize = async (size: string) => {
+    const isSelecting = selectedSpeakerSizes.value !== size;
     selectedSpeakerSizeByCategory.value = {
         ...selectedSpeakerSizeByCategory.value,
-        [selectedSpeakerCategory.value]: selectedSpeakerSizes.value === size ? '' : size,
+        [selectedSpeakerCategory.value]: isSelecting ? size : '',
     };
+
+    if (isSelecting) await centerConfiguratorTarget('speaker-options-step');
 };
 
 const formatSpeakerSize = (value: string) => {
@@ -1743,16 +1787,25 @@ const serviceZones = computed(() => [
     { key: 'south' as const, label: t('installation.zone_south') },
 ]);
 
-const toggleServiceZone = (zone: 'north' | 'capital' | 'south' | 'tenerife' | 'fuerteventura' | 'lanzarote') => {
-    selectedServiceZone.value = selectedServiceZone.value === zone ? null : zone;
+const toggleServiceZone = async (zone: 'north' | 'capital' | 'south' | 'tenerife' | 'fuerteventura' | 'lanzarote') => {
+    const isSelecting = selectedServiceZone.value !== zone;
+    selectedServiceZone.value = isSelecting ? zone : null;
     selectedPrecheckMethod.value = null;
     selectedInstallationKey.value = null;
+
+    if (isSelecting) {
+        await centerConfiguratorTarget(
+            requiresPrecheck.value ? 'installation-precheck-step' : 'installation-final-step',
+        );
+    }
 };
 
-const togglePrecheckMethod = (method: 'self' | 'installer') => {
-    selectedPrecheckMethod.value =
-        selectedPrecheckMethod.value === method ? null : method;
+const togglePrecheckMethod = async (method: 'self' | 'installer') => {
+    const isSelecting = selectedPrecheckMethod.value !== method;
+    selectedPrecheckMethod.value = isSelecting ? method : null;
     selectedInstallationKey.value = null;
+
+    if (isSelecting) await centerConfiguratorTarget('installation-final-step');
 };
 
 const hasSelectedProducts = computed(
@@ -1763,6 +1816,10 @@ const hasSelectedProducts = computed(
         selectedCustomProducts.value.length
     ),
 );
+watch(hasSelectedProducts, async () => {
+    await nextTick();
+    updateMobileQuoteTotals();
+});
 const requiresPrecheck = computed(
     () => selectedScreens.value.length > 0,
 );
@@ -1860,6 +1917,33 @@ const visibleInstallationOptions = computed(() => {
     }));
 });
 
+const handlePostalCodeInput = async () => {
+    postalCode.value = postalCode.value.replace(/\D/g, '').slice(0, 5);
+
+    if (postalCode.value.length === 5) {
+        await centerConfiguratorTarget('postal-code-check', true);
+    }
+};
+
+const centerInstallationResult = async () => {
+    if (matchedInstallationZone.value && hasThreeStepInstallationFlow.value && hasSelectedProducts.value) {
+        await centerConfiguratorTarget('installation-zone-step');
+        return;
+    }
+
+    if (matchedInstallationZone.value && requiresPrecheck.value) {
+        await centerConfiguratorTarget('installation-precheck-step');
+        return;
+    }
+
+    if (matchedInstallationZone.value) {
+        await centerConfiguratorTarget('installation-final-step');
+        return;
+    }
+
+    await centerConfiguratorTarget('installation-availability-message');
+};
+
 const checkPostalCode = async () => {
     const normalized = postalCode.value.trim();
 
@@ -1867,6 +1951,7 @@ const checkPostalCode = async () => {
         checkedPostalCode.value = null;
         resolvedInstallationArea.value = null;
         postalCodeError.value = t('errors.postal_invalid');
+        await centerConfiguratorTarget('installation-availability-message');
         return;
     }
 
@@ -1881,6 +1966,7 @@ const checkPostalCode = async () => {
         checkedPostalCode.value = normalized;
         resolvedInstallationArea.value = null;
         postalCodeError.value = null;
+        await centerInstallationResult();
         return;
     }
 
@@ -1899,10 +1985,12 @@ const checkPostalCode = async () => {
             ? result.installationArea
             : null;
         postalCodeError.value = null;
+        await centerInstallationResult();
     } catch {
         checkedPostalCode.value = null;
         resolvedInstallationArea.value = null;
         postalCodeError.value = t('errors.postal_lookup');
+        await centerConfiguratorTarget('installation-availability-message');
     }
 };
 
@@ -3060,7 +3148,7 @@ watch(
             <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <section class="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
                     <div class="grid gap-6">
-                        <button type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStep('vehicle')">{{ t('steps.vehicle') }}</button>
+                        <button type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStepAndCenter('vehicle', 'vehicle-brand', true)">{{ t('steps.vehicle') }}</button>
                         <div v-if="openSteps.includes('vehicle')">
 
                         <div
@@ -3072,7 +3160,7 @@ watch(
                                     id="vehicle-brand"
                                     v-model="selectedBrand"
                                     class="vehicle-option-select w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-base text-white sm:text-sm"
-                                    @change="handleMissingVehicleOption('brand', $event)"
+                                    @change="handleVehicleBrandChange"
                                 >
                                     <option :value="null">{{ t('fields.select_brand') }}</option>
                                     <option :value="missingBrandOption" class="missing-vehicle-option">
@@ -3090,6 +3178,7 @@ watch(
 
                             <div v-if="selectedBrand">
                                 <select
+                                    id="vehicle-year"
                                     v-model="selectedYear"
                                     class="vehicle-option-select w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-base text-white sm:text-sm"
                                     @change="handleVehicleYearChange"
@@ -3144,7 +3233,15 @@ watch(
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button ref="screenStepButton" type="button" :class="mainStepButtonClass('screen')" @click="toggleScreenStep">{{ t('steps.screen') }}</button>
-                            <div v-if="openSteps.includes('screen')" class="mt-6">
+                            <div v-if="openSteps.includes('screen')" id="screen-step-content" class="mt-6">
+                            <p
+                                v-if="displayedScreenOptionCount > 0"
+                                class="mb-4 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-center text-sm font-semibold text-emerald-400"
+                            >
+                                {{ displayedScreenOptionCount === 1
+                                    ? t('screen.available_option')
+                                    : t('screen.available_options', { count: displayedScreenOptionCount }) }}
+                            </p>
                             <div v-if="hasNoSpecificScreenForBudget && !showUniversalScreens" class="rounded-xl border border-neutral-700 bg-[#121212] p-5">
                                 <p class="text-sm leading-6 text-neutral-200">{{ t('budget.no_specific_screen') }}</p>
                                 <div v-if="lowestSpecificVariantPrice !== null" class="mt-3 flex flex-wrap items-center gap-3">
@@ -3302,9 +3399,9 @@ watch(
                             v-if="selectedModel && visibleCameraOptions.length > 0"
                             class="border-t border-neutral-800 pt-6"
                         >
-                            <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStep('camera')">{{ t('steps.camera') }}</button>
-                            <div v-if="openSteps.includes('camera')" class="mt-6">
-                            <div class="mt-4 grid gap-4 md:grid-cols-3">
+                            <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStepAndCenter('camera', 'camera-step-options')">{{ t('steps.camera') }}</button>
+                            <div v-if="openSteps.includes('camera')" id="camera-step-content" class="mt-6">
+                            <div id="camera-step-options" class="mt-4 grid gap-4 md:grid-cols-3">
                                 <div
                                     v-for="camera in visibleCameraOptions"
                                     :key="camera.key"
@@ -3392,9 +3489,9 @@ watch(
                             v-if="hasSelectedProducts"
                             class="border-t border-neutral-800 pt-6"
                         >
-                            <button type="button" :class="mainStepButtonClass('speaker')" @click="toggleStep('speaker')">{{ t('steps.speaker') }}</button>
-                            <div v-if="openSteps.includes('speaker')" class="mt-6">
-                            <div class="mt-4 grid max-w-2xl gap-4">
+                            <button type="button" :class="mainStepButtonClass('speaker')" @click="toggleStepAndCenter('speaker', 'speaker-step-controls')">{{ t('steps.speaker') }}</button>
+                            <div v-if="openSteps.includes('speaker')" id="speaker-step-content" class="mt-6">
+                            <div id="speaker-step-controls" class="mt-4 grid max-w-2xl gap-4">
                                 <div>
                                     <div class="flex flex-wrap gap-2">
                                         <button
@@ -3413,7 +3510,7 @@ watch(
                                         </button>
                                     </div>
                                 </div>
-                                <div v-if="selectedSpeakerCategory">
+                                <div v-if="selectedSpeakerCategory" id="speaker-size-step">
                                 <p class="mb-2 block text-sm font-medium text-neutral-300">
                                     {{ t('speaker.size') }}
                                 </p>
@@ -3432,7 +3529,7 @@ watch(
                                 </div>
                             </div>
 
-                            <div v-if="visibleSpeakerOptions.length" class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            <div v-if="visibleSpeakerOptions.length" id="speaker-options-step" class="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                                 <article
                                     v-for="speaker in visibleSpeakerOptions"
                                     :key="speaker.key"
@@ -3468,7 +3565,7 @@ watch(
                                     </a>
                                 </article>
                             </div>
-                            <p v-else-if="selectedSpeakerCategory && selectedSpeakerSizes" class="mt-4 text-sm text-neutral-500">
+                            <p v-else-if="selectedSpeakerCategory && selectedSpeakerSizes" id="speaker-options-step" class="mt-4 text-sm text-neutral-500">
                                 {{ t('speaker.no_options') }}
                             </p>
                             </div>
@@ -3478,8 +3575,8 @@ watch(
                             v-if="hasSelectedProducts"
                             class="border-t border-neutral-800 pt-6"
                         >
-                            <button type="button" :class="mainStepButtonClass('installation')" @click="toggleStep('installation'); installationRequested = true">{{ t('steps.installation') }}</button>
-                            <div v-if="openSteps.includes('installation')" class="mt-6">
+                            <button type="button" :class="mainStepButtonClass('installation')" @click="toggleStepAndCenter('installation', 'postal-code', true); installationRequested = true">{{ t('steps.installation') }}</button>
+                            <div v-if="openSteps.includes('installation')" id="installation-step-content" class="mt-6">
                             <p v-if="hasSelectedProducts" class="mt-2 max-w-3xl text-sm leading-6 text-neutral-400">
                                 {{ t('installation.intro') }}
                             </p>
@@ -3502,17 +3599,18 @@ watch(
                                         maxlength="5"
                                         :placeholder="t('installation.postal_placeholder')"
                                         class="min-w-0 flex-1 rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white placeholder:text-neutral-600"
+                                        @input="handlePostalCodeInput"
                                         @keyup.enter="checkPostalCode"
                                     />
-                                    <button type="button" class="rounded-lg bg-amber-400 px-5 py-3 text-sm font-semibold text-black transition hover:bg-amber-300" @click="checkPostalCode">
+                                    <button id="postal-code-check" type="button" class="rounded-lg bg-amber-400 px-5 py-3 text-sm font-semibold text-black transition hover:bg-amber-300" @click="checkPostalCode">
                                         {{ t('installation.check') }}
                                     </button>
                                 </div>
-                                <p v-if="postalCodeError" class="mt-3 text-sm text-red-400">{{ postalCodeError }}</p>
-                                <p v-else-if="checkedPostalCode && matchedInstallationZone" class="mt-3 text-sm text-emerald-400">
+                                <p v-if="postalCodeError" id="installation-availability-message" class="mt-3 text-sm text-red-400">{{ postalCodeError }}</p>
+                                <p v-else-if="checkedPostalCode && matchedInstallationZone" id="installation-availability-message" class="mt-3 text-sm text-emerald-400">
                                     {{ t('installation.available_zone', { zone: matchedInstallationZone.name }) }}
                                 </p>
-                                <p v-else-if="checkedPostalCode" class="mt-3 text-sm text-amber-400">
+                                <p v-else-if="checkedPostalCode" id="installation-availability-message" class="mt-3 text-sm text-amber-400">
                                     {{ t('installation.unavailable') }}
                                     <a
                                         :href="storefrontUrl('/pages/contact')"
@@ -3528,7 +3626,7 @@ watch(
 
                             <div class="mt-4 grid gap-5 lg:grid-cols-[1.05fr_.95fr]">
                             <div v-if="checkedPostalCode && hasThreeStepInstallationFlow && hasSelectedProducts" class="contents">
-                                <div v-if="hasSelectedProducts" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
+                                <div v-if="hasSelectedProducts" id="installation-zone-step" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
                                     <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
                                         {{ t('installation.zone_step', { step: 1 }) }}
                                     </p>
@@ -3646,7 +3744,7 @@ watch(
                                     </template>
                                 </div>
 
-                                <div v-if="requiresPrecheck" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
+                                <div v-if="requiresPrecheck" id="installation-precheck-step" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
                                     <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
                                         {{ t('installation.precheck_step', { step: precheckStepNumber }) }}
                                     </p>
@@ -3684,7 +3782,7 @@ watch(
                                 </div>
                             </div>
 
-                            <div v-else-if="checkedPostalCode && requiresPrecheck" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
+                            <div v-else-if="checkedPostalCode && requiresPrecheck" id="installation-precheck-step" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
                                 <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
                                     {{ t('installation.precheck_step', { step: precheckStepNumber }) }}
                                 </p>
@@ -3704,6 +3802,7 @@ watch(
                             </div>
 
                             <div
+                                id="installation-final-step"
                                 v-if="
                                     (!hasSelectedProducts && checkedPostalCode && matchedInstallationZone) ||
                                     (
@@ -4085,6 +4184,7 @@ watch(
                 </aside>
 
                 <div
+                    v-if="hasSelectedProducts"
                     ref="mobileQuoteTotals"
                     class="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-700 bg-[#121212]/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgba(0,0,0,0.45)] backdrop-blur lg:hidden"
                     :class="showMobileQuoteTotals ? 'visible opacity-100' : 'pointer-events-none invisible opacity-0'"
