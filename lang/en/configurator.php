@@ -59,8 +59,8 @@ return [
         'color' => 'Color',
         'single_variant' => 'Single variant',
         'recommended' => 'Recommended',
-        'available_option' => 'We have one option available. Scroll down to see it.',
-        'available_options' => 'We have :count options available. Scroll down to see them all.',
+        'available_option' => 'We have one product available. Scroll down to see it.',
+        'available_options' => 'We have :count products available. Scroll down to see them all.',
     ],
     'camera' => [
         'standard' => 'Standard rear camera',
@@ -178,6 +178,7 @@ return [
         'copy_failed' => 'Copy failed',
         'create_quote' => 'Create quote',
         'download_quote' => 'Download my quote',
+        'remove_product' => 'Remove product',
         'cancel' => 'Cancel',
         'generate_quote' => 'Generate quote',
         'close' => 'Close',

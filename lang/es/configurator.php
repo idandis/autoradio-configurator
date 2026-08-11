@@ -60,8 +60,8 @@ return [
         'color' => 'Color',
         'single_variant' => 'Variante única',
         'recommended' => 'Recomendada',
-        'available_option' => 'Tenemos una opción disponible. Desplázate hacia abajo para verla.',
-        'available_options' => 'Tenemos :count opciones disponibles. Desplázate hacia abajo para verlas todas.',
+        'available_option' => 'Tenemos un producto disponible. Desplázate hacia abajo para verlo.',
+        'available_options' => 'Tenemos :count productos disponibles. Desplázate hacia abajo para verlos todos.',
     ],
     'camera' => [
         'standard' => 'Cámara trasera estándar',
@@ -179,6 +179,7 @@ return [
         'copy_failed' => 'No se pudo copiar',
         'create_quote' => 'Crear presupuesto',
         'download_quote' => 'Descargar mi presupuesto',
+        'remove_product' => 'Eliminar producto',
         'cancel' => 'Cancelar',
         'generate_quote' => 'Generar presupuesto',
         'close' => 'Cerrar',

@@ -60,8 +60,8 @@ return [
         'color' => 'Colore',
         'single_variant' => 'Variante unica',
         'recommended' => 'Consigliata',
-        'available_option' => 'Abbiamo un’opzione disponibile. Scorri verso il basso per vederla.',
-        'available_options' => 'Abbiamo :count opzioni disponibili. Scorri verso il basso per vederle tutte.',
+        'available_option' => 'Abbiamo un prodotto disponibile. Scorri verso il basso per vederlo.',
+        'available_options' => 'Abbiamo :count prodotti disponibili. Scorri verso il basso per vederli tutti.',
     ],
     'camera' => [
         'standard' => 'Telecamera posteriore standard',
@@ -179,6 +179,7 @@ return [
         'copy_failed' => 'Copia non riuscita',
         'create_quote' => 'Crea preventivo',
         'download_quote' => 'Scarica il mio preventivo',
+        'remove_product' => 'Rimuovi prodotto',
         'cancel' => 'Annulla',
         'generate_quote' => 'Genera preventivo',
         'close' => 'Chiudi',

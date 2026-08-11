@@ -390,6 +390,16 @@ const centerConfiguratorTarget = async (targetId: string, focus = false) => {
         target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 };
+const goToFullQuote = async () => {
+    await centerConfiguratorTarget('full-quote-summary');
+};
+const goToPrecheckStep = async () => {
+    installationRequested.value = true;
+    if (!openSteps.value.includes('installation')) {
+        openSteps.value = [...openSteps.value, 'installation'];
+    }
+    await centerConfiguratorTarget('installation-precheck-step');
+};
 const toggleStepAndCenter = async (step: string, targetId: string, focus = false) => {
     const isOpening = !openSteps.value.includes(step);
     toggleStep(step);
@@ -428,6 +438,7 @@ const mobileQuoteTotals = ref<HTMLElement | null>(null);
 const quotePanel = ref<HTMLElement | null>(null);
 const showMobileQuoteTotals = ref(false);
 const summaryMode = ref(false);
+let quoteTotalsObserver: IntersectionObserver | null = null;
 const updateMobileQuoteTotals = () => {
     if (!hasSelectedProducts.value || !quoteTotals.value || !mobileQuoteTotals.value || window.innerWidth >= 1024) {
         showMobileQuoteTotals.value = false;
@@ -439,9 +450,30 @@ const updateMobileQuoteTotals = () => {
         return;
     }
 
-    const fixedHeight = mobileQuoteTotals.value.offsetHeight;
-    showMobileQuoteTotals.value =
-        quoteTotals.value.getBoundingClientRect().top > window.innerHeight - fixedHeight;
+    const viewportHeight = window.visualViewport?.height ?? document.documentElement.clientHeight;
+    const originalTotalsRect = quoteTotals.value.getBoundingClientRect();
+
+    // Show the compact bar only while the original totals are still below the
+    // viewport. Once users reach or pass them, keep it hidden through checkout
+    // methods and the footer, including mobile overscroll/bounce.
+    showMobileQuoteTotals.value = originalTotalsRect.top >= viewportHeight;
+};
+const observeQuoteTotals = async () => {
+    await nextTick();
+    quoteTotalsObserver?.disconnect();
+    quoteTotalsObserver = null;
+
+    if (!quoteTotals.value || typeof IntersectionObserver === 'undefined') {
+        updateMobileQuoteTotals();
+        return;
+    }
+
+    quoteTotalsObserver = new IntersectionObserver(
+        () => updateMobileQuoteTotals(),
+        { root: null, threshold: [0, 0.01] },
+    );
+    quoteTotalsObserver.observe(quoteTotals.value);
+    updateMobileQuoteTotals();
 };
 const missingVehicleForm = ref({ first_name: '', last_name: '', email: '', phone: '', province: '', brand: '', model: '', year: '', comment: '', photo: null as File | null });
 type MissingVehicleField = 'first_name' | 'last_name' | 'email' | 'phone' | 'province' | 'brand' | 'model' | 'year' | 'comment' | 'photo';
@@ -690,36 +722,16 @@ const compatibleVehicles = computed(() => {
 });
 
 const toggleScreenStep = async () => {
-    const canJumpToFirstScreen =
-        window.innerWidth < 1024
-        && selectedBrand.value !== null
-        && selectedYear.value !== null
-        && selectedModel.value !== null
-        && affordableSpecificScreens.value.length > 0;
+    const isOpening = !openSteps.value.includes('screen');
+    toggleStep('screen');
 
-    if (!canJumpToFirstScreen) {
-        const isOpening = !openSteps.value.includes('screen');
-        toggleStep('screen');
-        if (isOpening) {
-            await nextTick();
-            const firstScreenId = displayedScreenVehicles.value[0]
-                ? `screen-product-${displayedScreenVehicles.value[0].id}`
-                : 'screen-step-content';
-            await centerConfiguratorTarget(firstScreenId);
-        }
-        return;
+    if (isOpening) {
+        await centerConfiguratorTarget(
+            displayedScreenOptionCount.value > 0
+                ? 'screen-availability-message'
+                : 'screen-alternative-message',
+        );
     }
-
-    if (!openSteps.value.includes('screen')) {
-        openSteps.value = [...openSteps.value, 'screen'];
-    }
-
-    await nextTick();
-    window.requestAnimationFrame(() => {
-        document
-            .getElementById(`screen-product-${affordableSpecificScreens.value[0].id}`)
-            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
 };
 
 const selectedCompatibilityEntry = computed(() => {
@@ -874,14 +886,7 @@ const displayedScreenVehicles = computed(() =>
         : affordableSpecificScreens.value,
 );
 
-const displayedScreenOptionCount = computed(() =>
-    displayedScreenVehicles.value.reduce(
-        (total, vehicle) => total + vehicle.variants.filter(
-            (variant) => !isScreenVariantOverBudget(variant),
-        ).length,
-        0,
-    ),
-);
+const displayedScreenOptionCount = computed(() => displayedScreenVehicles.value.length);
 
 const selectableScreenVehicles = computed(() => [
     ...compatibleVehicles.value,
@@ -899,6 +904,12 @@ const toggleScreenVariant = (variant: Variant) => {
     selectedScreenVariantIds.value = isScreenVariantSelected(variant)
         ? withoutGroup
         : [...withoutGroup, selectedScreenChoice(variant).id];
+};
+
+const removeSelectedScreen = (variantId: number) => {
+    selectedScreenVariantIds.value = selectedScreenVariantIds.value.filter(
+        (selectedId) => selectedId !== variantId,
+    );
 };
 
 const selectScreenColor = (variant: Variant, event: Event) => {
@@ -1327,7 +1338,9 @@ onMounted(async () => {
     window.addEventListener('keydown', closeImageZoomOnEscape);
     window.addEventListener('scroll', updateMobileQuoteTotals, { passive: true });
     window.addEventListener('resize', updateMobileQuoteTotals);
+    window.visualViewport?.addEventListener('resize', updateMobileQuoteTotals);
     requestAnimationFrame(async () => {
+        await observeQuoteTotals();
         updateMobileQuoteTotals();
 
         if (sharedConfigurationRestored) {
@@ -1344,6 +1357,8 @@ onBeforeUnmount(() => {
     window.removeEventListener('keydown', closeImageZoomOnEscape);
     window.removeEventListener('scroll', updateMobileQuoteTotals);
     window.removeEventListener('resize', updateMobileQuoteTotals);
+    window.visualViewport?.removeEventListener('resize', updateMobileQuoteTotals);
+    quoteTotalsObserver?.disconnect();
     stopVariantAutoScroll();
 });
 const failedBrandImage = ref<string | null>(null);
@@ -1806,6 +1821,11 @@ const togglePrecheckMethod = async (method: 'self' | 'installer') => {
     selectedInstallationKey.value = null;
 
     if (isSelecting) await centerConfiguratorTarget('installation-final-step');
+};
+
+const removePrecheck = () => {
+    selectedPrecheckMethod.value = null;
+    selectedInstallationKey.value = null;
 };
 
 const hasSelectedProducts = computed(
@@ -3236,13 +3256,14 @@ watch(
                             <div v-if="openSteps.includes('screen')" id="screen-step-content" class="mt-6">
                             <p
                                 v-if="displayedScreenOptionCount > 0"
+                                id="screen-availability-message"
                                 class="mb-4 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-center text-sm font-semibold text-emerald-400"
                             >
                                 {{ displayedScreenOptionCount === 1
                                     ? t('screen.available_option')
                                     : t('screen.available_options', { count: displayedScreenOptionCount }) }}
                             </p>
-                            <div v-if="hasNoSpecificScreenForBudget && !showUniversalScreens" class="rounded-xl border border-neutral-700 bg-[#121212] p-5">
+                            <div v-if="hasNoSpecificScreenForBudget && !showUniversalScreens" id="screen-alternative-message" class="rounded-xl border border-neutral-700 bg-[#121212] p-5">
                                 <p class="text-sm leading-6 text-neutral-200">{{ t('budget.no_specific_screen') }}</p>
                                 <div v-if="lowestSpecificVariantPrice !== null" class="mt-3 flex flex-wrap items-center gap-3">
                                     <p class="text-sm font-semibold text-amber-400">
@@ -3265,7 +3286,7 @@ watch(
                                     </button>
                                 </div>
                             </div>
-                            <p v-else-if="hasNoSpecificScreenForBudget && showUniversalScreens && affordableUniversalScreens.length === 0" class="rounded-xl border border-neutral-700 bg-[#121212] p-5 text-sm text-neutral-300">
+                            <p v-else-if="hasNoSpecificScreenForBudget && showUniversalScreens && affordableUniversalScreens.length === 0" id="screen-alternative-message" class="rounded-xl border border-neutral-700 bg-[#121212] p-5 text-sm text-neutral-300">
                                 {{ t('budget.no_universal_screen') }}
                             </p>
                             <div v-else-if="selectedYear !== null && displayedScreenVehicles.length" class="mt-4 grid gap-5">
@@ -3380,6 +3401,7 @@ watch(
                             </div>
                             <div
                                 v-else-if="selectedBrand && selectedModel && selectedYear"
+                                id="screen-alternative-message"
                                 class="mt-4 flex flex-col items-center gap-3 text-center text-sm"
                             >
                                 <p class="text-neutral-300">{{ t('screen.missing_message') }}</p>
@@ -3389,7 +3411,7 @@ watch(
                                     @click="openMissingScreenForm"
                                 >{{ t('screen.missing_action') }}</button>
                             </div>
-                            <p v-else class="mt-4 text-sm text-neutral-500">
+                            <p v-else id="screen-alternative-message" class="mt-4 text-sm text-neutral-500">
                                 {{ t('screen.select_vehicle') }}
                             </p>
                             </div>
@@ -3941,8 +3963,8 @@ watch(
                         </div>
                     </div>
 
-                    <div class="quote-scrollbar lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
-                    <p class="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-amber-400">
+                    <div class="quote-scrollbar quote-summary-scrollbar lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-3">
+                    <p id="full-quote-summary" class="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-amber-400">
                         {{ t('quote.title') }}
                     </p>
 
@@ -3987,13 +4009,16 @@ watch(
                                 :key="screen.id"
                                 class="flex items-start justify-between gap-4"
                             >
-                                <div class="min-w-0">
+                                <button type="button" class="summary-remove-button" :aria-label="t('actions.remove_product')" @click="removeSelectedScreen(screen.id)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg>
+                                </button>
+                                <div class="min-w-0 flex-1">
                                     <button
                                         type="button"
-                                        class="text-left font-medium text-neutral-100 underline decoration-transparent underline-offset-4 transition hover:text-amber-400 hover:decoration-amber-400 focus-visible:text-amber-400 focus-visible:decoration-amber-400"
+                                        class="summary-product-link"
                                         @click="goToSelectedProduct('screen', screen.id)"
                                     >
-                                        {{ displayVariantTitle(screen.title) }}
+                                        <span>{{ displayVariantTitle(screen.title) }}</span>
                                     </button>
                                     <p class="text-sm text-neutral-500">
                                         {{ t('screen.label') }}<span v-if="screen.color"> · {{ t('screen.color') }}: {{ screen.color }}</span>
@@ -4009,13 +4034,16 @@ watch(
                                 :key="speaker.key"
                                 class="flex items-start justify-between gap-4"
                             >
-                                <div class="min-w-0">
+                                <button type="button" class="summary-remove-button" :aria-label="t('actions.remove_product')" @click="toggleSpeaker(speaker.key)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg>
+                                </button>
+                                <div class="min-w-0 flex-1">
                                     <button
                                         type="button"
-                                        class="text-left font-medium text-neutral-100 underline decoration-transparent underline-offset-4 transition hover:text-amber-400 hover:decoration-amber-400 focus-visible:text-amber-400 focus-visible:decoration-amber-400"
+                                        class="summary-product-link"
                                         @click="goToSelectedProduct('speaker', speaker.key)"
                                     >
-                                        {{ speaker.productTitle }}
+                                        <span>{{ speaker.productTitle }}</span>
                                     </button>
                                     <p class="text-sm text-neutral-500">{{ t('speaker.label') }}</p>
                                 </div>
@@ -4029,13 +4057,16 @@ watch(
                                 :key="camera.key"
                                 class="flex items-start justify-between gap-4"
                             >
-                                <div class="min-w-0">
+                                <button type="button" class="summary-remove-button" :aria-label="t('actions.remove_product')" @click="toggleCamera(camera.key)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg>
+                                </button>
+                                <div class="min-w-0 flex-1">
                                     <button
                                         type="button"
-                                        class="text-left font-medium text-neutral-100 underline decoration-transparent underline-offset-4 transition hover:text-amber-400 hover:decoration-amber-400 focus-visible:text-amber-400 focus-visible:decoration-amber-400"
+                                        class="summary-product-link"
                                         @click="goToSelectedProduct('camera', camera.key)"
                                     >
-                                        {{ camera.title }}
+                                        <span>{{ camera.title }}</span>
                                     </button>
                                     <p class="text-sm text-neutral-500">{{ t('camera.label') }}</p>
                                 </div>
@@ -4049,26 +4080,29 @@ watch(
                                 :key="product.key"
                                 class="flex items-start justify-between gap-4"
                             >
-                                <div class="min-w-0">
+                                <button type="button" class="summary-remove-button" :aria-label="t('actions.remove_product')" @click="toggleCustomProduct(product.key)">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg>
+                                </button>
+                                <div class="min-w-0 flex-1">
                                     <p class="font-medium text-neutral-100">
                                         {{ product.title }}<span v-if="product.variantTitle"> — {{ displayVariantTitle(product.variantTitle) }}</span>
                                     </p>
                                     <p class="text-sm text-neutral-500">{{ product.sku || product.category }}</p>
                                 </div>
-                                <div class="flex shrink-0 items-center gap-3">
-                                    <p class="whitespace-nowrap font-semibold">{{ product.price.toFixed(2) }} €</p>
-                                    <button type="button" class="text-neutral-500 hover:text-red-400" @click="toggleCustomProduct(product.key)">✕</button>
-                                </div>
+                                <p class="shrink-0 whitespace-nowrap font-semibold">{{ product.price.toFixed(2) }} €</p>
                             </div>
 
                             <div v-if="selectedInstallation" class="flex items-start justify-between gap-4">
-                                <div class="min-w-0">
+                                <button type="button" class="summary-remove-button" :aria-label="t('actions.remove_product')" @click="selectedInstallationKey = null">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg>
+                                </button>
+                                <div class="min-w-0 flex-1">
                                     <button
                                         type="button"
-                                        class="text-left font-medium text-neutral-100 underline decoration-transparent underline-offset-4 transition hover:text-amber-400 hover:decoration-amber-400 focus-visible:text-amber-400 focus-visible:decoration-amber-400"
+                                        class="summary-product-link"
                                         @click="goToSelectedProduct('installation', selectedInstallation.key)"
                                     >
-                                        {{ selectedInstallation.title }}
+                                        <span>{{ selectedInstallation.title }}</span>
                                     </button>
                                     <p class="text-sm text-neutral-500">{{ t('installation.label') }}</p>
                                 </div>
@@ -4078,10 +4112,14 @@ watch(
                             </div>
 
                             <div v-if="selectedPrecheckMethod === 'installer'" class="flex items-start justify-between gap-4">
-                                <div>
-                                    <p class="font-medium text-neutral-100">
+                                <button type="button" class="summary-remove-button lg:hidden" :aria-label="t('actions.remove_product')" @click="removePrecheck">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg>
+                                </button>
+                                <div class="min-w-0 flex-1">
+                                    <button type="button" class="summary-product-link lg:hidden" @click="goToPrecheckStep">
                                         {{ t('installation.precheck_installer_summary') }}
-                                    </p>
+                                    </button>
+                                    <p class="hidden font-medium text-neutral-100 lg:block">{{ t('installation.precheck_installer_summary') }}</p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold text-white">
                                     {{ precheckPrice.toFixed(2) }} €
@@ -4186,25 +4224,31 @@ watch(
                 <div
                     v-if="hasSelectedProducts"
                     ref="mobileQuoteTotals"
-                    class="fixed inset-x-0 bottom-0 z-40 border-t border-neutral-700 bg-[#121212]/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgba(0,0,0,0.45)] backdrop-blur lg:hidden"
+                    class="fixed inset-x-0 bottom-0 z-40 border-t-2 border-amber-400 bg-[#121212]/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgba(216,174,45,0.14)] backdrop-blur lg:hidden"
                     :class="showMobileQuoteTotals ? 'visible opacity-100' : 'pointer-events-none invisible opacity-0'"
                 >
-                    <div class="mx-auto max-w-md space-y-2">
-                        <div class="rounded-xl border border-neutral-800 bg-neutral-900 px-4 py-3">
+                    <div class="mx-auto max-w-md space-y-1.5">
+                        <div class="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
                             <div class="flex items-center justify-between">
-                                <span class="text-lg font-semibold text-white">{{ t('quote.online_total') }}</span>
-                                <span class="shrink-0 whitespace-nowrap text-2xl font-semibold text-amber-400">
+                                <button
+                                    type="button"
+                                    class="text-left text-base font-semibold text-white underline decoration-amber-400/70 underline-offset-4 transition hover:text-amber-400 focus-visible:text-amber-400 active:text-amber-400"
+                                    @click="goToFullQuote"
+                                >
+                                    {{ t('quote.online_total') }}
+                                </button>
+                                <span class="shrink-0 whitespace-nowrap text-xl font-semibold text-amber-400">
                                     {{ onlineTotal.toFixed(2) }} €
                                 </span>
                             </div>
-                            <div v-if="installationCost > 0" class="mt-1 flex items-center justify-between text-xs text-neutral-400">
+                            <div v-if="installationCost > 0" class="mt-0.5 flex items-center justify-between text-[10px] leading-3 text-neutral-400">
                                 <span>{{ t('quote.installation_direct') }}</span>
                                 <span>{{ installationCost.toFixed(2) }} €</span>
                             </div>
                         </div>
 
-                        <div class="flex items-center justify-center gap-2 rounded-lg border border-amber-400/60 bg-amber-400/10 px-3 py-2 text-center text-xs font-semibold text-amber-300">
-                            <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <div class="flex items-center justify-center gap-1.5 rounded-md border border-amber-400/60 bg-amber-400/10 px-2 py-1.5 text-center text-[10px] font-semibold leading-3 text-amber-300">
+                            <svg class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                 <path d="M10 17h4V5H2v12h3" />
                                 <path d="M14 9h4l4 4v4h-3" />
                                 <circle cx="7.5" cy="17.5" r="2.5" />
@@ -4213,7 +4257,7 @@ watch(
                             <span>{{ t('quote.home_delivery') }}</span>
                         </div>
 
-                        <label class="flex cursor-pointer items-start gap-2 px-1 text-xs leading-5 text-neutral-400">
+                        <label class="flex cursor-pointer items-start gap-1.5 px-1 text-[10px] leading-3 text-neutral-400">
                             <input
                                 v-model="checkoutConsentAccepted"
                                 type="checkbox"
@@ -4221,7 +4265,7 @@ watch(
                                 class="sr-only"
                             />
                             <span
-                                class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition"
+                                class="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition"
                                 :class="checkoutConsentAccepted ? 'border-neutral-400 bg-neutral-300 text-black' : 'border-neutral-600 bg-transparent'"
                                 aria-hidden="true"
                             >
@@ -4238,14 +4282,14 @@ watch(
                                     class="ml-1 text-neutral-300 underline underline-offset-2 hover:text-white"
                                     @click.stop
                                 >
-                                    <br>{{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}
+                                    {{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}
                                 </a>
                             </span>
                         </label>
 
                         <button
                             type="button"
-                            class="w-full rounded-xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="w-full rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                             :disabled="!canCheckout"
                             @click="goToCheckout"
                         >
@@ -4254,7 +4298,7 @@ watch(
 
                         <button
                             type="button"
-                            class="w-full rounded-xl border border-amber-400 px-5 py-3 text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-600"
+                            class="w-full rounded-lg border border-amber-400 px-4 py-2 text-xs font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-600"
                             :disabled="!hasSelectedProducts"
                             @click="downloadQuote"
                         >
@@ -4456,7 +4500,7 @@ watch(
                     </div>
                 </div>
 
-                <div class="quote-scrollbar mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-2">
+                <div class="quote-scrollbar quote-summary-scrollbar mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-3">
                     <div
                         v-for="product in filteredCustomProducts"
                         :key="product.key"
@@ -4639,6 +4683,11 @@ watch(
     scrollbar-color: #525252 #171717;
     scrollbar-width: thin;
 }
+.summary-product-link { display: inline-flex; align-items: flex-start; gap: 0.35rem; text-align: left; font-weight: 500; color: #f5f5f5; text-decoration-line: underline; text-decoration-color: rgba(216, 174, 45, 0.7); text-decoration-thickness: 1px; text-underline-offset: 4px; transition: color 150ms ease, text-decoration-color 150ms ease; }
+.summary-product-link:hover, .summary-product-link:focus-visible, .summary-product-link:active { color: #d8ae2d; text-decoration-color: #d8ae2d; }
+.summary-remove-button { display: inline-flex; height: 1.5rem; width: 1.5rem; flex: none; align-items: center; justify-content: center; border: 1px solid rgba(216, 174, 45, 0.42); border-radius: 0.375rem; background: rgba(216, 174, 45, 0.08); color: rgba(216, 174, 45, 0.78); transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease; }
+.summary-remove-button svg { height: 0.85rem; width: 0.85rem; }
+.summary-remove-button:hover, .summary-remove-button:focus-visible, .summary-remove-button:active { border-color: #d8ae2d; background: rgba(216, 174, 45, 0.18); color: #d8ae2d; }
 .form-input { width: 100%; border: 1px solid #404040; border-radius: 0.5rem; background: #121212; padding: 0.75rem 1rem; color: white; }
 .form-input::placeholder { color: #737373; }
 .form-input-error { border-color: #ef4444; box-shadow: 0 0 0 1px #ef4444; }
@@ -4679,5 +4728,33 @@ watch(
 
 .quote-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #737373;
+}
+
+.quote-summary-scrollbar {
+    scrollbar-color: #d8ae2d #211d10;
+    scrollbar-width: auto;
+}
+
+.quote-summary-scrollbar::-webkit-scrollbar {
+    width: 14px;
+}
+
+.quote-summary-scrollbar::-webkit-scrollbar-track {
+    border: 1px solid rgba(216, 174, 45, 0.28);
+    border-radius: 9999px;
+    background: #211d10;
+}
+
+.quote-summary-scrollbar::-webkit-scrollbar-thumb {
+    border: 2px solid #211d10;
+    border-block-width: 10px;
+    border-radius: 9999px;
+    background: #d8ae2d;
+    background-clip: padding-box;
+}
+
+.quote-summary-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #f0c438;
+    background-clip: padding-box;
 }
 </style>
