@@ -8,19 +8,19 @@ return new class extends Migration
 {
     public function up(): void
     {
-        if (Schema::hasColumn('installation_zone_products', 'price')) {
+        if (Schema::hasColumn('installation_zone_products', 'title')) {
             return;
         }
 
         Schema::table('installation_zone_products', function (Blueprint $table) {
-            $table->decimal('price', 10, 2)->nullable()->after('product_handle');
+            $table->string('title')->nullable()->after('product_handle');
         });
     }
 
     public function down(): void
     {
         Schema::table('installation_zone_products', function (Blueprint $table) {
-            $table->dropColumn('price');
+            $table->dropColumn('title');
         });
     }
 };

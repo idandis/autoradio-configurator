@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ConfiguratorProduct;
 use App\Models\InstallationZone;
+use App\Models\InstallationZonePostalCode;
+use App\Models\InstallationZoneService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -16,111 +16,126 @@ class InstallationZonesController extends Controller
     public function index(): Response
     {
         return Inertia::render('InstallationZones', [
-            'zones' => InstallationZone::with(['postalCodes', 'products'])
+            'zones' => InstallationZone::query()
+                ->with(['postalCodes' => fn ($query) => $query->orderBy('postal_code_from'), 'services' => fn ($query) => $query->orderBy('name')])
                 ->orderBy('name')
                 ->get()
                 ->map(fn (InstallationZone $zone) => [
                     'id' => $zone->id,
                     'name' => $zone->name,
-                    'active' => $zone->active,
-                    'postal_ranges' => $zone->postalCodes->map(fn ($range) => [
+                    'postal_ranges' => $zone->postalCodes->map(fn (InstallationZonePostalCode $range) => [
+                        'id' => $range->id,
                         'from' => $range->postal_code_from,
                         'to' => $range->postal_code_to,
                     ])->values(),
-                    'product_handles' => $zone->products->pluck('product_handle')->values(),
-                    'product_prices' => $zone->products->mapWithKeys(fn ($product) => [
-                        $product->product_handle => $product->price === null ? null : (float) $product->price,
-                    ]),
-                ]),
-            'installationProducts' => ConfiguratorProduct::query()
-                ->where('category', 'installation')
-                ->orderBy('title')
-                ->get(['handle', 'title', 'subtype', 'price_min'])
-                ->map(fn ($product) => [
-                    'handle' => $product->handle,
-                    'title' => $product->title,
-                    'subtype' => $product->subtype,
-                    'price' => (float) $product->price_min,
-                ]),
+                    'services' => $zone->services->map(fn (InstallationZoneService $service) => [
+                        'id' => $service->id,
+                        'name' => $service->name,
+                        'price' => (float) $service->price,
+                    ])->values(),
+                ])->values(),
         ]);
     }
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $this->validated($request);
+        $data = $request->validate(['name' => ['required', 'string', 'max:255', 'unique:installation_zones,name']]);
+        InstallationZone::create(['name' => trim($data['name']), 'active' => true]);
 
-        DB::transaction(function () use ($data) {
-            $zone = InstallationZone::create(['name' => $data['name'], 'active' => $data['active']]);
-            $this->replaceRelations($zone, $data);
-        });
-
-        return back()->with('status', 'Zona di installazione creata.');
+        return back()->with('status', 'Zona creata.');
     }
 
     public function update(Request $request, InstallationZone $installationZone): RedirectResponse
     {
-        $data = $this->validated($request);
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255', 'unique:installation_zones,name,'.$installationZone->id],
+        ]);
+        $installationZone->update(['name' => trim($data['name'])]);
 
-        DB::transaction(function () use ($installationZone, $data) {
-            $installationZone->update(['name' => $data['name'], 'active' => $data['active']]);
-            $this->replaceRelations($installationZone, $data);
-        });
-
-        return back()->with('status', 'Zona di installazione aggiornata.');
+        return back()->with('status', 'Zona rinominata.');
     }
 
     public function destroy(InstallationZone $installationZone): RedirectResponse
     {
         $installationZone->delete();
 
-        return back()->with('status', 'Zona di installazione eliminata.');
+        return back()->with('status', 'Zona, CAP e installazioni eliminati.');
     }
 
-    private function validated(Request $request): array
+    public function storePostalCode(Request $request, InstallationZone $installationZone): RedirectResponse
+    {
+        $data = $this->postalCodeData($request);
+        $installationZone->postalCodes()->create($data);
+
+        return back()->with('status', 'Codice postale aggiunto.');
+    }
+
+    public function updatePostalCode(Request $request, InstallationZone $installationZone, InstallationZonePostalCode $postalCode): RedirectResponse
+    {
+        $this->ensureBelongsToZone($postalCode->installation_zone_id, $installationZone);
+        $postalCode->update($this->postalCodeData($request));
+
+        return back()->with('status', 'Codice postale aggiornato.');
+    }
+
+    public function destroyPostalCode(InstallationZone $installationZone, InstallationZonePostalCode $postalCode): RedirectResponse
+    {
+        $this->ensureBelongsToZone($postalCode->installation_zone_id, $installationZone);
+        $postalCode->delete();
+
+        return back()->with('status', 'Codice postale eliminato.');
+    }
+
+    public function storeService(Request $request, InstallationZone $installationZone): RedirectResponse
+    {
+        $installationZone->services()->create($this->serviceData($request));
+
+        return back()->with('status', 'Installazione aggiunta.');
+    }
+
+    public function updateService(Request $request, InstallationZone $installationZone, InstallationZoneService $service): RedirectResponse
+    {
+        $this->ensureBelongsToZone($service->installation_zone_id, $installationZone);
+        $service->update($this->serviceData($request));
+
+        return back()->with('status', 'Installazione aggiornata.');
+    }
+
+    public function destroyService(InstallationZone $installationZone, InstallationZoneService $service): RedirectResponse
+    {
+        $this->ensureBelongsToZone($service->installation_zone_id, $installationZone);
+        $service->delete();
+
+        return back()->with('status', 'Installazione eliminata.');
+    }
+
+    private function postalCodeData(Request $request): array
+    {
+        $data = $request->validate([
+            'from' => ['required', 'regex:/^\d{5}$/'],
+            'to' => ['nullable', 'regex:/^\d{5}$/'],
+        ]);
+        $to = $data['to'] ?: $data['from'];
+
+        if ($data['from'] > $to) {
+            throw ValidationException::withMessages(['to' => 'Il CAP finale non può essere inferiore a quello iniziale.']);
+        }
+
+        return ['postal_code_from' => $data['from'], 'postal_code_to' => $to];
+    }
+
+    private function serviceData(Request $request): array
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'active' => ['required', 'boolean'],
-            'postal_ranges' => ['required', 'array', 'min:1'],
-            'postal_ranges.*.from' => ['required', 'regex:/^\d{5}$/'],
-            'postal_ranges.*.to' => ['nullable', 'regex:/^\d{5}$/'],
-            'product_handles' => ['required', 'array', 'min:1'],
-            'product_handles.*' => ['required', 'string', 'exists:configurator_products,handle'],
-            'product_prices' => ['required', 'array'],
-            'product_prices.*' => ['nullable', 'numeric', 'min:0', 'max:999999.99'],
+            'price' => ['required', 'numeric', 'min:0', 'max:999999.99'],
         ]);
 
-        $ranges = collect($data['postal_ranges'])
-            ->map(function (array $range) {
-                $from = $range['from'];
-                $to = $range['to'] ?: $from;
-
-                if ($from > $to) {
-                    throw ValidationException::withMessages([
-                        'postal_ranges' => "L'intervallo {$from}-{$to} è invertito.",
-                    ]);
-                }
-
-                return ['from' => $from, 'to' => $to];
-            })->values()->all();
-
-        $data['name'] = trim($data['name']);
-        $data['ranges'] = $ranges;
-
-        return $data;
+        return ['name' => trim($data['name']), 'price' => $data['price']];
     }
 
-    private function replaceRelations(InstallationZone $zone, array $data): void
+    private function ensureBelongsToZone(int $zoneId, InstallationZone $zone): void
     {
-        $zone->postalCodes()->delete();
-        $zone->products()->delete();
-        $zone->postalCodes()->createMany(collect($data['ranges'])->map(fn ($range) => [
-            'postal_code_from' => $range['from'],
-            'postal_code_to' => $range['to'],
-        ])->all());
-        $zone->products()->createMany(collect($data['product_handles'])->unique()->map(fn ($handle) => [
-            'product_handle' => $handle,
-            'price' => $data['product_prices'][$handle] ?? null,
-        ])->values()->all());
+        abort_unless($zoneId === $zone->id, 404);
     }
 }

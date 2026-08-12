@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ConfiguratorProduct;
 use App\Models\InstallationZone;
 use App\Models\SpanishPostalCode;
 use Illuminate\Http\JsonResponse;
@@ -19,7 +18,7 @@ class ConfiguratorPostalCodeController extends Controller
             ->whereHas('postalCodes', fn ($query) => $query
                 ->where('postal_code_from', '<=', $postalCode)
                 ->where('postal_code_to', '>=', $postalCode))
-            ->with('products')
+            ->with('services')
             ->first();
 
         if ($configuredZone) {
@@ -28,10 +27,9 @@ class ConfiguratorPostalCodeController extends Controller
                 'postalCode' => $postalCode,
                 'installationArea' => [
                     'name' => $configuredZone->name,
-                    'productHandles' => $configuredZone->products->pluck('product_handle')->values(),
-                    'productPrices' => $configuredZone->products
-                        ->filter(fn ($product) => $product->price !== null)
-                        ->mapWithKeys(fn ($product) => [$product->product_handle => (float) $product->price]),
+                    'productHandles' => $configuredZone->services->map(fn ($service) => 'zone-service-'.$service->id)->values(),
+                    'productPrices' => $configuredZone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => (float) $service->price]),
+                    'productTitles' => $configuredZone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => $service->name]),
                 ],
             ]);
         }
@@ -48,31 +46,13 @@ class ConfiguratorPostalCodeController extends Controller
             return response()->json(['found' => false]);
         }
 
-        $productHandles = [];
-
-        if ($location) {
-            $normalizedLocation = $this->normalize($location);
-            $productHandles = ConfiguratorProduct::query()
-                ->where('category', 'installation')
-                ->get(['handle', 'meta'])
-                ->filter(fn (ConfiguratorProduct $product) => $this->normalize($product->meta['installation']['location'] ?? '') === $normalizedLocation
-                )
-                ->pluck('handle')
-                ->values()
-                ->all();
-        }
-
         return response()->json([
             'found' => true,
             'postalCode' => $postalCode,
             'placeName' => $postalCodeRecord?->place_name,
             'province' => $postalCodeRecord?->province,
             'island' => $location,
-            'installationArea' => $location ? [
-                'name' => $location,
-                'productHandles' => $productHandles,
-                'productPrices' => (object) [],
-            ] : null,
+            'installationArea' => null,
         ]);
     }
 

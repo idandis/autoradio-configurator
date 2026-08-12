@@ -60,6 +60,7 @@ type InstallationZone = {
     postalRanges: Array<{ from: string; to: string }>;
     productHandles: string[];
     productPrices: Record<string, number>;
+    productTitles: Record<string, string>;
 };
 
 type SpeakerOption = SimpleOption & {
@@ -318,6 +319,33 @@ const handleVehicleYearChange = async (event: Event) => {
 };
 
 const selectVehicleModel = async (model: string) => {
+    if (selectedModel.value === model) {
+        selectedModel.value = null;
+        selectedScreenVariantIds.value = [];
+        selectedCameraKeys.value = [];
+        selectedCameraVariantIds.value = {};
+        selectedSpeakerCategory.value = '';
+        selectedSpeakerSizeByCategory.value = {};
+        selectedSpeakerKeys.value = [];
+        selectedCustomProductKeys.value = [];
+        selectedInstallationKey.value = null;
+        selectedServiceZone.value = null;
+        selectedPrecheckMethod.value = null;
+        installationRequested.value = false;
+        postalCode.value = '';
+        checkedPostalCode.value = null;
+        resolvedInstallationArea.value = null;
+        postalCodeError.value = null;
+        showUniversalScreens.value = false;
+        checkoutConsentAccepted.value = false;
+        openSteps.value = ['vehicle'];
+        await nextTick();
+        window.requestAnimationFrame(() => {
+            modelSelectionSection.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        return;
+    }
+
     selectedModel.value = model;
     await nextTick();
 
@@ -624,7 +652,9 @@ const submitMissingVehicleForm = async () => {
     }
 };
 const selectedPrecheckMethod = ref<'self' | 'installer' | null>(null);
-const selectedServiceZone = ref<'north' | 'capital' | 'south' | 'tenerife' | 'fuerteventura' | 'lanzarote' | null>(null);
+type ServiceZoneKey = 'north' | 'capital' | 'south' | 'tenerife' | 'fuerteventura' | 'lanzarote' | 'madrid' | 'barcelona' | 'malaga' | 'murcia' | 'configured';
+const serviceZoneKeys: ServiceZoneKey[] = ['north', 'capital', 'south', 'tenerife', 'fuerteventura', 'lanzarote', 'madrid', 'barcelona', 'malaga', 'murcia', 'configured'];
+const selectedServiceZone = ref<ServiceZoneKey | null>(null);
 const postalCode = ref('');
 const checkedPostalCode = ref<string | null>(null);
 const postalCodeError = ref<string | null>(null);
@@ -632,6 +662,7 @@ const resolvedInstallationArea = ref<{
     name: string;
     productHandles: string[];
     productPrices?: Record<string, number>;
+    productTitles?: Record<string, string>;
 } | null>(null);
 
 const models = computed(() => {
@@ -660,7 +691,10 @@ const models = computed(() => {
                 .map((entry) => indexedVehicleModel(entry.model).model)
                 .filter(Boolean),
         ),
-    ];
+    ].sort((first, second) => first.localeCompare(second, props.locale, {
+        sensitivity: 'base',
+        numeric: true,
+    }));
 });
 
 const brandVehicles = computed(() =>
@@ -1115,8 +1149,8 @@ const restoreConfiguratorState = async () => {
         selectedPrecheckMethod.value = ['self', 'installer'].includes(state.selectedPrecheckMethod)
             ? state.selectedPrecheckMethod
             : null;
-        selectedServiceZone.value = ['north', 'capital', 'south', 'tenerife', 'fuerteventura', 'lanzarote'].includes(state.selectedServiceZone)
-            ? state.selectedServiceZone
+        selectedServiceZone.value = serviceZoneKeys.includes(state.selectedServiceZone)
+            ? state.selectedServiceZone as ServiceZoneKey
             : null;
         postalCode.value = typeof state.postalCode === 'string' ? state.postalCode : '';
         checkedPostalCode.value = typeof state.checkedPostalCode === 'string'
@@ -1200,8 +1234,8 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
     }
 
     const sharedServiceZone = configuration.serviceZone;
-    selectedServiceZone.value = ['north', 'capital', 'south', 'tenerife', 'fuerteventura', 'lanzarote'].includes(sharedServiceZone ?? '')
-        ? sharedServiceZone as 'north' | 'capital' | 'south' | 'tenerife' | 'fuerteventura' | 'lanzarote'
+    selectedServiceZone.value = serviceZoneKeys.includes(sharedServiceZone as ServiceZoneKey)
+        ? sharedServiceZone as ServiceZoneKey
         : null;
     const sharedPrecheck = configuration.precheck;
     selectedPrecheckMethod.value = ['self', 'installer'].includes(sharedPrecheck ?? '')
@@ -1739,6 +1773,7 @@ const matchedInstallationZone = computed(() => {
             postalRanges: [],
             productHandles: resolvedInstallationArea.value.productHandles,
             productPrices: resolvedInstallationArea.value.productPrices ?? {},
+            productTitles: resolvedInstallationArea.value.productTitles ?? {},
         };
     }
 
@@ -1779,9 +1814,27 @@ const isLanzarote = computed(() =>
         .includes('lanzarote') ?? false,
 );
 
-const hasThreeStepInstallationFlow = computed(() =>
-    isGranCanaria.value || isTenerife.value || isFuerteventura.value || isLanzarote.value,
+const isMadrid = computed(() =>
+    matchedInstallationZone.value?.name
+        .toLocaleLowerCase()
+        .includes('madrid') ?? false,
 );
+
+const isBarcelona = computed(() =>
+    matchedInstallationZone.value?.name
+        .toLocaleLowerCase()
+        .includes('barcelona') ?? false,
+);
+
+const isMalaga = computed(() =>
+    normalizeInstallationValue(matchedInstallationZone.value?.name ?? '').includes('malaga'),
+);
+
+const isMurcia = computed(() =>
+    normalizeInstallationValue(matchedInstallationZone.value?.name ?? '').includes('murcia'),
+);
+
+const hasThreeStepInstallationFlow = computed(() => matchedInstallationZone.value !== null);
 
 const precheckProduct = computed(() =>
     props.installationOptions.find((option) =>
@@ -1802,7 +1855,7 @@ const serviceZones = computed(() => [
     { key: 'south' as const, label: t('installation.zone_south') },
 ]);
 
-const toggleServiceZone = async (zone: 'north' | 'capital' | 'south' | 'tenerife' | 'fuerteventura' | 'lanzarote') => {
+const toggleServiceZone = async (zone: ServiceZoneKey) => {
     const isSelecting = selectedServiceZone.value !== zone;
     selectedServiceZone.value = isSelecting ? zone : null;
     selectedPrecheckMethod.value = null;
@@ -1903,10 +1956,54 @@ const optionInstallationCombination = (option: SimpleOption) => {
     return normalizeInstallationValue(option.subtype ?? '');
 };
 
+const zoneServiceMatchesSelection = (option: SimpleOption) => {
+    const title = normalizeInstallationValue(option.title);
+    const hasScreen = selectedScreens.value.length > 0;
+    const hasCamera = selectedCameras.value.length > 0;
+    const hasSpeaker = selectedSpeakers.value.length > 0;
+    const mentionsScreen = title.includes('pantalla');
+    const mentionsCamera = title.includes('camara');
+    const mentionsSpeaker = title.includes('altavoc');
+
+    if (hasScreen !== mentionsScreen || hasCamera !== mentionsCamera || hasSpeaker !== mentionsSpeaker) {
+        return false;
+    }
+
+    if (hasCamera) {
+        const hasCamera360 = selectedCameras.value.some(
+            (camera) => camera.productHandle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave',
+        );
+        if (hasCamera360 !== title.includes('360')) return false;
+        if (selectedCameras.value.length >= 2 && !/2\s*camara|trasera\s+y\s+delantera/.test(title)) return false;
+        if (selectedCameras.value.length === 1 && /2\s*camara|trasera\s+y\s+delantera/.test(title)) return false;
+    }
+
+    if (hasSpeaker) {
+        const expectedSpeakers = selectedSpeakers.value.length === 1 ? 2 : 4;
+        if (!title.includes(`${expectedSpeakers} altavoc`)) return false;
+    }
+
+    return true;
+};
+
+const installationIcons = (option: SimpleOption) => {
+    const title = normalizeInstallationValue(option.title);
+
+    return {
+        speaker: title.includes('altavoc'),
+        camera: title.includes('camara'),
+        screen: title.includes('pantalla'),
+    };
+};
+
 const visibleInstallationOptions = computed(() => {
+    const hasZoneManagedServices = matchedInstallationZone.value?.productHandles.some(
+        (handle) => handle.startsWith('zone-service-'),
+    ) ?? false;
+
     if (
         !matchedInstallationZone.value ||
-        (hasSelectedProducts.value && !requiredInstallationCombination.value) ||
+        (hasSelectedProducts.value && !requiredInstallationCombination.value && !hasZoneManagedServices) ||
         (hasSelectedProducts.value && hasThreeStepInstallationFlow.value && !selectedServiceZone.value) ||
         (requiresPrecheck.value && !selectedPrecheckMethod.value)
     ) {
@@ -1921,18 +2018,23 @@ const visibleInstallationOptions = computed(() => {
 
         return belongsToZone &&
             option !== precheckProduct.value &&
-            (!hasSelectedProducts.value ||
+            (option.key.startsWith('zone-service-')
+                ? zoneServiceMatchesSelection(option)
+                : !hasSelectedProducts.value ||
                 optionInstallationCombination(option) === requiredInstallationCombination.value);
     });
 
     const uniqueOptions = new Map<string, SimpleOption>();
     matchingOptions.forEach((option) => {
-        const key = `${normalizeInstallationValue(option.location ?? '')}|${optionInstallationCombination(option)}`;
+        const key = option.key.startsWith('zone-service-')
+            ? option.key
+            : `${normalizeInstallationValue(option.location ?? '')}|${optionInstallationCombination(option)}`;
         if (!uniqueOptions.has(key)) uniqueOptions.set(key, option);
     });
 
     return [...uniqueOptions.values()].map((option) => ({
         ...option,
+        title: matchedInstallationZone.value!.productTitles[option.key] ?? option.title,
         price: matchedInstallationZone.value!.productPrices[option.key] ?? option.price,
     }));
 });
@@ -3179,7 +3281,7 @@ watch(
                                 <select
                                     id="vehicle-brand"
                                     v-model="selectedBrand"
-                                    class="vehicle-option-select w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-base text-white sm:text-sm"
+                                    class="vehicle-option-select mobile-vehicle-select w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-base text-white sm:text-sm"
                                     @change="handleVehicleBrandChange"
                                 >
                                     <option :value="null">{{ t('fields.select_brand') }}</option>
@@ -3200,7 +3302,7 @@ watch(
                                 <select
                                     id="vehicle-year"
                                     v-model="selectedYear"
-                                    class="vehicle-option-select w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-base text-white sm:text-sm"
+                                    class="vehicle-option-select mobile-vehicle-select w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-base text-white sm:text-sm"
                                     @change="handleVehicleYearChange"
                                 >
                                     <option :value="null">{{ t('fields.select_year') }}</option>
@@ -3218,10 +3320,10 @@ watch(
                             </div>
                         </div>
 
-                        <div ref="modelSelectionSection" v-if="selectedBrand && selectedYear !== null" class="grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-end">
+                        <div ref="modelSelectionSection" v-if="selectedBrand && selectedYear !== null" class="mobile-model-section grid gap-4 md:grid-cols-[minmax(0,1fr)_220px] md:items-end">
                             <div class="grid gap-3">
-                                <label class="text-sm font-medium text-neutral-300">{{ t('fields.model') }}</label>
-                                <div class="flex flex-wrap gap-2">
+                                <label class="text-center text-sm font-medium text-neutral-300 md:text-left">{{ t('fields.model') }}</label>
+                                <div class="mobile-model-buttons flex flex-wrap gap-2">
                                     <button
                                         v-for="model in models"
                                         :key="model ?? 'unknown-model'"
@@ -3231,14 +3333,14 @@ watch(
                                         :class="
                                             selectedModel === model
                                                 ? 'border-amber-400 bg-amber-400 text-black'
-                                                : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400 hover:text-black'
+                                                : 'border-amber-400 bg-[#121212] text-amber-400 active:bg-amber-400 active:text-black md:hover:bg-amber-400 md:hover:text-black'
                                         "
                                     >
                                         {{ model }}
                                     </button>
                                     <button
                                         type="button"
-                                        class="rounded-lg border border-amber-400 bg-[#121212] px-4 py-3 text-sm text-amber-400 transition hover:bg-amber-400 hover:text-black"
+                                        class="mobile-missing-model-button rounded-lg border border-amber-400 bg-[#121212] px-4 py-3 text-sm text-amber-400 transition hover:bg-amber-400 hover:text-black"
                                         @click="openMissingModelForm"
                                     >
                                         {{ t('vehicle.model_not_found') }}
@@ -3496,13 +3598,14 @@ watch(
                             </div>
                             <p
                                 v-if="selectedBrand && selectedModel && selectedYear && !hasSpecificCameraOption"
-                                class="mt-4 text-sm text-neutral-300"
+                                class="mt-4 flex w-full flex-col items-center gap-1 text-center text-sm text-neutral-300"
                             >
+                                <span>{{ t('camera.missing_question') }}</span>
                                 <button
                                     type="button"
                                     class="font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
                                     @click="openMissingVehicleForm"
-                                >{{ t('camera.missing') }}</button>
+                                >{{ t('camera.missing_action') }}</button>
                             </p>
                             </div>
                         </div>
@@ -3744,7 +3847,7 @@ watch(
                                             {{ t('installation.fuerteventura_zone_option') }}
                                         </button>
                                     </template>
-                                    <template v-else>
+                                    <template v-else-if="isLanzarote">
                                         <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.lanzarote_zone_title') }}</h3>
                                         <p class="mt-2 text-sm leading-6 text-neutral-400">{{ t('installation.lanzarote_zone_help') }}</p>
                                         <button
@@ -3762,6 +3865,100 @@ watch(
                                             @click="toggleServiceZone('lanzarote')"
                                         >
                                             {{ t('installation.lanzarote_zone_option') }}
+                                        </button>
+                                    </template>
+                                    <template v-else-if="isMadrid">
+                                        <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.madrid_zone_title') }}</h3>
+                                        <p class="mt-2 text-sm leading-6 text-neutral-400">{{ t('installation.madrid_zone_help') }}</p>
+                                        <button
+                                            type="button"
+                                            class="relative mx-auto mt-5 block max-w-sm overflow-hidden rounded-xl border transition"
+                                            :class="selectedServiceZone === 'madrid' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
+                                            @click="toggleServiceZone('madrid')"
+                                        >
+                                            <img src="/images/installation/madrid-humanes-zone.png" :alt="t('installation.madrid_map_label')" class="h-auto w-full" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="mt-4 w-full rounded-lg border px-4 py-3 text-left text-sm font-medium transition"
+                                            :class="selectedServiceZone === 'madrid' ? 'border-amber-400 bg-amber-400 text-black' : 'border-neutral-700 bg-neutral-900 text-neutral-200 hover:border-amber-400'"
+                                            @click="toggleServiceZone('madrid')"
+                                        >
+                                            {{ t('installation.madrid_zone_option') }}
+                                        </button>
+                                    </template>
+                                    <template v-else-if="isBarcelona">
+                                        <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.barcelona_zone_title') }}</h3>
+                                        <p class="mt-2 text-sm leading-6 text-neutral-400">{{ t('installation.barcelona_zone_help') }}</p>
+                                        <button
+                                            type="button"
+                                            class="relative mx-auto mt-5 block max-w-sm overflow-hidden rounded-xl border transition"
+                                            :class="selectedServiceZone === 'barcelona' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
+                                            @click="toggleServiceZone('barcelona')"
+                                        >
+                                            <img src="/images/installation/barcelona-hospitalet-zone.png" :alt="t('installation.barcelona_map_label')" class="h-auto w-full" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="mt-4 w-full rounded-lg border px-4 py-3 text-left text-sm font-medium transition"
+                                            :class="selectedServiceZone === 'barcelona' ? 'border-amber-400 bg-amber-400 text-black' : 'border-neutral-700 bg-neutral-900 text-neutral-200 hover:border-amber-400'"
+                                            @click="toggleServiceZone('barcelona')"
+                                        >
+                                            {{ t('installation.barcelona_zone_option') }}
+                                        </button>
+                                    </template>
+                                    <template v-else-if="isMalaga">
+                                        <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.malaga_zone_title') }}</h3>
+                                        <p class="mt-2 text-sm leading-6 text-neutral-400">{{ t('installation.malaga_zone_help') }}</p>
+                                        <button
+                                            type="button"
+                                            class="relative mx-auto mt-5 block max-w-sm overflow-hidden rounded-xl border transition"
+                                            :class="selectedServiceZone === 'malaga' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
+                                            @click="toggleServiceZone('malaga')"
+                                        >
+                                            <img src="/images/installation/malaga-moraima-zone.png" :alt="t('installation.malaga_map_label')" class="h-auto w-full" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="mt-4 w-full rounded-lg border px-4 py-3 text-left text-sm font-medium transition"
+                                            :class="selectedServiceZone === 'malaga' ? 'border-amber-400 bg-amber-400 text-black' : 'border-neutral-700 bg-neutral-900 text-neutral-200 hover:border-amber-400'"
+                                            @click="toggleServiceZone('malaga')"
+                                        >
+                                            {{ t('installation.malaga_zone_option') }}
+                                        </button>
+                                    </template>
+                                    <template v-else-if="isMurcia">
+                                        <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.murcia_zone_title') }}</h3>
+                                        <p class="mt-2 text-sm leading-6 text-neutral-400">{{ t('installation.murcia_zone_help') }}</p>
+                                        <button
+                                            type="button"
+                                            class="relative mx-auto mt-5 block max-w-sm overflow-hidden rounded-xl border transition"
+                                            :class="selectedServiceZone === 'murcia' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
+                                            @click="toggleServiceZone('murcia')"
+                                        >
+                                            <img src="/images/installation/murcia-center-zone.png" :alt="t('installation.murcia_map_label')" class="h-auto w-full" />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            class="mt-4 w-full rounded-lg border px-4 py-3 text-left text-sm font-medium transition"
+                                            :class="selectedServiceZone === 'murcia' ? 'border-amber-400 bg-amber-400 text-black' : 'border-neutral-700 bg-neutral-900 text-neutral-200 hover:border-amber-400'"
+                                            @click="toggleServiceZone('murcia')"
+                                        >
+                                            {{ t('installation.murcia_zone_option') }}
+                                        </button>
+                                    </template>
+                                    <template v-else>
+                                        <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.zone_question') }}</h3>
+                                        <p class="mt-2 text-sm leading-6 text-neutral-400">
+                                            {{ matchedInstallationZone?.name }}
+                                        </p>
+                                        <button
+                                            type="button"
+                                            class="mt-5 w-full rounded-xl border px-4 py-4 text-left text-sm font-medium transition"
+                                            :class="selectedServiceZone === 'configured' ? 'border-amber-400 bg-amber-400 text-black' : 'border-neutral-700 bg-neutral-900 text-neutral-200 hover:border-amber-400'"
+                                            @click="toggleServiceZone('configured')"
+                                        >
+                                            {{ matchedInstallationZone?.name }}
                                         </button>
                                     </template>
                                 </div>
@@ -3860,6 +4057,38 @@ watch(
                                     @keydown.enter.prevent="selectedInstallationKey = selectedInstallationKey === installation.key ? null : installation.key"
                                     @keydown.space.prevent="selectedInstallationKey = selectedInstallationKey === installation.key ? null : installation.key"
                                 >
+                                    <div class="absolute left-4 top-4 flex items-center gap-2" aria-hidden="true">
+                                        <span
+                                            v-if="installationIcons(installation).speaker"
+                                            class="grid size-10 place-items-center rounded-lg bg-amber-400 text-black shadow-sm shadow-black/30"
+                                        >
+                                            <svg viewBox="0 0 32 32" class="size-7" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <circle cx="16" cy="16" r="10.5" stroke="currentColor" stroke-width="2" />
+                                                <circle cx="16" cy="16" r="6.5" stroke="currentColor" stroke-width="2" />
+                                                <circle cx="16" cy="16" r="2.2" fill="currentColor" />
+                                                <path d="M10.4 8.1 21.6 23.9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity=".7" />
+                                            </svg>
+                                        </span>
+                                        <span
+                                            v-if="installationIcons(installation).camera"
+                                            class="grid size-10 place-items-center rounded-lg bg-amber-400 text-black shadow-sm shadow-black/30"
+                                        >
+                                            <svg viewBox="0 0 32 32" class="size-7" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <rect x="6" y="7" width="20" height="18" rx="5" stroke="currentColor" stroke-width="2" />
+                                                <circle cx="16" cy="16" r="4.5" stroke="currentColor" stroke-width="2" />
+                                                <circle cx="23" cy="10.5" r="1.4" fill="currentColor" />
+                                            </svg>
+                                        </span>
+                                        <span
+                                            v-if="installationIcons(installation).screen"
+                                            class="grid size-10 place-items-center rounded-lg bg-amber-400 text-black shadow-sm shadow-black/30"
+                                        >
+                                            <svg viewBox="0 0 32 32" class="size-7" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                <rect x="5" y="7" width="22" height="15" rx="2" stroke="currentColor" stroke-width="2" />
+                                                <path d="M16 22v4M11.5 26h9" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                                            </svg>
+                                        </span>
+                                    </div>
                                     <div class="grid min-h-40 w-full content-end gap-2 p-4 pt-16 text-left">
                                         <p class="text-sm font-medium text-neutral-100">
                                             {{ installation.title }}
@@ -3868,15 +4097,6 @@ watch(
                                             {{ installation.price.toFixed(2) }} €
                                         </p>
                                     </div>
-                                    <a
-                                        :href="productUrl(installation.key)"
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        class="absolute left-1/2 top-3 z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-amber-400 bg-[#121212]/90 px-3 py-2 text-xs font-semibold text-amber-400 shadow-lg transition hover:bg-amber-400 hover:text-black"
-                                        @click.stop
-                                    >
-                                        {{ t('screen.product_details') }}
-                                    </a>
                                 </article>
                             </div>
                                 <p v-if="hasSelectedProducts && !visibleInstallationOptions.length" class="mt-4 text-sm text-amber-400">
@@ -3908,15 +4128,15 @@ watch(
                             v-if="selectedBrand"
                             class="grid"
                         >
-                            <div class="flex min-w-0 items-center gap-4 border-b border-neutral-800 bg-[#121212] p-4">
+                            <div class="flex min-w-0 flex-col items-center gap-2 border-b border-neutral-800 bg-[#121212] p-4 sm:flex-row sm:gap-4">
                                 <img
                                     v-if="selectedBrandImageUrl && failedBrandImage !== selectedBrandImageUrl"
                                     :src="selectedBrandImageUrl"
                                     :alt="selectedBrand"
-                                    class="h-12 w-16 shrink-0 object-contain object-center"
+                                    class="h-16 w-24 shrink-0 object-contain object-center sm:h-12 sm:w-16"
                                     @error="failedBrandImage = selectedBrandImageUrl"
                                 />
-                                <div class="min-w-0">
+                                <div class="hidden min-w-0 sm:block">
                                     <p class="truncate text-xs font-medium uppercase tracking-wider text-neutral-500">
                                         {{ selectedBrand }}
                                     </p>
@@ -3928,6 +4148,11 @@ watch(
                                             {{ selectedYear }}
                                         </p>
                                     </div>
+                                </div>
+                                <div class="flex min-w-0 max-w-full items-baseline justify-center gap-2 sm:hidden">
+                                    <p class="shrink-0 truncate text-xs font-medium uppercase tracking-wider text-neutral-500">{{ selectedBrand }}</p>
+                                    <p v-if="selectedModel" class="min-w-0 truncate text-lg font-semibold text-white">{{ selectedModel }}</p>
+                                    <p v-if="selectedYear" class="shrink-0 text-sm text-neutral-400">{{ selectedYear }}</p>
                                 </div>
                             </div>
 
@@ -4161,14 +4386,17 @@ watch(
                             </div>
                         </div>
 
-                        <div class="flex items-center justify-center gap-2 rounded-lg border border-amber-400/60 bg-amber-400/10 px-3 py-2 text-center text-xs font-semibold text-amber-300">
-                            <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <path d="M10 17h4V5H2v12h3" />
-                                <path d="M14 9h4l4 4v4h-3" />
-                                <circle cx="7.5" cy="17.5" r="2.5" />
-                                <circle cx="16.5" cy="17.5" r="2.5" />
-                            </svg>
-                            <span>{{ t('quote.home_delivery') }}</span>
+                        <div class="flex flex-col items-center justify-center rounded-lg border border-amber-400/60 bg-amber-400/10 px-3 py-2 text-center text-xs font-semibold text-amber-300">
+                            <span class="flex items-center justify-center gap-2">
+                                <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                                    <path d="M10 17h4V5H2v12h3" />
+                                    <path d="M14 9h4l4 4v4h-3" />
+                                    <circle cx="7.5" cy="17.5" r="2.5" />
+                                    <circle cx="16.5" cy="17.5" r="2.5" />
+                                </svg>
+                                <span>{{ t('quote.home_delivery_title') }}</span>
+                            </span>
+                            <span>{{ t('quote.home_delivery_estimate') }}</span>
                         </div>
 
                         <label class="flex cursor-pointer items-start gap-2 px-1 text-xs leading-5 text-neutral-400">
@@ -4230,79 +4458,19 @@ watch(
                     <div class="mx-auto max-w-md space-y-1.5">
                         <div class="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
                             <div class="flex items-center justify-between">
-                                <button
-                                    type="button"
-                                    class="text-left text-base font-semibold text-white underline decoration-amber-400/70 underline-offset-4 transition hover:text-amber-400 focus-visible:text-amber-400 active:text-amber-400"
-                                    @click="goToFullQuote"
-                                >
-                                    {{ t('quote.online_total') }}
-                                </button>
+                                <span class="text-base font-semibold text-white">{{ t('quote.online_total') }}</span>
                                 <span class="shrink-0 whitespace-nowrap text-xl font-semibold text-amber-400">
                                     {{ onlineTotal.toFixed(2) }} €
                                 </span>
                             </div>
-                            <div v-if="installationCost > 0" class="mt-0.5 flex items-center justify-between text-[10px] leading-3 text-neutral-400">
-                                <span>{{ t('quote.installation_direct') }}</span>
-                                <span>{{ installationCost.toFixed(2) }} €</span>
-                            </div>
                         </div>
-
-                        <div class="flex items-center justify-center gap-1.5 rounded-md border border-amber-400/60 bg-amber-400/10 px-2 py-1.5 text-center text-[10px] font-semibold leading-3 text-amber-300">
-                            <svg class="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                                <path d="M10 17h4V5H2v12h3" />
-                                <path d="M14 9h4l4 4v4h-3" />
-                                <circle cx="7.5" cy="17.5" r="2.5" />
-                                <circle cx="16.5" cy="17.5" r="2.5" />
-                            </svg>
-                            <span>{{ t('quote.home_delivery') }}</span>
-                        </div>
-
-                        <label class="flex cursor-pointer items-start gap-1.5 px-1 text-[10px] leading-3 text-neutral-400">
-                            <input
-                                v-model="checkoutConsentAccepted"
-                                type="checkbox"
-                                required
-                                class="sr-only"
-                            />
-                            <span
-                                class="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition"
-                                :class="checkoutConsentAccepted ? 'border-neutral-400 bg-neutral-300 text-black' : 'border-neutral-600 bg-transparent'"
-                                aria-hidden="true"
-                            >
-                                <svg v-if="checkoutConsentAccepted" class="h-3 w-3" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="3">
-                                    <path d="m4 10 4 4 8-9" />
-                                </svg>
-                            </span>
-                            <span>
-                                {{ t('checkout_consent.checkbox') }}
-                                <a
-                                    href="https://www.autoradiocanario.com/policies/terms-of-service"
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    class="ml-1 text-neutral-300 underline underline-offset-2 hover:text-white"
-                                    @click.stop
-                                >
-                                    {{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}
-                                </a>
-                            </span>
-                        </label>
 
                         <button
                             type="button"
-                            class="w-full rounded-lg bg-red-600 px-4 py-2 text-xs font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
-                            :disabled="!canCheckout"
-                            @click="goToCheckout"
+                            class="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-500"
+                            @click="goToFullQuote"
                         >
-                            {{ t('actions.add_to_cart') }}
-                        </button>
-
-                        <button
-                            type="button"
-                            class="w-full rounded-lg border border-amber-400 px-4 py-2 text-xs font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-600"
-                            :disabled="!hasSelectedProducts"
-                            @click="downloadQuote"
-                        >
-                            {{ t('actions.download_quote') }}
+                            {{ t('actions.view_quote') }}
                         </button>
                     </div>
                 </div>
@@ -4698,6 +4866,50 @@ watch(
 .missing-vehicle-option { background: #fbbf24; color: #000; font-weight: 700; }
 
 @media (max-width: 639px) {
+    .mobile-model-section {
+        width: 16rem;
+        max-width: 100%;
+        margin: 1.5rem auto 0;
+    }
+
+    .mobile-model-buttons {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+    }
+
+    .mobile-model-buttons > button {
+        width: 100%;
+        min-width: 0;
+        padding-inline: 0.5rem;
+        text-align: center;
+    }
+
+    .mobile-model-buttons > .mobile-missing-model-button {
+        grid-column: 1 / -1;
+    }
+
+    .mobile-vehicle-select {
+        display: block;
+        width: 16rem;
+        max-width: 100%;
+        margin-inline: auto;
+        border: 2px solid #d8ae2d;
+        appearance: none;
+        background-color: #121212;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23D8AE2D' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: right 0.85rem center;
+        padding-right: 2.5rem;
+        color: #d8ae2d;
+    }
+
+    .mobile-vehicle-select:focus {
+        border-color: #d8ae2d;
+        outline: 2px solid rgba(216, 174, 45, 0.3);
+        outline-offset: 2px;
+    }
+
     .vehicle-option-select {
         font-size: 16px;
         line-height: 1.5;

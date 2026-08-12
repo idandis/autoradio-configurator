@@ -47,12 +47,19 @@ class DatabaseMigrationController extends Controller
             ]);
 
             return back()->withErrors([
-                'database' => 'Impossibile aggiornare il database. Controlla i log del server o contatta il provider.',
+                'database' => 'Impossibile aggiornare il database: '.$this->safeErrorMessage($exception),
             ]);
         } finally {
             if ($lockAcquired) {
                 $lock->release();
             }
         }
+    }
+
+    private function safeErrorMessage(Throwable $exception): string
+    {
+        $message = preg_replace('/\s+/', ' ', $exception->getMessage()) ?: 'errore sconosciuto';
+
+        return mb_str($message)->limit(350)->toString();
     }
 }

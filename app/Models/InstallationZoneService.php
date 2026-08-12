@@ -5,9 +5,9 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class InstallationZoneProduct extends Model
+class InstallationZoneService extends Model
 {
-    protected $fillable = ['product_handle', 'title', 'price'];
+    protected $fillable = ['name', 'price'];
 
     protected $casts = ['price' => 'decimal:2'];
 

@@ -100,13 +100,15 @@ class ConfiguratorController extends Controller
             ->get()
             ->values();
 
-        $installationProducts = ConfiguratorProduct::with('variants')
-            ->where('category', 'installation')
-            ->get();
-
         $speakerProducts = ConfiguratorProduct::with('variants')
             ->where('category', 'speaker')
             ->orderBy('title')
+            ->get();
+
+        $installationZones = InstallationZone::query()
+            ->where('active', true)
+            ->with(['postalCodes', 'services'])
+            ->orderBy('name')
             ->get();
 
         return Inertia::render('Configurator', [
@@ -158,12 +160,23 @@ class ConfiguratorController extends Controller
             'universalScreens' => $this->screenOptions($universalScreenProducts),
             'cameraOptions' => $this->cameraOptions($cameraProducts),
             'speakerOptions' => $this->speakerOptions($speakerProducts),
-            'installationOptions' => $this->installationOptions($installationProducts),
-            'installationZones' => InstallationZone::query()
-                ->where('active', true)
-                ->with(['postalCodes', 'products'])
-                ->orderBy('name')
-                ->get()
+            'installationOptions' => $installationZones->flatMap(fn (InstallationZone $zone) =>
+                $zone->services->map(fn ($service) => [
+                    'key' => 'zone-service-'.$service->id,
+                    'productId' => null,
+                    'variantId' => null,
+                    'title' => $service->name,
+                    'productTitle' => $service->name,
+                    'variantTitle' => null,
+                    'price' => (float) $service->price,
+                    'shopifyVariantId' => null,
+                    'sku' => null,
+                    'subtype' => 'zone-service',
+                    'location' => $zone->name,
+                    'installationRaw' => null,
+                ])
+            )->values(),
+            'installationZones' => $installationZones
                 ->map(fn (InstallationZone $zone) => [
                     'id' => $zone->id,
                     'name' => $zone->name,
@@ -171,10 +184,9 @@ class ConfiguratorController extends Controller
                         'from' => $range->postal_code_from,
                         'to' => $range->postal_code_to,
                     ])->values(),
-                    'productHandles' => $zone->products->pluck('product_handle')->values(),
-                    'productPrices' => $zone->products
-                        ->filter(fn ($product) => $product->price !== null)
-                        ->mapWithKeys(fn ($product) => [$product->product_handle => (float) $product->price]),
+                    'productHandles' => $zone->services->map(fn ($service) => 'zone-service-'.$service->id)->values(),
+                    'productPrices' => $zone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => (float) $service->price]),
+                    'productTitles' => $zone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => $service->name]),
                 ])->values(),
             'vehicleImages' => collect(glob(public_path('images/vehicles-dark/*.{png,jpg,jpeg,webp}'), GLOB_BRACE) ?: [])
                 ->map(fn (string $path) => basename($path))

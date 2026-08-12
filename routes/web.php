@@ -103,6 +103,12 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::post('/installation-zones', [InstallationZonesController::class, 'store'])->name('installation-zones.store');
     Route::put('/installation-zones/{installationZone}', [InstallationZonesController::class, 'update'])->name('installation-zones.update');
     Route::delete('/installation-zones/{installationZone}', [InstallationZonesController::class, 'destroy'])->name('installation-zones.destroy');
+    Route::post('/installation-zones/{installationZone}/postal-codes', [InstallationZonesController::class, 'storePostalCode'])->name('installation-zones.postal-codes.store');
+    Route::put('/installation-zones/{installationZone}/postal-codes/{postalCode}', [InstallationZonesController::class, 'updatePostalCode'])->name('installation-zones.postal-codes.update');
+    Route::delete('/installation-zones/{installationZone}/postal-codes/{postalCode}', [InstallationZonesController::class, 'destroyPostalCode'])->name('installation-zones.postal-codes.destroy');
+    Route::post('/installation-zones/{installationZone}/services', [InstallationZonesController::class, 'storeService'])->name('installation-zones.services.store');
+    Route::put('/installation-zones/{installationZone}/services/{service}', [InstallationZonesController::class, 'updateService'])->name('installation-zones.services.update');
+    Route::delete('/installation-zones/{installationZone}/services/{service}', [InstallationZonesController::class, 'destroyService'])->name('installation-zones.services.destroy');
 });
 
 Route::middleware('auth')->group(function () {

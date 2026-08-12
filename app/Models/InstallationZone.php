@@ -20,4 +20,9 @@ class InstallationZone extends Model
     {
         return $this->hasMany(InstallationZoneProduct::class);
     }
+
+    public function services(): HasMany
+    {
+        return $this->hasMany(InstallationZoneService::class);
+    }
 }
