@@ -1411,6 +1411,13 @@ const selectedVehicleModelSlugs = computed(() => {
     }
 
     const modelSlug = slugifyVehiclePart(selectedModel.value);
+    const familySlug = modelSlug.replace(/-\d{2,3}$/, '');
+
+    if (selectedBrand.value !== 'BMW' && familySlug !== modelSlug) {
+        const familyName = familySlug.split('-').at(-1);
+
+        return [...new Set([modelSlug, familySlug, familyName].filter((slug): slug is string => Boolean(slug)))];
+    }
 
     if (selectedBrand.value !== 'BMW' || selectedYear.value === null) {
         return [modelSlug];
@@ -3362,8 +3369,8 @@ watch(
                                 class="mb-4 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-center text-sm font-semibold text-emerald-400"
                             >
                                 {{ displayedScreenOptionCount === 1
-                                    ? t('screen.available_option')
-                                    : t('screen.available_options', { count: displayedScreenOptionCount }) }}
+                                    ? t('screen.available_option', { vehicle: `${selectedBrand} ${selectedModel} ${selectedYear}` })
+                                    : t('screen.available_options', { count: displayedScreenOptionCount, vehicle: `${selectedBrand} ${selectedModel} ${selectedYear}` }) }}
                             </p>
                             <div v-if="hasNoSpecificScreenForBudget && !showUniversalScreens" id="screen-alternative-message" class="rounded-xl border border-neutral-700 bg-[#121212] p-5">
                                 <p class="text-sm leading-6 text-neutral-200">{{ t('budget.no_specific_screen') }}</p>
@@ -3460,7 +3467,7 @@ watch(
                                                     </button>
                                                     <span
                                                         v-if="isRecommendedScreenVariant(vehicle, variant)"
-                                                        class="pointer-events-none absolute left-2 top-0 z-10 inline-flex -translate-y-1/2 -rotate-2 rounded-sm bg-emerald-400 px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wide text-black shadow-sm sm:px-2 sm:text-[9px]"
+                                                        class="pointer-events-none absolute left-2 top-0.5 z-10 inline-flex -rotate-2 rounded-sm bg-emerald-400 px-1.5 py-0.5 text-[8px] font-black uppercase leading-none tracking-wide text-black shadow-sm sm:px-2 sm:text-[9px]"
                                                     >
                                                         {{ t('screen.recommended') }}
                                                     </span>
@@ -3570,13 +3577,14 @@ watch(
 
                                     <button
                                         type="button"
-                                        class="flex min-w-0 w-full max-w-full items-center justify-start gap-1 overflow-hidden rounded-b-xl p-2 text-left"
+                                        class="block min-w-0 w-full max-w-full overflow-hidden rounded-b-xl p-2 text-left"
                                         @click="toggleCamera(camera.key)"
                                     >
-                                        <p class="min-w-0 flex-1 truncate whitespace-nowrap text-xs font-medium">{{ camera.isStandardFront ? t('camera.standard_front') : camera.title }}</p>
-                                        <p class="shrink-0 whitespace-nowrap text-sm font-semibold">
-                                            {{ camera.price.toFixed(2) }} €
-                                        </p>
+                                        <span class="flex min-w-0 items-center justify-between gap-1">
+                                            <span class="min-w-0 flex-1 truncate whitespace-nowrap text-xs font-medium">{{ camera.isStandardFront ? t('camera.standard_front') : camera.title }}</span>
+                                            <span class="shrink-0 whitespace-nowrap text-sm font-semibold">{{ camera.price.toFixed(2) }} €</span>
+                                        </span>
+                                        <span class="mt-1 block text-xs font-bold uppercase tracking-wide text-amber-400">{{ t('camera.add_action') }}</span>
                                     </button>
 
                                     <div
@@ -3803,7 +3811,8 @@ watch(
                                             :class="selectedServiceZone === zone.key ? 'border-amber-400 bg-amber-400 text-black' : 'border-neutral-700 bg-neutral-900 text-neutral-200 hover:border-amber-400'"
                                             @click="toggleServiceZone(zone.key)"
                                         >
-                                            {{ zone.label }}
+                                            <span class="block">{{ zone.label }}</span>
+                                            <span class="mt-1 block text-xs font-bold uppercase tracking-wide" :class="selectedServiceZone === zone.key ? 'text-black/70' : 'text-amber-400'">{{ t('installation.click_here') }}</span>
                                         </button>
                                     </div>
 
@@ -3825,6 +3834,7 @@ watch(
                                             @click="toggleServiceZone('tenerife')"
                                         >
                                             {{ t('installation.tenerife_zone_option') }}
+                                            <span class="mt-1 block text-xs font-bold uppercase tracking-wide">{{ t('installation.click_here') }}</span>
                                         </button>
                                     </template>
                                     <template v-else-if="isFuerteventura">
@@ -3845,6 +3855,7 @@ watch(
                                             @click="toggleServiceZone('fuerteventura')"
                                         >
                                             {{ t('installation.fuerteventura_zone_option') }}
+                                            <span class="mt-1 block text-xs font-bold uppercase tracking-wide">{{ t('installation.click_here') }}</span>
                                         </button>
                                     </template>
                                     <template v-else-if="isLanzarote">
@@ -3865,6 +3876,7 @@ watch(
                                             @click="toggleServiceZone('lanzarote')"
                                         >
                                             {{ t('installation.lanzarote_zone_option') }}
+                                            <span class="mt-1 block text-xs font-bold uppercase tracking-wide">{{ t('installation.click_here') }}</span>
                                         </button>
                                     </template>
                                     <template v-else-if="isMadrid">
@@ -3885,6 +3897,7 @@ watch(
                                             @click="toggleServiceZone('madrid')"
                                         >
                                             {{ t('installation.madrid_zone_option') }}
+                                            <span class="mt-1 block text-xs font-bold uppercase tracking-wide">{{ t('installation.click_here') }}</span>
                                         </button>
                                     </template>
                                     <template v-else-if="isBarcelona">
@@ -3905,6 +3918,7 @@ watch(
                                             @click="toggleServiceZone('barcelona')"
                                         >
                                             {{ t('installation.barcelona_zone_option') }}
+                                            <span class="mt-1 block text-xs font-bold uppercase tracking-wide">{{ t('installation.click_here') }}</span>
                                         </button>
                                     </template>
                                     <template v-else-if="isMalaga">
@@ -3925,6 +3939,7 @@ watch(
                                             @click="toggleServiceZone('malaga')"
                                         >
                                             {{ t('installation.malaga_zone_option') }}
+                                            <span class="mt-1 block text-xs font-bold uppercase tracking-wide">{{ t('installation.click_here') }}</span>
                                         </button>
                                     </template>
                                     <template v-else-if="isMurcia">
@@ -3945,12 +3960,14 @@ watch(
                                             @click="toggleServiceZone('murcia')"
                                         >
                                             {{ t('installation.murcia_zone_option') }}
+                                            <span class="mt-1 block text-xs font-bold uppercase tracking-wide">{{ t('installation.click_here') }}</span>
                                         </button>
                                     </template>
                                     <template v-else>
                                         <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.zone_question') }}</h3>
                                         <p class="mt-2 text-sm leading-6 text-neutral-400">
                                             {{ matchedInstallationZone?.name }}
+                                            <span class="mt-1 block text-xs font-bold uppercase tracking-wide">{{ t('installation.click_here') }}</span>
                                         </p>
                                         <button
                                             type="button"
@@ -3984,7 +4001,7 @@ watch(
                                         >
                                             <span class="block font-semibold text-white">{{ t('installation.precheck_self_title') }}</span>
                                             <span class="mt-1 block text-sm leading-5 text-neutral-400">{{ t('installation.precheck_self_description') }}</span>
-                                            <span class="mt-3 block text-sm font-semibold text-emerald-400">{{ t('installation.free') }}</span>
+                                            <span class="mt-3 block text-sm font-bold text-emerald-400">{{ t('installation.precheck_free_action') }}</span>
                                         </button>
                                         <button
                                             type="button"
@@ -3995,7 +4012,7 @@ watch(
                                         >
                                             <span class="block font-semibold text-white">{{ t('installation.precheck_installer_title') }}</span>
                                             <span class="mt-1 block text-sm leading-5 text-neutral-400">{{ t('installation.precheck_installer_description') }}</span>
-                                            <span class="mt-3 block whitespace-nowrap text-lg font-semibold text-white">{{ (precheckProduct?.price ?? 25).toFixed(2) }} €</span>
+                                            <span class="mt-3 block whitespace-nowrap text-sm font-bold text-amber-400">{{ t('installation.precheck_paid_action', { price: (precheckProduct?.price ?? 25).toFixed(2) }) }}</span>
                                         </button>
                                     </div>
                                 </div>
@@ -4016,7 +4033,7 @@ watch(
                                     @click="togglePrecheckMethod('self')"
                                 >
                                     <span class="font-semibold text-white">{{ t('installation.choose_remote_precheck') }}</span>
-                                    <span class="ml-3 text-sm font-semibold text-emerald-400">{{ t('installation.free') }}</span>
+                                    <span class="ml-3 text-sm font-bold text-emerald-400">{{ t('installation.precheck_free_action') }}</span>
                                 </button>
                             </div>
 
@@ -4096,6 +4113,9 @@ watch(
                                         <p class="text-lg font-semibold text-white">
                                             {{ installation.price.toFixed(2) }} €
                                         </p>
+                                        <p class="text-xs font-bold uppercase tracking-wide text-amber-400">
+                                            {{ t('installation.installation_action') }}
+                                        </p>
                                     </div>
                                 </article>
                             </div>
@@ -4156,7 +4176,7 @@ watch(
                                 </div>
                             </div>
 
-                            <div class="flex h-44 min-w-0 items-center justify-center bg-[#121212] p-1">
+                            <div class="flex h-44 min-w-0 items-center justify-center bg-[#121212] p-1 lg:h-24 xl:h-28">
                                 <button
                                     v-if="selectedVehicleImageUrl && failedVehicleImage !== selectedVehicleImageUrl"
                                     type="button"
@@ -4179,7 +4199,7 @@ watch(
                                 />
                             </div>
                         </div>
-                        <div v-else class="flex h-44 items-center justify-center bg-[#121212] p-1">
+                        <div v-else class="flex h-44 items-center justify-center bg-[#121212] p-1 lg:h-24 xl:h-28">
                             <img
                                 src="/images/logo.png"
                                 alt=""
@@ -4188,7 +4208,8 @@ watch(
                         </div>
                     </div>
 
-                    <div class="quote-scrollbar quote-summary-scrollbar lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-3">
+                    <div class="quote-scrollbar quote-summary-scrollbar lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
+                    <div>
                     <p id="full-quote-summary" class="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-amber-400">
                         {{ t('quote.title') }}
                     </p>
@@ -4355,15 +4376,11 @@ watch(
                     </div>
                     </div>
 
-                    <div ref="quoteTotals" class="mt-2 shrink-0 space-y-2 border-t border-neutral-800 bg-[#121212] pt-2">
-                        <div class="rounded-xl border border-neutral-800 bg-neutral-900 p-2.5">
+                    <div ref="quoteTotals" class="mt-2 border-t border-neutral-800 bg-[#121212] pt-2">
+                        <div class="shrink-0 rounded-xl border border-neutral-800 bg-neutral-900 p-2.5">
                             <div class="flex items-center justify-between text-sm text-neutral-400">
                                 <span>{{ t('quote.subtotal') }}</span>
                                 <span>{{ productsSubtotal.toFixed(2) }} €</span>
-                            </div>
-                            <div v-if="installationCost > 0" class="mt-2 flex items-center justify-between gap-4 text-sm text-amber-300">
-                                <span>{{ t('quote.installation_direct') }}</span>
-                                <span class="shrink-0">{{ installationCost.toFixed(2) }} €</span>
                             </div>
                             <div
                                 v-if="discountAmount > 0"
@@ -4372,20 +4389,29 @@ watch(
                                 <span>{{ discountLabel }}</span>
                                 <span>−{{ discountAmount.toFixed(2) }} €</span>
                             </div>
-                            <div class="mt-3 flex items-center justify-between border-t border-neutral-800 pt-3">
-                                <span class="text-sm font-semibold text-neutral-300">{{ t('quote.estimated_total') }}</span>
-                                <span class="text-lg font-semibold text-white">
+                            <div class="mt-3 flex items-center justify-between gap-3 border-t border-neutral-700 pt-3">
+                                <span class="text-base font-semibold text-white">{{ t('quote.estimated_total') }}</span>
+                                <span class="shrink-0 whitespace-nowrap text-xl font-bold text-white">
                                     {{ estimatedTotal.toFixed(2) }} €
                                 </span>
                             </div>
-                            <div class="mt-2 flex items-center justify-between gap-3">
+                            <div class="mt-3 flex items-center justify-between gap-3 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-3">
                                 <span class="text-base font-semibold text-white">{{ t('quote.online_total') }}</span>
-                                <span class="shrink-0 whitespace-nowrap text-2xl font-semibold text-amber-400">
+                                <span class="shrink-0 whitespace-nowrap text-2xl font-bold text-amber-400">
                                     {{ onlineTotal.toFixed(2) }} €
                                 </span>
                             </div>
+                            <div v-if="installationCost > 0" class="mt-2 rounded-lg border border-sky-400/30 bg-sky-400/5 px-3 py-3">
+                                <div class="flex items-center justify-between gap-4 text-sm text-sky-200">
+                                    <span class="font-semibold">{{ t('quote.installation_direct') }}</span>
+                                    <span class="shrink-0 whitespace-nowrap text-lg font-bold">{{ installationCost.toFixed(2) }} €</span>
+                                </div>
+                            </div>
                         </div>
+                    </div>
+                    </div>
 
+                    <div class="shrink-0 space-y-2 pt-2">
                         <div class="flex flex-col items-center justify-center rounded-lg border border-amber-400/60 bg-amber-400/10 px-3 py-2 text-center text-xs font-semibold text-amber-300">
                             <span class="flex items-center justify-center gap-2">
                                 <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -4397,6 +4423,12 @@ watch(
                                 <span>{{ t('quote.home_delivery_title') }}</span>
                             </span>
                             <span>{{ t('quote.home_delivery_estimate') }}</span>
+                            <span class="mt-0.5 text-amber-200/80">{{ t('quote.shipping_tracking') }}</span>
+                        </div>
+
+                        <div class="rounded-lg border border-neutral-700 bg-neutral-900/70 px-3 py-3 text-center">
+                            <p class="text-sm font-semibold text-amber-400">{{ t('quote.trust_title') }}</p>
+                            <p class="mt-1 text-xs leading-5 text-neutral-400">{{ t('quote.trust_details') }}</p>
                         </div>
 
                         <label class="flex cursor-pointer items-start gap-2 px-1 text-xs leading-5 text-neutral-400">
@@ -4428,6 +4460,10 @@ watch(
                                 </a>
                             </span>
                         </label>
+
+                        <p class="px-2 text-center text-xs leading-5 text-neutral-400">
+                            {{ t('quote.checkout_trust') }}
+                        </p>
 
                         <button
                             type="button"
@@ -4476,12 +4512,6 @@ watch(
                 </div>
             </div>
         </div>
-        <p class="pb-6 text-center text-xs text-neutral-700">
-            {{ t('attribution') }}
-            <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer" class="underline hover:text-neutral-500">GeoNames</a>
-            (CC BY 4.0).
-        </p>
-
         <footer class="border-t border-neutral-800 bg-[#121212] text-white">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="flex flex-col items-center py-14 text-center sm:py-16">
@@ -4491,6 +4521,18 @@ watch(
                         class="mt-7 text-sm transition hover:text-amber-400"
                     >
                         Info@AutoRadioCanario.com
+                    </a>
+                    <a
+                        href="https://wa.me/34694259117"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-emerald-400 underline decoration-emerald-400/70 underline-offset-4 transition hover:text-emerald-300"
+                        aria-label="WhatsApp: +34 694 259 117"
+                    >
+                        <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                            <path d="M12.04 2a9.84 9.84 0 0 0-8.5 14.78L2 22l5.38-1.41A9.96 9.96 0 0 0 12.04 22 10 10 0 0 0 12.04 2Zm0 18.18a8.1 8.1 0 0 1-4.13-1.13l-.3-.18-3.19.84.85-3.1-.2-.32a8.15 8.15 0 1 1 6.97 3.89Zm4.47-6.1c-.24-.12-1.45-.71-1.67-.79-.23-.08-.39-.12-.55.12-.16.25-.63.8-.77.96-.14.17-.29.19-.53.07a6.64 6.64 0 0 1-1.97-1.21 7.38 7.38 0 0 1-1.36-1.7c-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.43.12-.14.16-.25.24-.41.08-.17.04-.31-.02-.43-.06-.12-.55-1.33-.75-1.82-.2-.48-.4-.41-.55-.42h-.47c-.16 0-.43.06-.65.31-.22.25-.85.83-.85 2.03s.87 2.36.99 2.52c.12.17 1.72 2.63 4.17 3.69.58.25 1.04.4 1.39.51.58.19 1.12.16 1.54.1.47-.07 1.45-.59 1.65-1.16.21-.57.21-1.06.15-1.16-.06-.11-.23-.17-.47-.29Z"/>
+                        </svg>
+                        <span>WhatsApp · +34 694 259 117</span>
                     </a>
                     <div class="mt-10 flex items-center gap-6">
                         <a
@@ -4568,6 +4610,12 @@ watch(
                         <a href="https://www.autoradiocanario.com/policies/contact-information" class="hover:text-white">Información de contacto</a>
                         <span>·</span>
                         <a href="https://www.autoradiocanario.com/policies/legal-notice" class="hover:text-white">Aviso legal</a>
+                        <span>·</span>
+                        <span class="text-neutral-600">
+                            {{ t('attribution') }}
+                            <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer" class="underline hover:text-neutral-400">GeoNames</a>
+                            (CC BY 4.0)
+                        </span>
                     </div>
                 </div>
             </div>

@@ -95,6 +95,16 @@ class VehicleImageGenerator
         $brandSlug = Str::slug($brand);
         $modelSlug = Str::slug($model);
         $bases = [$brandSlug.'-'.$modelSlug];
+        $familySlug = preg_replace('/-\d{2,3}$/', '', $modelSlug);
+
+        if (is_string($familySlug) && $familySlug !== $modelSlug) {
+            $bases[] = $brandSlug.'-'.$familySlug;
+
+            $familyName = Str::afterLast($familySlug, '-');
+            if ($familyName !== $familySlug) {
+                $bases[] = $brandSlug.'-'.$familyName;
+            }
+        }
 
         if ($brandSlug !== 'bmw') {
             return $bases;
