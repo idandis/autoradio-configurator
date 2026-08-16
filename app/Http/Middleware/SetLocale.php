@@ -19,6 +19,11 @@ class SetLocale
             $request->session()->put('locale', $requestedLocale);
         } elseif ($referrerLocale = $this->localeFromStorefrontReferrer($request->headers->get('referer'))) {
             $request->session()->put('locale', $referrerLocale);
+        } elseif (! in_array($request->session()->get('locale'), self::SUPPORTED_LOCALES, true)) {
+            $request->session()->put(
+                'locale',
+                $request->getPreferredLanguage(self::SUPPORTED_LOCALES) ?? 'es',
+            );
         }
 
         $locale = $request->session()->get('locale', 'es');
@@ -54,6 +59,6 @@ class SetLocale
             return 'en';
         }
 
-        return 'es';
+        return null;
     }
 }

@@ -19,7 +19,7 @@ class LocaleTest extends TestCase
     public function test_spanish_is_used_by_default(): void
     {
         $this->get('/configurator')
-            ->assertSessionMissing('locale')
+            ->assertSessionHas('locale', 'es')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Configurator')
                 ->where('locale', 'es')
@@ -86,5 +86,25 @@ class LocaleTest extends TestCase
             ->withHeader('Referer', 'https://example.com/en')
             ->get('/configurator')
             ->assertSessionHas('locale', 'it');
+    }
+
+    public function test_browser_language_is_used_on_the_first_visit(): void
+    {
+        $this->withHeader('Accept-Language', 'it-IT,it;q=0.9,en;q=0.8')
+            ->get('/configurator')
+            ->assertSessionHas('locale', 'it')
+            ->assertInertia(fn (Assert $page) => $page->where('locale', 'it'));
+
+        $this->flushSession();
+
+        $this->withHeader('Accept-Language', 'en-US,en;q=0.9')
+            ->get('/configurator')
+            ->assertSessionHas('locale', 'en');
+
+        $this->flushSession();
+
+        $this->withHeader('Accept-Language', 'fr-FR,fr;q=0.9')
+            ->get('/configurator')
+            ->assertSessionHas('locale', 'es');
     }
 }
