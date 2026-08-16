@@ -16,7 +16,6 @@ class DashboardController extends Controller
                 'screens' => ConfiguratorProduct::where('category', 'screen')->count(),
                 'cameras' => ConfiguratorProduct::where('category', 'camera')->count(),
                 'speakers' => ConfiguratorProduct::where('category', 'speaker')->count(),
-                'installations' => ConfiguratorProduct::where('category', 'installation')->count(),
                 'vehicles' => ConfiguratorProduct::where('category', 'screen')
                     ->select('brand', 'model')
                     ->distinct()

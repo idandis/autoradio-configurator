@@ -21,11 +21,10 @@ class ImportConfiguratorCsv extends Command
         );
 
         $this->info(sprintf(
-            'Import completato: %d schermi, %d camere, %d altoparlanti, %d installazioni, %d varianti. Foto mancanti: %d; messe in coda: %d.',
+            'Import completato: %d schermi, %d camere, %d altoparlanti, %d varianti. Foto mancanti: %d; messe in coda: %d.',
             $stats['screen_products'],
             $stats['camera_products'],
             $stats['speaker_products'],
-            $stats['installation_products'],
             $stats['variants'],
             $stats['vehicle_images_missing'],
             $stats['vehicle_images_queued'],

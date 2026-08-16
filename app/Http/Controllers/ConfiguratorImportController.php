@@ -30,12 +30,11 @@ class ConfiguratorImportController extends Controller
         }
 
         return back()->with('status', sprintf(
-            'Import %s completato: %d schermi, %d camere, %d altoparlanti, %d installazioni, %d varianti. Foto veicoli mancanti: %d; messe in coda: %d.',
+            'Import %s completato: %d schermi, %d camere, %d altoparlanti, %d varianti. Foto veicoli mancanti: %d; messe in coda: %d.',
             $mode === 'replace' ? 'con sostituzione completa' : 'in aggiunta/aggiornamento',
             $stats['screen_products'],
             $stats['camera_products'],
             $stats['speaker_products'],
-            $stats['installation_products'],
             $stats['variants'],
             $stats['vehicle_images_missing'],
             $stats['vehicle_images_queued'],

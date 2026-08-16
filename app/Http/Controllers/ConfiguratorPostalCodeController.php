@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\InstallationZone;
 use App\Models\SpanishPostalCode;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Str;
 
 class ConfiguratorPostalCodeController extends Controller
 {
@@ -39,8 +38,7 @@ class ConfiguratorPostalCodeController extends Controller
             ->first();
 
         $location = $postalCodeRecord?->island
-            ?? $this->canaryIsland($postalCode)
-            ?? $this->installationLocation($postalCodeRecord?->province);
+            ?? $this->canaryIsland($postalCode);
 
         if (! $postalCodeRecord && ! $location) {
             return response()->json(['found' => false]);
@@ -54,11 +52,6 @@ class ConfiguratorPostalCodeController extends Controller
             'island' => $location,
             'installationArea' => null,
         ]);
-    }
-
-    private function normalize(string $value): string
-    {
-        return Str::lower(Str::ascii(trim($value)));
     }
 
     private function canaryIsland(string $postalCode): ?string
@@ -75,20 +68,4 @@ class ConfiguratorPostalCodeController extends Controller
         };
     }
 
-    private function installationLocation(?string $province): ?string
-    {
-        if (! $province) {
-            return null;
-        }
-
-        $normalizedProvince = $this->normalize($province);
-
-        return ConfiguratorProduct::query()
-            ->where('category', 'installation')
-            ->get(['meta'])
-            ->map(fn (ConfiguratorProduct $product) => $product->meta['installation']['location'] ?? null)
-            ->filter()
-            ->unique(fn (string $location) => $this->normalize($location))
-            ->first(fn (string $location) => $this->normalize($location) === $normalizedProvince);
-    }
 }

@@ -10,7 +10,10 @@ type VariantChoice = {
     shopifyVariantId: string | null;
     price: number;
     image: string | null;
+    dashboardVariant: string | null;
 };
+
+type DashboardImage = { url: string; variant: string | null };
 
 type Variant = VariantChoice & {
     colorOptions: VariantChoice[];
@@ -25,6 +28,7 @@ type Vehicle = {
     yearFrom: number | null;
     yearTo: number | null;
     image: string | null;
+    originalDashboardImages: DashboardImage[];
     variants: Variant[];
 };
 
@@ -969,6 +973,62 @@ const screenImage = (vehicle: Vehicle) =>
     vehicle.image
     ?? vehicle.variants.flatMap(screenVariantChoices).find((variant) => variant.image)?.image
     ?? null;
+
+const selectedDashboardVariants = ref<Record<number, string>>({});
+
+const dashboardChoiceImages = (vehicle: Vehicle) =>
+    vehicle.originalDashboardImages
+        .filter((image) => image.variant !== null)
+        .toSorted((first, second) => first.variant!.localeCompare(second.variant!, undefined, {
+            numeric: true,
+            sensitivity: 'base',
+        }));
+
+const requiresDashboardChoice = (vehicle: Vehicle) =>
+    dashboardChoiceImages(vehicle).length >= 2;
+
+const selectedDashboardVariant = (vehicle: Vehicle) =>
+    selectedDashboardVariants.value[vehicle.id] ?? null;
+
+const visibleScreenVariants = (vehicle: Vehicle) => {
+    if (!requiresDashboardChoice(vehicle)) return vehicle.variants;
+
+    const selected = selectedDashboardVariant(vehicle);
+    return selected
+        ? vehicle.variants.filter((variant) => variant.dashboardVariant === selected)
+        : [];
+};
+
+const selectDashboardVariant = (vehicle: Vehicle, variant: string) => {
+    const vehicleChoiceIds = vehicle.variants.flatMap((item) => screenVariantChoices(item).map((choice) => choice.id));
+    selectedScreenVariantIds.value = selectedScreenVariantIds.value.filter((id) => !vehicleChoiceIds.includes(id));
+    selectedDashboardVariants.value = { ...selectedDashboardVariants.value, [vehicle.id]: variant };
+};
+
+const changeDashboardVariant = (vehicle: Vehicle) => {
+    const vehicleChoiceIds = vehicle.variants.flatMap((item) => screenVariantChoices(item).map((choice) => choice.id));
+    selectedScreenVariantIds.value = selectedScreenVariantIds.value.filter((id) => !vehicleChoiceIds.includes(id));
+
+    const selections = { ...selectedDashboardVariants.value };
+    delete selections[vehicle.id];
+    selectedDashboardVariants.value = selections;
+};
+
+const dashboardReferenceImages = (vehicle: Vehicle) => {
+    if (!requiresDashboardChoice(vehicle)) return vehicle.originalDashboardImages;
+
+    const selected = selectedDashboardVariant(vehicle);
+    const selectedImage = selected
+        ? dashboardChoiceImages(vehicle).find((image) => image.variant === selected)
+        : null;
+
+    return selectedImage ? [selectedImage] : [];
+};
+
+const dashboardReferenceLabel = (vehicle: Vehicle) =>
+    t(dashboardReferenceImages(vehicle).length === 1
+        ? 'screen.original_radio_compatible_one'
+        : 'screen.original_radio_compatible_many');
 
 const screenProductUrl = (vehicle: Vehicle) =>
     storefrontUrl(`/products/${encodeURIComponent(vehicle.handle)}`);
@@ -3411,6 +3471,22 @@ watch(
                                             : 'border-neutral-800 bg-[#121212]'
                                     "
                                 >
+                                    <div v-if="requiresDashboardChoice(vehicle) && !selectedDashboardVariant(vehicle)" class="lg:col-span-2">
+                                        <h3 class="mb-5 text-center text-xl font-semibold text-white">{{ t('screen.original_radio_question') }}</h3>
+                                        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                                            <button
+                                                v-for="image in dashboardChoiceImages(vehicle)"
+                                                :key="image.url"
+                                                type="button"
+                                                class="group rounded-xl border border-neutral-700 bg-neutral-950 p-3 text-center transition hover:border-amber-400 hover:bg-amber-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                                                @click="selectDashboardVariant(vehicle, image.variant!)"
+                                            >
+                                                <img :src="image.url" :alt="t('screen.original_radio_variant', { variant: image.variant! })" class="h-64 w-full rounded-lg object-contain" />
+                                                <span class="mt-3 block font-semibold text-amber-400">{{ t('screen.original_radio_variant', { variant: image.variant! }) }}</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <template v-else>
                                     <div class="relative flex min-h-64 items-center justify-center overflow-hidden rounded-xl border border-neutral-800 bg-[#121212] p-4">
                                         <button
                                             v-if="screenImage(vehicle)"
@@ -3436,6 +3512,31 @@ watch(
                                         >
                                             {{ t('screen.product_details') }}
                                         </a>
+                                        <div v-if="dashboardReferenceImages(vehicle).length" class="absolute bottom-3 left-3 right-3 flex min-w-0 flex-col items-start gap-2">
+                                            <div class="flex max-w-full items-center gap-2">
+                                                <span class="min-w-0 whitespace-nowrap rounded bg-black/80 px-2 py-1 text-left text-[11px] font-semibold text-white backdrop-blur">{{ dashboardReferenceLabel(vehicle) }}</span>
+                                                <button
+                                                    v-if="requiresDashboardChoice(vehicle) && selectedDashboardVariant(vehicle)"
+                                                    type="button"
+                                                    class="shrink-0 whitespace-nowrap rounded border border-amber-400 bg-black/85 px-2 py-1 text-[11px] font-semibold text-amber-400 shadow transition hover:bg-amber-400 hover:text-black"
+                                                    @click.stop="changeDashboardVariant(vehicle)"
+                                                >
+                                                    {{ t('screen.change_original_radio_variant') }}
+                                                </button>
+                                            </div>
+                                            <div class="flex max-w-full gap-2 overflow-x-auto">
+                                                <button
+                                                    v-for="image in dashboardReferenceImages(vehicle)"
+                                                    :key="image.url"
+                                                    type="button"
+                                                    class="h-16 w-16 shrink-0 cursor-zoom-in overflow-hidden rounded-lg border-2 border-amber-400 bg-black shadow-lg sm:h-20 sm:w-20"
+                                                    :aria-label="dashboardReferenceLabel(vehicle)"
+                                                    @click.stop="openImageZoom(image.url, dashboardReferenceLabel(vehicle))"
+                                                >
+                                                    <img :src="image.url" :alt="dashboardReferenceLabel(vehicle)" class="h-full w-full object-cover" />
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
 
                                     <div class="min-w-0">
@@ -3449,7 +3550,7 @@ watch(
                                         >
                                             <div class="grid gap-2">
                                                 <div
-                                                    v-for="variant in vehicle.variants"
+                                                    v-for="variant in visibleScreenVariants(vehicle)"
                                                     :key="variant.id"
                                                     :id="`product-screen-${variant.id}`"
                                                     class="group relative flex min-h-10 w-full items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium leading-tight transition"
@@ -3506,6 +3607,7 @@ watch(
                                             </div>
                                         </div>
                                     </div>
+                                    </template>
                                 </article>
                             </div>
                             <div
@@ -4016,25 +4118,6 @@ watch(
                                         </button>
                                     </div>
                                 </div>
-                            </div>
-
-                            <div v-else-if="checkedPostalCode && requiresPrecheck" id="installation-precheck-step" class="rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:p-6">
-                                <p class="text-sm font-semibold uppercase tracking-[0.18em] text-amber-400">
-                                    {{ t('installation.precheck_step', { step: precheckStepNumber }) }}
-                                </p>
-                                <h3 class="mt-2 text-xl font-semibold text-white">{{ t('installation.precheck_self_title') }}</h3>
-                                <p class="mt-2 max-w-2xl text-sm leading-6 text-neutral-400">
-                                    {{ t('installation.remote_only_description') }}
-                                </p>
-                                <button
-                                    type="button"
-                                    class="mt-4 rounded-xl border p-4 text-left transition"
-                                    :class="selectedPrecheckMethod === 'self' ? 'border-amber-400 bg-amber-400/10' : 'border-neutral-700 bg-neutral-900 hover:border-amber-400'"
-                                    @click="togglePrecheckMethod('self')"
-                                >
-                                    <span class="font-semibold text-white">{{ t('installation.choose_remote_precheck') }}</span>
-                                    <span class="ml-3 text-sm font-bold text-emerald-400">{{ t('installation.precheck_free_action') }}</span>
-                                </button>
                             </div>
 
                             <div

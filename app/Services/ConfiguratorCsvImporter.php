@@ -28,7 +28,6 @@ class ConfiguratorCsvImporter
         'Metafield: custom.radio_type [single_line_text_field]',
         'Metafield: custom.altavoces [single_line_text_field]',
         'Metafield: custom.modello_auto [single_line_text_field]',
-        'Metafield: custom.installazione [single_line_text_field]',
         'Metafield: custom.anno [single_line_text_field]',
         'Metafield: shopify.vehicle-coaxial-speaker-nominal-size [list.metaobject_reference]',
     ];
@@ -100,7 +99,6 @@ class ConfiguratorCsvImporter
             'screen_products' => 0,
             'camera_products' => 0,
             'speaker_products' => 0,
-            'installation_products' => 0,
             'variants' => 0,
         ];
 
@@ -108,6 +106,9 @@ class ConfiguratorCsvImporter
             if ($replaceExistingDataset) {
                 DB::table('configurator_variants')->delete();
                 DB::table('configurator_products')->delete();
+            } else {
+                // Installations are managed exclusively through internal zones/services.
+                ConfiguratorProduct::query()->where('category', 'installation')->delete();
             }
 
             foreach ($grouped as $handle => $rows) {
@@ -218,6 +219,9 @@ class ConfiguratorCsvImporter
     private function buildProduct(string $handle, array $rows): ?array
     {
         $primaryRow = $this->findPrimaryRow($rows);
+        $primaryImageUrl = $this->extractPrimaryImage(
+            $this->value($primaryRow, ['Image Src', 'Product Image'])
+        );
         $title = trim((string) $this->value($primaryRow, ['Title', 'Product Title']));
         $primaryVariantId = $this->normalizeShopifyVariantId(
             $this->value($primaryRow, ['Variant ID', 'Variant Id'])
@@ -231,19 +235,11 @@ class ConfiguratorCsvImporter
         }
         $type = strtoupper(trim((string) $this->value($primaryRow, ['Type', 'Product Type'])));
         $tags = trim((string) $this->value($primaryRow, ['Tags', 'Product Tags']));
-        $installation = $this->parseInstallation(
-            $this->value($primaryRow, ['Metafield: custom.installazione [single_line_text_field]'])
-        );
-
         $category = $this->detectCategory($handle, $title, $type, $tags);
         $isUniversalScreen = $this->isUniversalScreen($handle, $title, $tags);
 
         if ($category === null && $isUniversalScreen) {
             $category = 'screen';
-        }
-
-        if ($category === null && $installation !== null) {
-            $category = 'installation';
         }
 
         if (
@@ -354,7 +350,7 @@ class ConfiguratorCsvImporter
             'product' => [
                 'handle' => $handle,
                 'category' => $category,
-                'subtype' => $this->detectSubtype($category, $handle, $title, $installation['type'] ?? null),
+                'subtype' => $this->detectSubtype($category, $handle, $title),
                 'title' => $title !== '' ? $title : $handle,
                 'brand' => $brand,
                 'model' => $explicitModel,
@@ -362,7 +358,7 @@ class ConfiguratorCsvImporter
                 'year_to' => $explicitYears['year_to'] ?? null,
                 'option_name' => trim((string) $this->value($primaryRow, ['Option1 Name'])) ?: null,
                 'price_min' => $prices !== [] ? min($prices) : null,
-                'image_url' => $this->extractPrimaryImage($this->value($primaryRow, ['Image Src', 'Product Image'])),
+                'image_url' => $primaryImageUrl,
                 'tags' => $tags !== '' ? $tags : null,
                 'meta' => [
                     'type' => $this->value($primaryRow, ['Type', 'Product Type']),
@@ -380,11 +376,77 @@ class ConfiguratorCsvImporter
                         'Metafield: custom.altavoces [single_line_text_field]',
                         'Product.custom.altavoces',
                     ])),
-                    'installation' => $installation,
+                    'original_dashboard_images' => $this->parseFileList($this->value($primaryRow, [
+                        'Metafield: custom.foto_cruscotto_originale [list.file_reference]',
+                        'Metafield: custom.foto_cruscotto_originale [list.file]',
+                        'Product.custom.foto_cruscotto_originale',
+                        'custom.foto_cruscotto_originale',
+                        'Foto cruscotto originale (product.metafields.custom.foto_cruscotto_originale)',
+                        'FOTO CRUSCOTTO ORIGINALE (product.metafields.custom.foto_cruscotto_originale)',
+                    ]), $primaryImageUrl),
                 ],
             ],
             'variants' => $variants,
         ];
+    }
+
+    /** @return array<int, array{url: string, variant: ?string}> */
+    private function parseFileList(mixed $value, ?string $primaryImageUrl = null): array
+    {
+        if (is_array($value)) {
+            $items = $value;
+        } else {
+            $raw = trim((string) $value);
+            if ($raw === '') {
+                return [];
+            }
+
+            $decoded = json_decode($raw, true);
+            $items = is_array($decoded)
+                ? $decoded
+                : (preg_split('/\s*(?:,|;|\||\R)\s*/u', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: []);
+        }
+
+        return collect($items)
+            ->map(function ($item) use ($primaryImageUrl) {
+                $url = trim((string) (is_array($item)
+                    ? ($item['url'] ?? $item['src'] ?? $item['originalSource'] ?? '')
+                    : $item));
+                $url = $this->resolveFileUrl($url, $primaryImageUrl);
+                $path = (string) (parse_url($url, PHP_URL_PATH) ?? $url);
+                $filename = pathinfo(rawurldecode($path), PATHINFO_FILENAME);
+                preg_match('/-([a-z])$/iu', $filename, $matches);
+
+                return $url === '' ? null : [
+                    'url' => $url,
+                    'variant' => isset($matches[1]) ? mb_strtoupper($matches[1]) : null,
+                ];
+            })
+            ->filter()
+            ->unique('url')
+            ->values()
+            ->all();
+    }
+
+    private function resolveFileUrl(string $value, ?string $primaryImageUrl): string
+    {
+        if ($value === '' || filter_var($value, FILTER_VALIDATE_URL)) {
+            return $value;
+        }
+
+        if (! $primaryImageUrl || ! filter_var($primaryImageUrl, FILTER_VALIDATE_URL)) {
+            return $value;
+        }
+
+        $parts = parse_url($primaryImageUrl);
+        if (! isset($parts['scheme'], $parts['host'], $parts['path'])) {
+            return $value;
+        }
+
+        $directory = rtrim(str_replace('\\', '/', dirname($parts['path'])), '/');
+        $filename = rawurlencode(rawurldecode(basename(str_replace('\\', '/', $value))));
+
+        return "{$parts['scheme']}://{$parts['host']}{$directory}/{$filename}";
     }
 
     private function findPrimaryRow(array $rows): array
@@ -402,25 +464,8 @@ class ConfiguratorCsvImporter
     {
         $needle = mb_strtolower(trim($handle.' '.$title.' '.$tags));
 
-        if (str_contains($needle, 'precheck') || str_contains($needle, 'pre-check')) {
-            return 'installation';
-        }
-
-        if (
-            str_contains($needle, 'instalacion base') ||
-            str_contains($needle, 'instalación base') ||
-            str_contains($needle, 'instalacion de pantalla') ||
-            str_contains($needle, 'instalación de pantalla')
-        ) {
-            return 'installation';
-        }
-
         if ($type === 'CAM') {
             return 'camera';
-        }
-
-        if (in_array($type, ['INSTALLAZIONE', 'INSTALLATION', 'INSTALACION', 'INSTALACIÓN'], true)) {
-            return 'installation';
         }
 
         if (in_array($type, ['ALTAVOCES', 'ALTAVOZ', 'ALTOPARLANTI', 'ALTOPARLANTE', 'SPEAKER', 'SPEAKERS'], true)) {
@@ -489,7 +534,7 @@ class ConfiguratorCsvImporter
             ->all();
     }
 
-    private function detectSubtype(string $category, string $handle, string $title, ?string $explicitType = null): ?string
+    private function detectSubtype(string $category, string $handle, string $title): ?string
     {
         $needle = mb_strtolower($handle.' '.$title);
 
@@ -513,99 +558,7 @@ class ConfiguratorCsvImporter
             return 'rear';
         }
 
-        if ($category === 'installation') {
-            if (str_contains($needle, 'precheck') || str_contains($needle, 'pre-check')) {
-                return 'precheck';
-            }
-
-            if ($explicitType !== null) {
-                return $explicitType;
-            }
-
-            if (str_contains($needle, 'sin cam') || str_contains($needle, 'sin c')) {
-                return 'screen_only';
-            }
-
-            if (str_contains($needle, 'camara') && str_contains($needle, 'pantalla')) {
-                return 'screen_camera';
-            }
-
-            if (
-                (str_contains($needle, 'camara') || str_contains($needle, 'camera')) &&
-                (str_contains($needle, 'altavoz') || str_contains($needle, 'altavoces') || str_contains($needle, 'altoparl') || str_contains($needle, 'speaker'))
-            ) {
-                return str_contains($needle, 'pantalla') || str_contains($needle, 'screen')
-                    ? 'screen_camera_speaker'
-                    : 'camera_speaker';
-            }
-
-            if (str_contains($needle, 'pantalla') && (str_contains($needle, 'altavoz') || str_contains($needle, 'altavoces') || str_contains($needle, 'altoparl') || str_contains($needle, 'speaker'))) {
-                return 'speaker_screen';
-            }
-
-            if (str_contains($needle, 'camara')) {
-                return 'camera_only';
-            }
-
-            return 'general';
-        }
-
         return null;
-    }
-
-    private function parseInstallation(mixed $value): ?array
-    {
-        $value = trim((string) $value);
-
-        if ($value === '') {
-            return null;
-        }
-
-        [$location, $type] = array_pad(array_map('trim', explode(',', $value, 2)), 2, '');
-        $normalizedType = mb_strtolower($type);
-        $normalizedType = strtr($normalizedType, ['á' => 'a', 'à' => 'a', 'ä' => 'a']);
-        $normalizedType = preg_replace('/\s+/u', ' ', $normalizedType) ?? $normalizedType;
-        $compactType = preg_replace('/\s*\+\s*/', '+', $normalizedType) ?? $normalizedType;
-
-        $subtype = match (true) {
-            in_array($compactType, ['precheck', 'pre-check'], true) => 'precheck',
-            preg_match('/pantalla|screen/', $compactType) === 1 &&
-            preg_match('/camara|camera/', $compactType) === 1 &&
-            preg_match('/360/', $compactType) === 1 => 'screen_camera_360',
-            preg_match('/camara|camera/', $compactType) === 1 && preg_match('/360/', $compactType) === 1 => 'camera_360',
-            preg_match('/pantalla|screen/', $compactType) === 1 &&
-            preg_match('/camara|camera/', $compactType) === 1 &&
-            ((preg_match('/delantera|frontal|front/', $compactType) === 1 &&
-                preg_match('/trasera|rear/', $compactType) === 1) ||
-                preg_match('/(?:2|dos)\s*(?:camara|camera)/', $compactType) === 1) => 'screen_camera_front_rear',
-            preg_match('/pantalla|screen/', $compactType) === 1 &&
-                preg_match('/camara|camera/', $compactType) === 1 &&
-                preg_match('/altav(?:oz|oces)|altoparl|speaker/', $compactType) === 1 => 'screen_camera_speaker',
-            preg_match('/camara|camera/', $compactType) === 1 &&
-                ((preg_match('/delantera|frontal|front/', $compactType) === 1 &&
-                    preg_match('/trasera|rear/', $compactType) === 1) ||
-                    preg_match('/(?:2|dos)\s*(?:camara|camera)/', $compactType) === 1) => 'camera_front_rear',
-            preg_match('/pantalla|screen/', $compactType) === 1 &&
-                preg_match('/camara|camera/', $compactType) === 1 => 'screen_camera',
-            preg_match('/pantalla|screen/', $compactType) === 1 &&
-                preg_match('/altav(?:oz|oces)|altoparl|speaker/', $compactType) === 1 => 'speaker_screen',
-            preg_match('/camara|camera/', $compactType) === 1 &&
-                preg_match('/altav(?:oz|oces)|altoparl|speaker/', $compactType) === 1 => 'camera_speaker',
-            preg_match('/pantalla|screen/', $compactType) === 1 => 'screen_only',
-            preg_match('/camara|camera/', $compactType) === 1 => 'camera_only',
-            preg_match('/altav(?:oz|oces)|altoparl|speaker/', $compactType) === 1 => 'speaker_only',
-            default => null,
-        };
-
-        if ($location === '' || $subtype === null) {
-            return null;
-        }
-
-        return [
-            'location' => $location,
-            'type' => $subtype,
-            'raw' => $value,
-        ];
     }
 
     private function normalizeBrand(?string $brand): ?string
@@ -621,10 +574,6 @@ class ConfiguratorCsvImporter
 
         if ($explicitBrand !== null) {
             return $explicitBrand;
-        }
-
-        if ($category === 'installation') {
-            return null;
         }
 
         $title = trim((string) $this->value($row, ['Title', 'Product Title']));

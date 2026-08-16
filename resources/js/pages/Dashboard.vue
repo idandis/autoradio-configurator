@@ -6,7 +6,6 @@ const props = defineProps<{
         screens: number;
         cameras: number;
         speakers: number;
-        installations: number;
         vehicles: number;
     };
     flashStatus?: string | null;
@@ -44,7 +43,7 @@ const migrateDatabase = () => {
     <Head title="Dashboard" />
 
     <div class="flex flex-1 flex-col gap-6 p-4">
-        <div class="grid gap-4 md:grid-cols-5">
+        <div class="grid gap-4 md:grid-cols-4">
             <div class="rounded-xl border border-sidebar-border/70 bg-card p-5">
                 <p class="text-sm text-muted-foreground">Veicoli</p>
                 <p class="mt-2 text-3xl font-semibold">{{ props.stats.vehicles }}</p>
@@ -61,10 +60,6 @@ const migrateDatabase = () => {
                 <p class="text-sm text-muted-foreground">Altoparlanti</p>
                 <p class="mt-2 text-3xl font-semibold">{{ props.stats.speakers }}</p>
             </div>
-            <div class="rounded-xl border border-sidebar-border/70 bg-card p-5">
-                <p class="text-sm text-muted-foreground">Installazioni</p>
-                <p class="mt-2 text-3xl font-semibold">{{ props.stats.installations }}</p>
-            </div>
         </div>
 
         <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -74,7 +69,8 @@ const migrateDatabase = () => {
                         <h1 class="text-2xl font-semibold">Import catalogo configuratore</h1>
                         <p class="mt-2 text-sm text-muted-foreground">
                             Carica l'export CSV o Excel di Shopify. Il sistema estrae prodotti schermo,
-                            camere, altoparlanti e installazioni e aggiorna il configuratore pubblico.
+                            camere e altoparlanti e aggiorna il configuratore pubblico. Le installazioni
+                            vengono gestite separatamente nelle zone di installazione.
                         </p>
                     </div>
 

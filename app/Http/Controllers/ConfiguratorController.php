@@ -62,6 +62,7 @@ class ConfiguratorController extends Controller
     public function __invoke(Request $request): Response
     {
         $allProducts = ConfiguratorProduct::with('variants')
+            ->whereIn('category', ['screen', 'camera', 'speaker'])
             ->orderBy('category')
             ->orderBy('title')
             ->get();
@@ -213,6 +214,7 @@ class ConfiguratorController extends Controller
                 'yearFrom' => $product->year_from,
                 'yearTo' => $product->year_to,
                 'image' => $product->image_url,
+                'originalDashboardImages' => $product->meta['original_dashboard_images'] ?? [],
                 'variants' => $product->variants
                     ->filter(fn ($variant) => filled($variant->option_value))
                     ->groupBy(fn ($variant) => mb_strtolower(trim((string) $variant->option_value)))
@@ -227,6 +229,7 @@ class ConfiguratorController extends Controller
                             'shopifyVariantId' => $variant->shopify_variant_id,
                             'price' => (float) $variant->price,
                             'image' => $variant->image_url ?: $product->image_url,
+                            'dashboardVariant' => $this->variantSuffix($variant->option_value ?: $variant->title),
                         ])->values();
                         $default = $choices->first();
 
@@ -239,6 +242,13 @@ class ConfiguratorController extends Controller
                     ->values(),
                 ];
             })->values();
+    }
+
+    private function variantSuffix(?string $title): ?string
+    {
+        preg_match('/(?:^|[\s_-])([a-z])\s*$/iu', trim((string) $title), $matches);
+
+        return isset($matches[1]) ? mb_strtoupper($matches[1]) : null;
     }
 
     private function sharedConfiguration(Request $request): ?array
@@ -338,30 +348,6 @@ class ConfiguratorController extends Controller
                     'yearFrom' => $product->year_from,
                     'yearTo' => $product->year_to,
                 ];
-        }
-
-        return $options;
-    }
-
-    private function installationOptions($products): array
-    {
-        $options = [];
-
-        foreach ($products->sortBy('price_min')->values() as $product) {
-            $options[] = [
-                'key' => $product->handle,
-                'productId' => $product->id,
-                'variantId' => $product->variants->first()?->id,
-                'title' => $product->title,
-                'productTitle' => $product->title,
-                'variantTitle' => $product->variants->first()?->option_value ?: $product->variants->first()?->title,
-                'price' => (float) $product->price_min,
-                'shopifyVariantId' => $product->variants->first()?->shopify_variant_id,
-                'sku' => $product->variants->first()?->sku,
-                'subtype' => $product->subtype,
-                'location' => $product->meta['installation']['location'] ?? null,
-                'installationRaw' => $product->meta['installation']['raw'] ?? null,
-            ];
         }
 
         return $options;

@@ -95,7 +95,6 @@ const formatCategory = (value: string) => {
     if (value === 'screen') return 'Schermo';
     if (value === 'camera') return 'Camera';
     if (value === 'speaker') return 'Altoparlante';
-    if (value === 'installation') return 'Installazione';
 
     return value;
 };
@@ -137,7 +136,6 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                     <option value="screen">Schermi</option>
                     <option value="camera">Camere</option>
                     <option value="speaker">Altoparlanti</option>
-                    <option value="installation">Installazioni</option>
                 </select>
 
                 <input
