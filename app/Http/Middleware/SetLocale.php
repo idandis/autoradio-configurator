@@ -17,6 +17,8 @@ class SetLocale
 
         if (is_string($requestedLocale) && in_array($requestedLocale, self::SUPPORTED_LOCALES, true)) {
             $request->session()->put('locale', $requestedLocale);
+        } elseif ($referrerLocale = $this->localeFromStorefrontReferrer($request->headers->get('referer'))) {
+            $request->session()->put('locale', $referrerLocale);
         }
 
         $locale = $request->session()->get('locale', 'es');
@@ -29,5 +31,29 @@ class SetLocale
         App::setLocale($locale);
 
         return $next($request);
+    }
+
+    private function localeFromStorefrontReferrer(?string $referrer): ?string
+    {
+        if (! $referrer || ! filter_var($referrer, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+
+        $host = mb_strtolower((string) parse_url($referrer, PHP_URL_HOST));
+        if (! in_array($host, ['autoradiocanario.com', 'www.autoradiocanario.com'], true)) {
+            return null;
+        }
+
+        $path = '/'.ltrim((string) parse_url($referrer, PHP_URL_PATH), '/');
+
+        if (preg_match('#^/it(?:/|$)#i', $path)) {
+            return 'it';
+        }
+
+        if (preg_match('#^/en(?:/|$)#i', $path)) {
+            return 'en';
+        }
+
+        return 'es';
     }
 }

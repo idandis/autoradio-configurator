@@ -55,4 +55,36 @@ class LocaleTest extends TestCase
                 ->where('translations.steps.vehicle', '1. Scegli la tua auto')
             );
     }
+
+    public function test_language_is_detected_from_the_storefront_referrer(): void
+    {
+        $this->withSession(['locale' => 'es'])
+            ->withHeader('Referer', 'https://www.autoradiocanario.com/it/products/autoradio')
+            ->get('/configurator')
+            ->assertSessionHas('locale', 'it')
+            ->assertInertia(fn (Assert $page) => $page->where('locale', 'it'));
+
+        $this->withHeader('Referer', 'https://www.autoradiocanario.com/en')
+            ->get('/configurator')
+            ->assertSessionHas('locale', 'en');
+
+        $this->withHeader('Referer', 'https://www.autoradiocanario.com/products/autoradio')
+            ->get('/configurator')
+            ->assertSessionHas('locale', 'es');
+    }
+
+    public function test_query_language_has_priority_over_storefront_referrer(): void
+    {
+        $this->withHeader('Referer', 'https://www.autoradiocanario.com/it')
+            ->get('/configurator?lang=en')
+            ->assertSessionHas('locale', 'en');
+    }
+
+    public function test_untrusted_referrer_does_not_change_the_session_language(): void
+    {
+        $this->withSession(['locale' => 'it'])
+            ->withHeader('Referer', 'https://example.com/en')
+            ->get('/configurator')
+            ->assertSessionHas('locale', 'it');
+    }
 }
