@@ -9,6 +9,7 @@ use App\Services\ShopifyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Testing\AssertableInertia as Assert;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xls;
@@ -18,6 +19,28 @@ use Tests\TestCase;
 class ConfiguratorImportTest extends TestCase
 {
     use RefreshDatabase;
+
+    public function test_import_preserves_a_model_compatibility_list_longer_than_255_characters(): void
+    {
+        $models = implode(' | ', array_map(
+            fn (int $index) => '1:Modello compatibile '.$index,
+            range(1, 30),
+        ));
+        $csv = implode("\n", [
+            'Product Type,Product Title,Product Handle,Variant Id,Variant Price,Variant Option1 Value,Product.custom.radio_type,Product.custom.modello_auto,Product.custom.anno',
+            'Radio AM/FM,Autoradio multi-modello,multi-model-screen,123456,299.00,Default,BMW,"'.$models.'",2000-2020',
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->post(route('dashboard.import'), [
+                'catalog' => UploadedFile::fake()->createWithContent('long-model-list.csv', $csv),
+            ])
+            ->assertRedirect();
+
+        $this->assertGreaterThan(255, mb_strlen($models));
+        $this->assertSame('text', Schema::getColumnType('configurator_products', 'model'));
+        $this->assertSame($models, ConfiguratorProduct::where('handle', 'multi-model-screen')->value('model'));
+    }
 
     public function test_import_reports_all_missing_essential_headers_without_changing_the_catalog(): void
     {
