@@ -1030,6 +1030,32 @@ const dashboardReferenceLabel = (vehicle: Vehicle) =>
         ? 'screen.original_radio_compatible_one'
         : 'screen.original_radio_compatible_many');
 
+const dashboardVariantLabel = (variant: string) => {
+    const key = 'screen.original_radio_variant';
+    const translated = t(key, { variant });
+
+    if (translated !== key) return translated;
+
+    return {
+        es: `Variante ${variant}`,
+        it: `Variante ${variant}`,
+        en: `Variant ${variant}`,
+    }[props.locale];
+};
+
+const changeDashboardVariantLabel = () => {
+    const key = 'screen.change_original_radio_variant';
+    const translated = t(key);
+
+    if (translated !== key) return translated;
+
+    return {
+        es: 'Cambiar variante',
+        it: 'Cambia variante',
+        en: 'Change variant',
+    }[props.locale];
+};
+
 const screenProductUrl = (vehicle: Vehicle) =>
     storefrontUrl(`/products/${encodeURIComponent(vehicle.handle)}`);
 
@@ -3481,8 +3507,8 @@ watch(
                                                 class="group rounded-xl border border-neutral-700 bg-neutral-950 p-3 text-center transition hover:border-amber-400 hover:bg-amber-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                                                 @click="selectDashboardVariant(vehicle, image.variant!)"
                                             >
-                                                <img :src="image.url" :alt="t('screen.original_radio_variant', { variant: image.variant! })" class="h-64 w-full rounded-lg object-contain" />
-                                                <span class="mt-3 block font-semibold text-amber-400">{{ t('screen.original_radio_variant', { variant: image.variant! }) }}</span>
+                                                <img :src="image.url" :alt="dashboardVariantLabel(image.variant!)" class="h-64 w-full rounded-lg object-contain" />
+                                                <span class="mt-3 block font-semibold text-amber-400">{{ dashboardVariantLabel(image.variant!) }}</span>
                                             </button>
                                         </div>
                                     </div>
@@ -3513,15 +3539,15 @@ watch(
                                             {{ t('screen.product_details') }}
                                         </a>
                                         <div v-if="dashboardReferenceImages(vehicle).length" class="absolute bottom-3 left-3 right-3 flex min-w-0 flex-col items-start gap-2">
-                                            <div class="flex max-w-full items-center gap-2">
-                                                <span class="min-w-0 whitespace-nowrap rounded bg-black/80 px-2 py-1 text-left text-[11px] font-semibold text-white backdrop-blur">{{ dashboardReferenceLabel(vehicle) }}</span>
+                                            <div class="flex w-full min-w-0 items-center gap-2">
+                                                <span class="min-w-0 flex-1 truncate rounded bg-black/80 px-2 py-1 text-left text-[11px] font-semibold text-white backdrop-blur" :title="dashboardReferenceLabel(vehicle)">{{ dashboardReferenceLabel(vehicle) }}</span>
                                                 <button
                                                     v-if="requiresDashboardChoice(vehicle) && selectedDashboardVariant(vehicle)"
                                                     type="button"
                                                     class="shrink-0 whitespace-nowrap rounded border border-amber-400 bg-black/85 px-2 py-1 text-[11px] font-semibold text-amber-400 shadow transition hover:bg-amber-400 hover:text-black"
                                                     @click.stop="changeDashboardVariant(vehicle)"
                                                 >
-                                                    {{ t('screen.change_original_radio_variant') }}
+                                                    {{ changeDashboardVariantLabel() }}
                                                 </button>
                                             </div>
                                             <div class="flex max-w-full gap-2 overflow-x-auto">
