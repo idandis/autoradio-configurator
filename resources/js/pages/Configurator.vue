@@ -2287,8 +2287,15 @@ const installationCost = computed(
             .reduce((sum, product) => sum + product.price, 0),
 );
 
-const discountTiers = [
-    { code: 'Vip', threshold: 900, percentage: 5 },
+type DiscountTier = {
+    code: string;
+    threshold: number;
+    percentage?: number;
+    fixedAmount?: number;
+};
+
+const discountTiers: DiscountTier[] = [
+    { code: 'Vip', threshold: 900, fixedAmount: 50 },
     { code: 'Pro', threshold: 500, percentage: 3 },
     { code: 'Base', threshold: 300, percentage: 2 },
 ];
@@ -2298,11 +2305,6 @@ const activeDiscount = computed(
 const nextDiscount = computed(() => {
     return [...discountTiers].reverse().find((tier) => productsSubtotal.value < tier.threshold) ?? null;
 });
-const amountUntilNextDiscount = computed(() =>
-    nextDiscount.value
-        ? Math.max(0, nextDiscount.value.threshold - productsSubtotal.value)
-        : 0,
-);
 const quoteDiscountCode = ref('');
 const quoteDiscountType = ref<'percentage' | 'fixed'>('percentage');
 const quoteDiscountValue = ref('');
@@ -2321,6 +2323,47 @@ const customDiscount = computed(() => {
     };
 });
 const effectiveDiscountCode = computed(() => customDiscount.value?.code ?? activeDiscount.value?.code ?? null);
+const automaticDiscountAmount = (tier: DiscountTier) =>
+    tier.fixedAmount ?? productsSubtotal.value * ((tier.percentage ?? 0) / 100);
+const automaticDiscountLabel = (tier: DiscountTier) => {
+    if (tier.fixedAmount === undefined) {
+        return t('quote.discount', { percentage: tier.percentage ?? 0 });
+    }
+
+    return {
+        es: `Descuento ${tier.fixedAmount} €`,
+        it: `Sconto ${tier.fixedAmount} €`,
+        en: `€${tier.fixedAmount} discount`,
+    }[props.locale];
+};
+const automaticDiscountAppliedMessage = (tier: DiscountTier) => {
+    if (tier.fixedAmount === undefined) {
+        return t('quote.discount_applied', { percentage: tier.percentage ?? 0, code: tier.code });
+    }
+
+    return {
+        es: `¡Ya tienes un descuento fijo de ${tier.fixedAmount} € aplicado!`,
+        it: `Hai già uno sconto fisso di ${tier.fixedAmount} € applicato!`,
+        en: `You already have a fixed €${tier.fixedAmount} discount applied!`,
+    }[props.locale];
+};
+const automaticDiscountRemainingMessage = (tier: DiscountTier) => {
+    const amount = Math.max(0, tier.threshold - productsSubtotal.value).toFixed(2);
+
+    if (tier.fixedAmount === undefined) {
+        return t('quote.discount_remaining', {
+            amount,
+            percentage: tier.percentage ?? 0,
+            code: tier.code,
+        });
+    }
+
+    return {
+        es: `Añade solo ${amount} € más y obtén un descuento fijo de ${tier.fixedAmount} € en todo el pedido.`,
+        it: `Aggiungi solo altri ${amount} € e ottieni uno sconto fisso di ${tier.fixedAmount} € sull’intero ordine.`,
+        en: `Add just €${amount} more and get a fixed €${tier.fixedAmount} discount on the entire order.`,
+    }[props.locale];
+};
 const discountAmount = computed(() => {
     if (customDiscount.value) {
         const amount = customDiscount.value.type === 'percentage'
@@ -2330,9 +2373,7 @@ const discountAmount = computed(() => {
         return Math.min(productsSubtotal.value, amount);
     }
 
-    return activeDiscount.value
-        ? productsSubtotal.value * (activeDiscount.value.percentage / 100)
-        : 0;
+    return activeDiscount.value ? automaticDiscountAmount(activeDiscount.value) : 0;
 });
 const discountLabel = computed(() => {
     if (customDiscount.value) {
@@ -2343,7 +2384,7 @@ const discountLabel = computed(() => {
         return `${adminDiscountCopy.value.special} ${value}`;
     }
 
-    return t('quote.discount', { percentage: activeDiscount.value?.percentage ?? 0 });
+    return activeDiscount.value ? automaticDiscountLabel(activeDiscount.value) : '';
 });
 const onlineTotal = computed(() => productsSubtotal.value - discountAmount.value);
 const estimatedTotal = computed(() => onlineTotal.value + installationCost.value);
@@ -4336,23 +4377,12 @@ watch(
                             {{ discountLabel }}
                         </template>
                         <template v-else-if="!activeDiscount && nextDiscount">
-                            {{ t('quote.discount_remaining', {
-                                amount: amountUntilNextDiscount.toFixed(2),
-                                percentage: nextDiscount.percentage,
-                                code: nextDiscount.code,
-                            }) }}
+                            {{ automaticDiscountRemainingMessage(nextDiscount) }}
                         </template>
                         <template v-else-if="activeDiscount">
-                            {{ t('quote.discount_applied', {
-                                percentage: activeDiscount.percentage,
-                                code: activeDiscount.code,
-                            }) }}
+                            {{ automaticDiscountAppliedMessage(activeDiscount) }}
                             <span v-if="nextDiscount" class="mt-1 block text-emerald-200/80">
-                                {{ t('quote.discount_remaining', {
-                                    amount: amountUntilNextDiscount.toFixed(2),
-                                    percentage: nextDiscount.percentage,
-                                    code: nextDiscount.code,
-                                }) }}
+                                {{ automaticDiscountRemainingMessage(nextDiscount) }}
                             </span>
                         </template>
                     </div>
