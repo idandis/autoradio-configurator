@@ -181,6 +181,8 @@ class ConfiguratorController extends Controller
                 ->map(fn (InstallationZone $zone) => [
                     'id' => $zone->id,
                     'name' => $zone->name,
+                    'installerAddress' => $zone->installer_address,
+                    'installerPhone' => $zone->installer_phone,
                     'postalRanges' => $zone->postalCodes->map(fn ($range) => [
                         'from' => $range->postal_code_from,
                         'to' => $range->postal_code_to,

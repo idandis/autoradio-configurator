@@ -4,7 +4,7 @@ import { computed, ref } from 'vue';
 
 type PostalRange = { id: number; from: string; to: string };
 type InstallationService = { id: number; name: string; price: number };
-type Zone = { id: number; name: string; postal_ranges: PostalRange[]; services: InstallationService[] };
+type Zone = { id: number; name: string; installer_address: string | null; installer_phone: string | null; postal_ranges: PostalRange[]; services: InstallationService[] };
 
 const props = defineProps<{ zones: Zone[] }>();
 
@@ -19,7 +19,7 @@ const showingServiceForm = ref(false);
 
 const selectedZone = computed(() => props.zones.find((zone) => zone.id === selectedZoneId.value) ?? null);
 
-const zoneForm = useForm({ name: '' });
+const zoneForm = useForm({ name: '', installer_address: '', installer_phone: '' });
 const postalForm = useForm({ from: '', to: '' });
 const serviceForm = useForm({ name: '', price: '' as string | number });
 
@@ -60,6 +60,8 @@ const startRenameZone = (zone: Zone) => {
     editingZoneId.value = zone.id;
     creatingZone.value = false;
     zoneForm.name = zone.name;
+    zoneForm.installer_address = zone.installer_address ?? '';
+    zoneForm.installer_phone = zone.installer_phone ?? '';
     zoneForm.clearErrors();
 };
 
@@ -172,7 +174,7 @@ const deleteService = (service: InstallationService) => {
                             <button type="button" class="tree-item min-w-0 flex-1" :class="selectedZoneId === zone.id ? 'tree-item-selected' : ''" @click="toggleZone(zone)">
                                 <span class="truncate">{{ zone.name }}</span><span v-if="selectedZoneId === zone.id">→</span>
                             </button>
-                            <button type="button" class="tree-icon-button" aria-label="Renombrar zona" @click="startRenameZone(zone)">✎</button>
+                            <button type="button" class="tree-icon-button" aria-label="Editar zona" @click="startRenameZone(zone)">✎</button>
                             <button type="button" class="tree-icon-button tree-delete" aria-label="Eliminar zona" @click="deleteZone(zone)">×</button>
                         </div>
                         <p v-if="props.zones.length === 0" class="rounded-lg border border-dashed p-4 text-sm text-muted-foreground">No hay zonas configuradas.</p>
@@ -181,7 +183,13 @@ const deleteService = (service: InstallationService) => {
                     <form v-if="creatingZone || editingZoneId" class="tree-form mt-3" @submit.prevent="saveZone">
                         <label class="tree-label">Nombre</label>
                         <input v-model="zoneForm.name" autofocus class="tree-input" />
+                        <label class="tree-label">Dirección del instalador</label>
+                        <textarea v-model="zoneForm.installer_address" class="tree-input min-h-20 resize-y" placeholder="Calle, número, localidad" />
+                        <label class="tree-label">Teléfono del instalador</label>
+                        <input v-model="zoneForm.installer_phone" type="tel" class="tree-input" placeholder="+34 600 000 000" />
                         <p v-if="zoneForm.errors.name" class="tree-error">{{ zoneForm.errors.name }}</p>
+                        <p v-if="zoneForm.errors.installer_address" class="tree-error">{{ zoneForm.errors.installer_address }}</p>
+                        <p v-if="zoneForm.errors.installer_phone" class="tree-error">{{ zoneForm.errors.installer_phone }}</p>
                         <div class="tree-actions"><button class="tree-save" type="submit">Guardar</button><button class="tree-cancel" type="button" @click="cancelZoneForm">Cancelar</button></div>
                     </form>
                     <button v-else type="button" class="tree-add" @click="startCreateZone">+ Nueva zona</button>

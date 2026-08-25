@@ -26,6 +26,8 @@ class ConfiguratorPostalCodeController extends Controller
                 'postalCode' => $postalCode,
                 'installationArea' => [
                     'name' => $configuredZone->name,
+                    'installerAddress' => $configuredZone->installer_address,
+                    'installerPhone' => $configuredZone->installer_phone,
                     'productHandles' => $configuredZone->services->map(fn ($service) => 'zone-service-'.$service->id)->values(),
                     'productPrices' => $configuredZone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => (float) $service->price]),
                     'productTitles' => $configuredZone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => $service->name]),

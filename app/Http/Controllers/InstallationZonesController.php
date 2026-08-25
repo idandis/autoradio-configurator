@@ -23,6 +23,8 @@ class InstallationZonesController extends Controller
                 ->map(fn (InstallationZone $zone) => [
                     'id' => $zone->id,
                     'name' => $zone->name,
+                    'installer_address' => $zone->installer_address,
+                    'installer_phone' => $zone->installer_phone,
                     'postal_ranges' => $zone->postalCodes->map(fn (InstallationZonePostalCode $range) => [
                         'id' => $range->id,
                         'from' => $range->postal_code_from,
@@ -39,20 +41,17 @@ class InstallationZonesController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $data = $request->validate(['name' => ['required', 'string', 'max:255', 'unique:installation_zones,name']]);
-        InstallationZone::create(['name' => trim($data['name']), 'active' => true]);
+        $data = $this->zoneData($request);
+        InstallationZone::create([...$data, 'active' => true]);
 
         return back()->with('status', 'Zona creata.');
     }
 
     public function update(Request $request, InstallationZone $installationZone): RedirectResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string', 'max:255', 'unique:installation_zones,name,'.$installationZone->id],
-        ]);
-        $installationZone->update(['name' => trim($data['name'])]);
+        $installationZone->update($this->zoneData($request, $installationZone));
 
-        return back()->with('status', 'Zona rinominata.');
+        return back()->with('status', 'Zona aggiornata.');
     }
 
     public function destroy(InstallationZone $installationZone): RedirectResponse
@@ -122,6 +121,21 @@ class InstallationZonesController extends Controller
         }
 
         return ['postal_code_from' => $data['from'], 'postal_code_to' => $to];
+    }
+
+    private function zoneData(Request $request, ?InstallationZone $zone = null): array
+    {
+        $data = $request->validate([
+            'name' => ['required', 'string', 'max:255', 'unique:installation_zones,name'.($zone ? ','.$zone->id : '')],
+            'installer_address' => ['nullable', 'string', 'max:500'],
+            'installer_phone' => ['nullable', 'string', 'max:50'],
+        ]);
+
+        return [
+            'name' => trim($data['name']),
+            'installer_address' => filled($data['installer_address'] ?? null) ? trim($data['installer_address']) : null,
+            'installer_phone' => filled($data['installer_phone'] ?? null) ? trim($data['installer_phone']) : null,
+        ];
     }
 
     private function serviceData(Request $request): array

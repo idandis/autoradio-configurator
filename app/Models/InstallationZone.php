@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InstallationZone extends Model
 {
-    protected $fillable = ['name', 'active'];
+    protected $fillable = ['name', 'installer_address', 'installer_phone', 'active'];
 
     protected $casts = ['active' => 'boolean'];
 

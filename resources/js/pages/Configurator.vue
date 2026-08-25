@@ -61,6 +61,8 @@ type SimpleOption = {
 type InstallationZone = {
     id: number;
     name: string;
+    installerAddress: string | null;
+    installerPhone: string | null;
     postalRanges: Array<{ from: string; to: string }>;
     productHandles: string[];
     productPrices: Record<string, number>;
@@ -466,36 +468,31 @@ const missingVehicleSending = ref(false);
 const missingVehicleSent = ref(false);
 const missingVehicleError = ref('');
 const quoteTotals = ref<HTMLElement | null>(null);
+const checkoutConsentSection = ref<HTMLElement | null>(null);
 const mobileQuoteTotals = ref<HTMLElement | null>(null);
 const quotePanel = ref<HTMLElement | null>(null);
+const quoteSummaryScroll = ref<HTMLElement | null>(null);
 const showMobileQuoteTotals = ref(false);
-const summaryMode = ref(false);
 let quoteTotalsObserver: IntersectionObserver | null = null;
 const updateMobileQuoteTotals = () => {
-    if (!hasSelectedProducts.value || !quoteTotals.value || !mobileQuoteTotals.value || window.innerWidth >= 1024) {
+    if (!hasSelectedProducts.value || !checkoutConsentSection.value || !mobileQuoteTotals.value || window.innerWidth >= 1024) {
         showMobileQuoteTotals.value = false;
         return;
     }
 
-    if (summaryMode.value) {
-        showMobileQuoteTotals.value = true;
-        return;
-    }
-
     const viewportHeight = window.visualViewport?.height ?? document.documentElement.clientHeight;
-    const originalTotalsRect = quoteTotals.value.getBoundingClientRect();
+    const consentRect = checkoutConsentSection.value.getBoundingClientRect();
 
-    // Show the compact bar only while the original totals are still below the
-    // viewport. Once users reach or pass them, keep it hidden through checkout
-    // methods and the footer, including mobile overscroll/bounce.
-    showMobileQuoteTotals.value = originalTotalsRect.top >= viewportHeight;
+    // Keep the compact total visible through the quote and hide it when the
+    // service-conditions consent reaches the viewport. Keep it hidden below it.
+    showMobileQuoteTotals.value = consentRect.top >= viewportHeight;
 };
 const observeQuoteTotals = async () => {
     await nextTick();
     quoteTotalsObserver?.disconnect();
     quoteTotalsObserver = null;
 
-    if (!quoteTotals.value || typeof IntersectionObserver === 'undefined') {
+    if (!checkoutConsentSection.value || typeof IntersectionObserver === 'undefined') {
         updateMobileQuoteTotals();
         return;
     }
@@ -504,7 +501,7 @@ const observeQuoteTotals = async () => {
         () => updateMobileQuoteTotals(),
         { root: null, threshold: [0, 0.01] },
     );
-    quoteTotalsObserver.observe(quoteTotals.value);
+    quoteTotalsObserver.observe(checkoutConsentSection.value);
     updateMobileQuoteTotals();
 };
 const missingVehicleForm = ref({ first_name: '', last_name: '', email: '', phone: '', province: '', brand: '', model: '', year: '', comment: '', photo: null as File | null });
@@ -664,6 +661,8 @@ const checkedPostalCode = ref<string | null>(null);
 const postalCodeError = ref<string | null>(null);
 const resolvedInstallationArea = ref<{
     name: string;
+    installerAddress?: string | null;
+    installerPhone?: string | null;
     productHandles: string[];
     productPrices?: Record<string, number>;
     productTitles?: Record<string, string>;
@@ -1261,7 +1260,6 @@ const restoreConfiguratorState = async () => {
 };
 
 const applySharedConfiguration = async (configuration: SharedConfigurationPayload) => {
-    summaryMode.value = true;
     const { brand, model, year } = configuration;
     const resolvedBrand = resolveAvailableBrand(brand);
     const validVehicle = resolvedBrand
@@ -1284,6 +1282,7 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
     selectedModel.value = validVehicle ? model : null;
     await nextTick();
 
+    const restoredDashboardVariants: Record<number, string> = {};
     selectedScreenVariantIds.value = configuration.screens.flatMap((screen) => {
         const vehicle = selectableScreenVehicles.value.find((candidate) => candidate.handle === screen.product);
         const token = screen.variant;
@@ -1295,8 +1294,13 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
                 || candidate.sku === token
             );
 
+        if (vehicle && variant?.dashboardVariant && requiresDashboardChoice(vehicle)) {
+            restoredDashboardVariants[vehicle.id] = variant.dashboardVariant;
+        }
+
         return variant ? [variant.id] : [];
     });
+    selectedDashboardVariants.value = restoredDashboardVariants;
 
     const visibleCameraKeys = new Set(visibleCameraOptions.value.map((camera) => camera.key));
     selectedCameraKeys.value = configuration.cameras
@@ -1335,7 +1339,7 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
         && visibleInstallationOptions.value.some((option) => option.key === installationKey)
         ? installationKey
         : null;
-    openSteps.value = [];
+    openSteps.value = selectedScreenVariantIds.value.length > 0 ? ['screen'] : [];
     await nextTick();
 
 };
@@ -1466,7 +1470,13 @@ onMounted(async () => {
         if (sharedConfigurationRestored) {
             await nextTick();
             await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
-            quotePanel.value?.scrollIntoView({
+            if (window.innerWidth >= 1024 && quoteSummaryScroll.value) {
+                quoteSummaryScroll.value.scrollTop = quoteSummaryScroll.value.scrollHeight;
+            }
+            const selectedScreenCard = selectedVehicle.value
+                ? document.getElementById(`screen-product-${selectedVehicle.value.id}`)
+                : null;
+            (selectedScreenCard ?? quotePanel.value)?.scrollIntoView({
                 behavior: window.innerWidth < 1024 ? 'auto' : 'smooth',
                 block: 'start',
             });
@@ -1863,6 +1873,8 @@ const matchedInstallationZone = computed(() => {
         return {
             id: 0,
             name: resolvedInstallationArea.value.name,
+            installerAddress: resolvedInstallationArea.value.installerAddress ?? null,
+            installerPhone: resolvedInstallationArea.value.installerPhone ?? null,
             postalRanges: [],
             productHandles: resolvedInstallationArea.value.productHandles,
             productPrices: resolvedInstallationArea.value.productPrices ?? {},
@@ -3580,17 +3592,6 @@ watch(
                                             {{ t('screen.product_details') }}
                                         </a>
                                         <div v-if="dashboardReferenceImages(vehicle).length" class="absolute bottom-3 left-3 right-3 flex min-w-0 flex-col items-start gap-2">
-                                            <div class="flex w-full min-w-0 items-center gap-2">
-                                                <span class="min-w-0 flex-1 truncate rounded bg-black/80 px-2 py-1 text-left text-[11px] font-semibold text-white backdrop-blur" :title="dashboardReferenceLabel(vehicle)">{{ dashboardReferenceLabel(vehicle) }}</span>
-                                                <button
-                                                    v-if="requiresDashboardChoice(vehicle) && selectedDashboardVariant(vehicle)"
-                                                    type="button"
-                                                    class="shrink-0 whitespace-nowrap rounded border border-amber-400 bg-black/85 px-2 py-1 text-[11px] font-semibold text-amber-400 shadow transition hover:bg-amber-400 hover:text-black"
-                                                    @click.stop="changeDashboardVariant(vehicle)"
-                                                >
-                                                    {{ changeDashboardVariantLabel() }}
-                                                </button>
-                                            </div>
                                             <div class="flex max-w-full gap-2 overflow-x-auto">
                                                 <button
                                                     v-for="image in dashboardReferenceImages(vehicle)"
@@ -3601,6 +3602,17 @@ watch(
                                                     @click.stop="openImageZoom(image.url, dashboardReferenceLabel(vehicle))"
                                                 >
                                                     <img :src="image.url" :alt="dashboardReferenceLabel(vehicle)" class="h-full w-full object-cover" />
+                                                </button>
+                                            </div>
+                                            <div class="flex w-full min-w-0 items-center gap-2">
+                                                <span class="min-w-0 flex-1 truncate rounded bg-black/80 px-2 py-1 text-left text-[11px] font-semibold text-white backdrop-blur" :title="dashboardReferenceLabel(vehicle)">{{ dashboardReferenceLabel(vehicle) }}</span>
+                                                <button
+                                                    v-if="requiresDashboardChoice(vehicle) && selectedDashboardVariant(vehicle)"
+                                                    type="button"
+                                                    class="shrink-0 whitespace-nowrap rounded border border-amber-400 bg-black/85 px-2 py-1 text-[11px] font-semibold text-amber-400 shadow transition hover:bg-amber-400 hover:text-black"
+                                                    @click.stop="changeDashboardVariant(vehicle)"
+                                                >
+                                                    {{ changeDashboardVariantLabel() }}
                                                 </button>
                                             </div>
                                         </div>
@@ -3909,9 +3921,13 @@ watch(
                                     </button>
                                 </div>
                                 <p v-if="postalCodeError" id="installation-availability-message" class="mt-3 text-sm text-red-400">{{ postalCodeError }}</p>
-                                <p v-else-if="checkedPostalCode && matchedInstallationZone" id="installation-availability-message" class="mt-3 text-sm text-emerald-400">
-                                    {{ t('installation.available_zone', { zone: matchedInstallationZone.name }) }}
-                                </p>
+                                <div v-else-if="checkedPostalCode && matchedInstallationZone" id="installation-availability-message" class="mt-3 text-sm text-emerald-400">
+                                    <p>{{ t('installation.available_zone', { zone: matchedInstallationZone.name }) }}</p>
+                                    <div v-if="matchedInstallationZone.installerAddress || matchedInstallationZone.installerPhone" class="mt-2 grid gap-1 text-neutral-300">
+                                        <p v-if="matchedInstallationZone.installerAddress">📍 {{ matchedInstallationZone.installerAddress }}</p>
+                                        <a v-if="matchedInstallationZone.installerPhone" :href="`tel:${matchedInstallationZone.installerPhone}`" class="w-fit font-semibold text-amber-400 underline underline-offset-2">☎ {{ matchedInstallationZone.installerPhone }}</a>
+                                    </div>
+                                </div>
                                 <p v-else-if="checkedPostalCode" id="installation-availability-message" class="mt-3 text-sm text-amber-400">
                                     {{ t('installation.unavailable') }}
                                     <a
@@ -4358,7 +4374,7 @@ watch(
                         </div>
                     </div>
 
-                    <div class="quote-scrollbar quote-summary-scrollbar lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
+                    <div ref="quoteSummaryScroll" class="quote-scrollbar quote-summary-scrollbar lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-2">
                     <div>
                     <p id="full-quote-summary" class="mt-6 text-sm font-semibold uppercase tracking-[0.24em] text-amber-400">
                         {{ t('quote.title') }}
@@ -4570,7 +4586,7 @@ watch(
                             <p class="mt-1 text-xs leading-5 text-neutral-400">{{ t('quote.trust_details') }}</p>
                         </div>
 
-                        <label class="flex cursor-pointer items-start gap-2 px-1 text-xs leading-5 text-neutral-400">
+                        <label ref="checkoutConsentSection" class="flex cursor-pointer items-start gap-2 px-1 text-xs leading-5 text-neutral-400">
                             <input
                                 v-model="checkoutConsentAccepted"
                                 type="checkbox"
