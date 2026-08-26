@@ -48,6 +48,7 @@ return [
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
         'image_model' => env('OPENAI_IMAGE_MODEL', 'gpt-image-1-mini'),
+        'text_model' => env('OPENAI_TEXT_MODEL', 'gpt-5-mini'),
     ],
 
 ];

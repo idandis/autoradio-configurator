@@ -38,6 +38,21 @@ class ImportedProductsController extends Controller
         return back()->with('status', 'Prezzo aggiornato.');
     }
 
+    public function updateTitles(Request $request, ConfiguratorProduct $product): RedirectResponse
+    {
+        $validated = $request->validate([
+            'title_it' => ['nullable', 'string', 'max:1000'],
+            'title_en' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $product->update([
+            'title_it' => filled($validated['title_it'] ?? null) ? trim($validated['title_it']) : null,
+            'title_en' => filled($validated['title_en'] ?? null) ? trim($validated['title_en']) : null,
+        ]);
+
+        return back()->with('status', 'Traduzioni del titolo aggiornate.');
+    }
+
     public function __invoke(Request $request): Response
     {
         $category = $request->string('category')->toString();
@@ -53,6 +68,8 @@ class ImportedProductsController extends Controller
                 $query->where(function ($nested) use ($search) {
                     $nested
                         ->where('title', 'like', "%{$search}%")
+                        ->orWhere('title_it', 'like', "%{$search}%")
+                        ->orWhere('title_en', 'like', "%{$search}%")
                         ->orWhere('handle', 'like', "%{$search}%")
                         ->orWhere('brand', 'like', "%{$search}%")
                         ->orWhere('model', 'like', "%{$search}%");
@@ -67,6 +84,8 @@ class ImportedProductsController extends Controller
                 'id' => $product->id,
                 'handle' => $product->handle,
                 'title' => $product->title,
+                'title_it' => $product->title_it,
+                'title_en' => $product->title_en,
                 'category' => $product->category,
                 'subtype' => $product->subtype,
                 'brand' => $product->brand,

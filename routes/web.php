@@ -98,6 +98,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/missing-vehicle-requests/{missingVehicleRequest}/photo', [MissingVehicleRequestsController::class, 'photo'])->name('missing-vehicle-requests.photo');
     Route::delete('/missing-vehicle-requests/{missingVehicleRequest}', [MissingVehicleRequestsController::class, 'destroy'])->name('missing-vehicle-requests.destroy');
     Route::patch('/imported-products/{product}/price', [ImportedProductsController::class, 'updatePrice'])->name('imported-products.price');
+    Route::patch('/imported-products/{product}/titles', [ImportedProductsController::class, 'updateTitles'])->name('imported-products.titles');
     Route::delete('/imported-products/{product}', [ImportedProductsController::class, 'destroy'])->name('imported-products.destroy');
     Route::get('/installation-zones', [InstallationZonesController::class, 'index'])->name('installation-zones.index');
     Route::post('/installation-zones', [InstallationZonesController::class, 'store'])->name('installation-zones.store');

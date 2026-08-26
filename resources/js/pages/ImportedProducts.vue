@@ -12,6 +12,8 @@ const props = defineProps<{
             id: number;
             handle: string;
             title: string;
+            title_it: string | null;
+            title_en: string | null;
             category: string;
             subtype: string | null;
             brand: string | null;
@@ -38,6 +40,34 @@ const editingPrice = ref<number | null>(null);
 const priceDraft = ref('');
 const savingPrice = ref(false);
 const deletingProduct = ref<number | null>(null);
+const editingTitles = ref<number | null>(null);
+const titleItDraft = ref('');
+const titleEnDraft = ref('');
+const savingTitles = ref(false);
+
+const startTitleEdit = (product: (typeof props.products.data)[number]) => {
+    editingTitles.value = product.id;
+    titleItDraft.value = product.title_it ?? '';
+    titleEnDraft.value = product.title_en ?? '';
+};
+
+const cancelTitleEdit = () => {
+    editingTitles.value = null;
+    titleItDraft.value = '';
+    titleEnDraft.value = '';
+};
+
+const saveTitles = (product: (typeof props.products.data)[number]) => {
+    savingTitles.value = true;
+    router.patch(`/imported-products/${product.id}/titles`, {
+        title_it: titleItDraft.value,
+        title_en: titleEnDraft.value,
+    }, {
+        preserveScroll: true,
+        onSuccess: cancelTitleEdit,
+        onFinish: () => { savingTitles.value = false; },
+    });
+};
 
 const startPriceEdit = (product: (typeof props.products.data)[number]) => {
     editingPrice.value = product.id;
@@ -189,6 +219,15 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                                 />
                                 <div class="min-w-0">
                                     <p class="font-medium">{{ product.title }}</p>
+                                    <div v-if="editingTitles === product.id" class="mt-3 grid min-w-80 gap-2">
+                                        <label class="grid gap-1 text-xs text-muted-foreground"><span>Italiano</span><textarea v-model="titleItDraft" rows="2" class="rounded-md border border-sidebar-border/70 bg-background px-2 py-1.5 text-sm text-foreground" /></label>
+                                        <label class="grid gap-1 text-xs text-muted-foreground"><span>Inglese</span><textarea v-model="titleEnDraft" rows="2" class="rounded-md border border-sidebar-border/70 bg-background px-2 py-1.5 text-sm text-foreground" /></label>
+                                        <div class="flex gap-2"><button type="button" class="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground" :disabled="savingTitles" @click="saveTitles(product)">Salva titoli</button><button type="button" class="rounded-md border px-2 py-1 text-xs" @click="cancelTitleEdit">Annulla</button></div>
+                                    </div>
+                                    <template v-else>
+                                        <p v-if="product.title_it" class="mt-1 text-xs text-muted-foreground"><span class="font-semibold">IT:</span> {{ product.title_it }}</p>
+                                        <p v-if="product.title_en" class="mt-1 text-xs text-muted-foreground"><span class="font-semibold">EN:</span> {{ product.title_en }}</p>
+                                    </template>
                                     <p class="mt-1 break-all text-xs text-muted-foreground">
                                         {{ product.handle }}
                                     </p>
@@ -221,6 +260,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                             {{ product.variants_count }}
                         </td>
                         <td class="px-6 py-4 text-right align-top">
+                            <button type="button" class="mr-2 rounded-md border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium transition hover:border-primary hover:text-primary" @click="startTitleEdit(product)">Traduci</button>
                             <button
                                 type="button"
                                 class="rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive transition hover:bg-destructive hover:text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-50"

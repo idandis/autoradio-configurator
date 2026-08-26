@@ -15,6 +15,8 @@ class ConfiguratorProduct extends Model
         'category',
         'subtype',
         'title',
+        'title_it',
+        'title_en',
         'brand',
         'model',
         'year_from',
@@ -34,5 +36,16 @@ class ConfiguratorProduct extends Model
     public function variants(): HasMany
     {
         return $this->hasMany(ConfiguratorVariant::class);
+    }
+
+    public function localizedTitle(?string $locale = null): string
+    {
+        $translated = match ($locale ?? app()->getLocale()) {
+            'it' => $this->title_it,
+            'en' => $this->title_en,
+            default => null,
+        };
+
+        return filled($translated) ? (string) $translated : (string) $this->title;
     }
 }
