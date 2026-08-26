@@ -71,6 +71,7 @@ return [
     'camera' => [
         'standard' => 'Telecamera posteriore standard',
         'standard_front' => 'Telecamera anteriore standard',
+        'standard_360' => 'Telecamera 360° standard',
         'specific_for_vehicle' => 'Specifica',
         'compatible' => 'Telecamere compatibili',
         'none' => 'Non aggiungere telecamera',

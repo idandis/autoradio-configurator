@@ -3,7 +3,7 @@ import { Head, router, useForm } from '@inertiajs/vue3';
 import { computed, ref } from 'vue';
 
 type PostalRange = { id: number; from: string; to: string };
-type InstallationService = { id: number; name: string; price: number };
+type InstallationService = { id: number; name: string; name_it: string | null; name_en: string | null; price: number };
 type Zone = { id: number; name: string; installer_address: string | null; installer_phone: string | null; postal_ranges: PostalRange[]; services: InstallationService[] };
 
 const props = defineProps<{ zones: Zone[] }>();
@@ -21,7 +21,7 @@ const selectedZone = computed(() => props.zones.find((zone) => zone.id === selec
 
 const zoneForm = useForm({ name: '', installer_address: '', installer_phone: '' });
 const postalForm = useForm({ from: '', to: '' });
-const serviceForm = useForm({ name: '', price: '' as string | number });
+const serviceForm = useForm({ name: '', name_it: '', name_en: '', price: '' as string | number });
 
 const closeDescendants = () => {
     selectedBranch.value = null;
@@ -140,6 +140,8 @@ const editService = (service: InstallationService) => {
     showingServiceForm.value = true;
     editingServiceId.value = service.id;
     serviceForm.name = service.name;
+    serviceForm.name_it = service.name_it ?? '';
+    serviceForm.name_en = service.name_en ?? '';
     serviceForm.price = service.price.toFixed(2);
 };
 
@@ -236,8 +238,10 @@ const deleteService = (service: InstallationService) => {
                     </div>
                     <form v-if="showingServiceForm" class="tree-form mt-3" @submit.prevent="saveService">
                         <label class="tree-label">Nombre</label><input v-model="serviceForm.name" class="tree-input" placeholder="Pantalla + cámara trasera" />
+                        <label class="tree-label">Titolo italiano</label><input v-model="serviceForm.name_it" class="tree-input" placeholder="Schermo + telecamera posteriore" />
+                        <label class="tree-label">English title</label><input v-model="serviceForm.name_en" class="tree-input" placeholder="Screen + rear camera" />
                         <label class="tree-label">Precio</label><div class="relative"><input v-model="serviceForm.price" type="number" min="0" step="0.01" class="tree-input pr-8" /><span class="pointer-events-none absolute right-3 top-2.5 text-muted-foreground">€</span></div>
-                        <p v-if="serviceForm.errors.name || serviceForm.errors.price" class="tree-error">{{ serviceForm.errors.name || serviceForm.errors.price }}</p>
+                        <p v-if="serviceForm.errors.name || serviceForm.errors.name_it || serviceForm.errors.name_en || serviceForm.errors.price" class="tree-error">{{ serviceForm.errors.name || serviceForm.errors.name_it || serviceForm.errors.name_en || serviceForm.errors.price }}</p>
                         <div class="tree-actions"><button class="tree-save" type="submit">Guardar</button><button class="tree-cancel" type="button" @click="cancelService">Cancelar</button></div>
                     </form>
                     <button v-else type="button" class="tree-add" @click="addService">+ Añadir instalación</button>

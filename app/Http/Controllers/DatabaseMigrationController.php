@@ -45,9 +45,11 @@ class DatabaseMigrationController extends Controller
                 @set_time_limit(0);
             }
 
-            foreach (['it' => 'italiani', 'en' => 'inglesi'] as $locale => $label) {
-                if ($error = $this->importMissingTranslations($locale, $label)) {
-                    return back()->withErrors(['database' => $error]);
+            foreach (['screen', 'camera', 'speaker'] as $category) {
+                foreach (['it' => 'italiani', 'en' => 'inglesi'] as $locale => $label) {
+                    if ($error = $this->importMissingTranslations($category, $locale, $label)) {
+                        return back()->withErrors(['database' => $error]);
+                    }
                 }
             }
 
@@ -55,9 +57,9 @@ class DatabaseMigrationController extends Controller
 
             $opcacheReset = function_exists('opcache_reset') && @opcache_reset();
             $translatedItalianTitles = ConfiguratorProduct::query()
-                ->where('category', 'screen')->whereNotNull('title_it')->count();
+                ->whereIn('category', ['screen', 'camera', 'speaker'])->whereNotNull('title_it')->count();
             $translatedEnglishTitles = ConfiguratorProduct::query()
-                ->where('category', 'screen')->whereNotNull('title_en')->count();
+                ->whereIn('category', ['screen', 'camera', 'speaker'])->whereNotNull('title_en')->count();
             $status = 'Database e cache Laravel aggiornati correttamente.';
             $status .= " Traduzioni presenti: {$translatedItalianTitles} italiane e {$translatedEnglishTitles} inglesi.";
 
@@ -83,10 +85,10 @@ class DatabaseMigrationController extends Controller
         }
     }
 
-    private function importMissingTranslations(string $locale, string $label): ?string
+    private function importMissingTranslations(string $category, string $locale, string $label): ?string
     {
         $missing = ConfiguratorProduct::query()
-            ->where('category', 'screen')
+            ->where('category', $category)
             ->whereNull('title_'.$locale)
             ->count();
 
@@ -96,7 +98,7 @@ class DatabaseMigrationController extends Controller
 
         $exitCode = Artisan::call('configurator:translate-titles', [
             'locale' => $locale,
-            '--category' => 'screen',
+            '--category' => $category,
             '--no-interaction' => true,
         ]);
 
@@ -105,12 +107,12 @@ class DatabaseMigrationController extends Controller
         }
 
         $output = trim(Artisan::output());
-        Log::error("Traduzione titoli {$label} fallita dalla dashboard.", [
+        Log::error("Traduzione titoli {$label} della categoria {$category} fallita dalla dashboard.", [
             'exit_code' => $exitCode,
             'output' => $output,
         ]);
 
-        return "Database aggiornato, ma la traduzione dei titoli {$label} non è terminata"
+        return "Database aggiornato, ma la traduzione dei titoli {$label} della categoria {$category} non è terminata"
             .($output !== '' ? ': '.$output : '.');
     }
 

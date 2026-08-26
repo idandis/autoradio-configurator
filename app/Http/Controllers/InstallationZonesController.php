@@ -33,6 +33,8 @@ class InstallationZonesController extends Controller
                     'services' => $zone->services->map(fn (InstallationZoneService $service) => [
                         'id' => $service->id,
                         'name' => $service->name,
+                        'name_it' => $service->name_it,
+                        'name_en' => $service->name_en,
                         'price' => (float) $service->price,
                     ])->values(),
                 ])->values(),
@@ -142,10 +144,17 @@ class InstallationZonesController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'name_it' => ['nullable', 'string', 'max:255'],
+            'name_en' => ['nullable', 'string', 'max:255'],
             'price' => ['required', 'numeric', 'min:0', 'max:999999.99'],
         ]);
 
-        return ['name' => trim($data['name']), 'price' => $data['price']];
+        return [
+            'name' => trim($data['name']),
+            'name_it' => filled($data['name_it'] ?? null) ? trim($data['name_it']) : null,
+            'name_en' => filled($data['name_en'] ?? null) ? trim($data['name_en']) : null,
+            'price' => $data['price'],
+        ];
     }
 
     private function ensureBelongsToZone(int $zoneId, InstallationZone $zone): void

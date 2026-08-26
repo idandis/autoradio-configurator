@@ -29,8 +29,9 @@ class TranslateConfiguratorProductTitles extends Command
         }
 
         $column = 'title_'.$locale;
+        $category = (string) $this->option('category');
         $query = ConfiguratorProduct::query()
-            ->where('category', (string) $this->option('category'))
+            ->where('category', $category)
             ->when(! $this->option('force'), fn ($query) => $query->whereNull($column))
             ->orderBy('id');
 
@@ -49,14 +50,14 @@ class TranslateConfiguratorProductTitles extends Command
         $translated = 0;
         $bar = $this->output->createProgressBar($products->count());
         $bar->start();
-        $catalog = $this->translationCatalog($locale);
+        $catalog = $this->translationCatalog($category, $locale);
         $remaining = $products->filter(function ($product) use ($catalog, $column, $locale, &$translated, $bar) {
             $entry = $catalog[$product->handle] ?? null;
             $title = is_array($entry) && ($entry['source'] ?? null) === $product->title
                 ? trim((string) ($entry['translation'] ?? ''))
                 : '';
 
-            if ($title === '') {
+            if ($title === '' && is_array($entry)) {
                 $title = $this->translateUpdatedTitle((string) $product->title, $locale);
             }
 
@@ -107,9 +108,9 @@ class TranslateConfiguratorProductTitles extends Command
     }
 
     /** @return array<string, array{source: string, translation: string}> */
-    private function translationCatalog(string $locale): array
+    private function translationCatalog(string $category, string $locale): array
     {
-        $path = resource_path("data/screen-titles-{$locale}.json");
+        $path = resource_path("data/{$category}-titles-{$locale}.json");
 
         if (! is_file($path)) {
             return [];

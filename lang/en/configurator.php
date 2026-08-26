@@ -86,6 +86,7 @@ return [
     'camera' => [
         'standard' => 'Standard rear camera',
         'standard_front' => 'Standard front camera',
+        'standard_360' => 'Standard 360° camera',
         'specific_for_vehicle' => 'Specific',
         'compatible' => 'Compatible cameras',
         'none' => 'Do not add a camera',

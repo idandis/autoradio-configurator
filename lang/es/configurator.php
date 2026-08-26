@@ -71,6 +71,7 @@ return [
     'camera' => [
         'standard' => 'Cámara trasera estándar',
         'standard_front' => 'Cámara frontal estándar',
+        'standard_360' => 'Cámara 360° estándar',
         'specific_for_vehicle' => 'Específica',
         'compatible' => 'Cámaras compatibles',
         'none' => 'No añadir cámara',

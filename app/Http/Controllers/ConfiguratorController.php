@@ -166,8 +166,8 @@ class ConfiguratorController extends Controller
                     'key' => 'zone-service-'.$service->id,
                     'productId' => null,
                     'variantId' => null,
-                    'title' => $service->name,
-                    'productTitle' => $service->name,
+                    'title' => $service->localizedName(),
+                    'productTitle' => $service->localizedName(),
                     'variantTitle' => null,
                     'price' => (float) $service->price,
                     'shopifyVariantId' => null,
@@ -189,7 +189,7 @@ class ConfiguratorController extends Controller
                     ])->values(),
                     'productHandles' => $zone->services->map(fn ($service) => 'zone-service-'.$service->id)->values(),
                     'productPrices' => $zone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => (float) $service->price]),
-                    'productTitles' => $zone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => $service->name]),
+                    'productTitles' => $zone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => $service->localizedName()]),
                 ])->values(),
             'vehicleImages' => collect(glob(public_path('images/vehicles-dark/*.{png,jpg,jpeg,webp}'), GLOB_BRACE) ?: [])
                 ->map(fn (string $path) => basename($path))
@@ -325,7 +325,7 @@ class ConfiguratorController extends Controller
                     'productId' => $product->id,
                     'variantId' => $defaultVariant?->id,
                     'title' => $product->handle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave'
-                        ? 'Cámara 360° estandar'
+                        ? trans('configurator.camera.standard_360')
                         : $product->localizedTitle(),
                     'productTitle' => $product->localizedTitle(),
                     'variantTitle' => $defaultVariant?->option_value ?: $defaultVariant?->title,

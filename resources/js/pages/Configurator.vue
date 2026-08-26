@@ -156,6 +156,11 @@ const displayVariantTitle = (title: string | null | undefined) => {
         : title;
 };
 
+const truncateStepTitle = (title: string, maximumLength = 38) =>
+    title.length > maximumLength
+        ? `${title.slice(0, maximumLength - 1).trimEnd()}…`
+        : title;
+
 const storefrontUrl = (path: string) => {
     const localePrefix = props.locale === 'es' ? '' : `/${props.locale}`;
 
@@ -189,6 +194,17 @@ const headerCopy = computed(() => ({
         language: 'English',
     },
 })[props.locale]);
+const footerContact = computed(() => props.locale === 'it'
+    ? {
+        email: 'info@autoradioitaliano.it',
+        phone: '+39 351 434 6911',
+        whatsappUrl: 'https://wa.me/393514346911',
+    }
+    : {
+        email: 'Info@AutoRadioCanario.com',
+        phone: '+34 694 259 117',
+        whatsappUrl: 'https://wa.me/34694259117',
+    });
 const customQuoteCopy = computed(() => ({
     es: { button: 'Presupuesto personalizado', title: 'Presupuesto personalizado', help: 'Añade todos los productos que quieras y crea el presupuesto al terminar.', search: 'Buscar por producto, variante o SKU…', selected: 'Productos añadidos', empty: 'Ningún producto encontrado', add: 'Añadir', added: 'Añadido', remove: 'Quitar', cancel: 'Cancelar', create: 'Crear presupuesto' },
     it: { button: 'Preventivo custom', title: 'Preventivo custom', help: 'Aggiungi tutti i prodotti che vuoi e crea il preventivo quando hai finito.', search: 'Cerca prodotto, variante o SKU…', selected: 'Prodotti aggiunti', empty: 'Nessun prodotto trovato', add: 'Aggiungi', added: 'Aggiunto', remove: 'Rimuovi', cancel: 'Annulla', create: 'Crea preventivo' },
@@ -470,7 +486,7 @@ const stepHasSelections = (step: string) => {
     }
 };
 const mainStepButtonClass = (step: string) => [
-    'mx-auto block w-fit min-w-64 rounded-lg border-2 px-5 py-4 text-base font-semibold uppercase tracking-wide transition',
+    'relative mx-auto block w-fit min-w-64 rounded-lg border-2 py-4 pl-5 pr-12 text-base font-semibold uppercase tracking-wide transition',
     stepHasSelections(step)
         ? 'border-black bg-amber-400 text-black ring-2 ring-amber-400 hover:bg-amber-300'
         : 'border-amber-400 bg-transparent text-amber-400 hover:border-black hover:bg-amber-400 hover:text-black hover:ring-2 hover:ring-amber-400',
@@ -825,6 +841,13 @@ const selectedScreens = computed(() =>
         ),
     ),
 );
+const selectedScreenVariantTitles = computed(() => [
+    ...new Set(
+        selectedScreens.value.map((screen) =>
+            [displayVariantTitle(screen.title), screen.color].filter(Boolean).join(' / '),
+        ),
+    ),
+]);
 
 const screenVariantChoices = (variant: Variant): VariantChoice[] =>
     variant.colorOptions.length > 0 ? variant.colorOptions : [variant];
@@ -1709,6 +1732,9 @@ const selectedCameras = computed(() =>
         selectedCameraKeys.value.includes(option.key),
     ),
 );
+const cameraStepTitles = computed(() =>
+    selectedCameras.value.map((camera) => truncateStepTitle(camera.title)),
+);
 
 const pendingCameraSelection = ref<{
     keys: string[];
@@ -1872,6 +1898,9 @@ const selectedSpeakers = computed(() =>
     props.speakerOptions.filter((speaker) =>
         selectedSpeakerKeys.value.includes(speaker.key),
     ),
+);
+const speakerStepTitles = computed(() =>
+    selectedSpeakers.value.map((speaker) => truncateStepTitle(speaker.productTitle)),
 );
 
 const toggleSpeaker = (key: string) => {
@@ -2239,6 +2268,9 @@ const selectedInstallation = computed(
             (option) => option.key === selectedInstallationKey.value,
         ) ?? null,
 );
+const installationStepTitle = computed(() => selectedInstallation.value === null
+    ? t('steps.installation')
+    : truncateStepTitle(selectedInstallation.value.title));
 
 const goToSelectedProduct = async (
     type: 'screen' | 'camera' | 'speaker' | 'installation',
@@ -2827,6 +2859,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
 
     quoteGenerationError.value = null;
     const printWindow = providedPrintWindow ?? window.open('', '_blank');
+    const shouldOpenPrintPreview = !window.matchMedia('(max-width: 1023px)').matches;
 
     if (!printWindow) {
         quoteGenerationError.value = t('errors.popup_blocked');
@@ -3084,7 +3117,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
     <p class="shipping-notice">${escapeHtml(t('quote.home_delivery'))}</p>
     <footer>INFO@AUTORADIOCANARIO.COM &nbsp;&nbsp; WWW.AUTORADIOCANARIO.COM &nbsp;&nbsp; TEL./WHATSAPP: +34 694 259 117</footer>
 </main>
-<script>window.addEventListener('load', () => window.print());<\/script>
+${shouldOpenPrintPreview ? '<script>window.addEventListener(\'load\', () => window.print());<\/script>' : ''}
 </body>
 </html>`);
     printWindow.document.close();
@@ -3092,6 +3125,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
 };
 
 const downloadQuote = async () => {
+    openSteps.value = [];
     const printWindow = window.open('', '_blank');
     await trackConfigurationEvent('quote_downloaded');
 
@@ -3131,7 +3165,10 @@ const goToCheckout = async () => {
 };
 
 watch(checkoutConsentAccepted, (accepted) => {
-    if (accepted) showCheckoutConsentWarning.value = false;
+    if (accepted) {
+        showCheckoutConsentWarning.value = false;
+        openSteps.value = [];
+    }
 });
 
 watch(
@@ -3428,7 +3465,12 @@ watch(
             <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <section class="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
                     <div class="grid gap-6">
-                        <button type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStepAndCenter('vehicle', 'vehicle-brand', true)">{{ vehicleStepTitle }}</button>
+                        <button type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStepAndCenter('vehicle', 'vehicle-brand', true)">
+                            <span :class="selectedBrand ? 'normal-case' : 'uppercase'">{{ vehicleStepTitle }}</span>
+                            <svg viewBox="0 0 24 24" fill="none" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 stroke-current transition-transform" :class="openSteps.includes('vehicle') ? '' : 'rotate-180'" aria-hidden="true">
+                                <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                        </button>
                         <div v-if="openSteps.includes('vehicle')">
 
                         <div
@@ -3512,7 +3554,20 @@ watch(
                             v-if="selectedModel"
                             class="border-t border-neutral-800 pt-6"
                         >
-                            <button ref="screenStepButton" type="button" :class="mainStepButtonClass('screen')" @click="toggleScreenStep">{{ t('steps.screen') }}</button>
+                            <button ref="screenStepButton" type="button" :class="mainStepButtonClass('screen')" @click="toggleScreenStep">
+                                <span v-if="selectedScreenVariantTitles.length === 0">{{ t('steps.screen') }}</span>
+                                <span
+                                    v-for="variantTitle in selectedScreenVariantTitles"
+                                    v-else
+                                    :key="variantTitle"
+                                    class="block normal-case"
+                                >
+                                    {{ variantTitle }}
+                                </span>
+                                <svg viewBox="0 0 24 24" fill="none" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 stroke-current transition-transform" :class="openSteps.includes('screen') ? '' : 'rotate-180'" aria-hidden="true">
+                                    <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </button>
                             <div v-if="openSteps.includes('screen')" id="screen-step-content" class="mt-6">
                             <p
                                 v-if="displayedScreenOptionCount > 0"
@@ -3723,7 +3778,20 @@ watch(
                             v-if="selectedModel && visibleCameraOptions.length > 0"
                             class="border-t border-neutral-800 pt-6"
                         >
-                            <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStepAndCenter('camera', 'camera-step-options')">{{ t('steps.camera') }}</button>
+                            <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStepAndCenter('camera', 'camera-step-options')">
+                                <span v-if="cameraStepTitles.length === 0" class="block whitespace-nowrap uppercase">{{ t('steps.camera') }}</span>
+                                <span
+                                    v-for="(cameraTitle, index) in cameraStepTitles"
+                                    v-else
+                                    :key="`${index}-${cameraTitle}`"
+                                    class="block max-w-[calc(100vw-4rem)] truncate whitespace-nowrap normal-case sm:max-w-lg"
+                                >
+                                    {{ cameraTitle }}
+                                </span>
+                                <svg viewBox="0 0 24 24" fill="none" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 stroke-current transition-transform" :class="openSteps.includes('camera') ? '' : 'rotate-180'" aria-hidden="true">
+                                    <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </button>
                             <div v-if="openSteps.includes('camera')" id="camera-step-content" class="mt-6">
                             <div id="camera-step-options" class="mt-4 grid gap-4 md:grid-cols-3">
                                 <div
@@ -3815,7 +3883,20 @@ watch(
                             v-if="hasSelectedProducts"
                             class="border-t border-neutral-800 pt-6"
                         >
-                            <button type="button" :class="mainStepButtonClass('speaker')" @click="toggleStepAndCenter('speaker', 'speaker-step-controls')">{{ t('steps.speaker') }}</button>
+                            <button type="button" :class="mainStepButtonClass('speaker')" @click="toggleStepAndCenter('speaker', 'speaker-step-controls')">
+                                <span v-if="speakerStepTitles.length === 0" class="block whitespace-nowrap uppercase">{{ t('steps.speaker') }}</span>
+                                <span
+                                    v-for="(speakerTitle, index) in speakerStepTitles"
+                                    v-else
+                                    :key="`${index}-${speakerTitle}`"
+                                    class="block max-w-[calc(100vw-4rem)] truncate whitespace-nowrap normal-case sm:max-w-lg"
+                                >
+                                    {{ speakerTitle }}
+                                </span>
+                                <svg viewBox="0 0 24 24" fill="none" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 stroke-current transition-transform" :class="openSteps.includes('speaker') ? '' : 'rotate-180'" aria-hidden="true">
+                                    <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </button>
                             <div v-if="openSteps.includes('speaker')" id="speaker-step-content" class="mt-6">
                             <div id="speaker-step-controls" class="mt-4 grid max-w-2xl gap-4">
                                 <div>
@@ -3901,7 +3982,12 @@ watch(
                             v-if="hasSelectedProducts"
                             class="border-t border-neutral-800 pt-6"
                         >
-                            <button type="button" :class="mainStepButtonClass('installation')" @click="toggleStepAndCenter('installation', 'postal-code', true); installationRequested = true">{{ t('steps.installation') }}</button>
+                            <button type="button" :class="mainStepButtonClass('installation')" @click="toggleStepAndCenter('installation', 'postal-code', true); installationRequested = true">
+                                <span class="block max-w-[calc(100vw-4rem)] truncate whitespace-nowrap sm:max-w-lg" :class="selectedInstallation ? 'normal-case' : 'uppercase'">{{ installationStepTitle }}</span>
+                                <svg viewBox="0 0 24 24" fill="none" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 stroke-current transition-transform" :class="openSteps.includes('installation') ? '' : 'rotate-180'" aria-hidden="true">
+                                    <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </button>
                             <div v-if="openSteps.includes('installation')" id="installation-step-content" class="mt-6">
                             <p v-if="hasSelectedProducts" class="mt-2 max-w-3xl text-sm leading-6 text-neutral-400">
                                 {{ t('installation.intro') }}
@@ -4684,22 +4770,22 @@ watch(
                 <div class="flex flex-col items-center py-14 text-center sm:py-16">
                     <h2 class="text-base font-medium">{{ headerCopy.contact }}</h2>
                     <a
-                        href="mailto:info@autoradiocanario.com"
+                        :href="`mailto:${footerContact.email}`"
                         class="mt-7 text-sm transition hover:text-amber-400"
                     >
-                        Info@AutoRadioCanario.com
+                        {{ footerContact.email }}
                     </a>
                     <a
-                        href="https://wa.me/34694259117"
+                        :href="footerContact.whatsappUrl"
                         target="_blank"
                         rel="noopener noreferrer"
                         class="mt-4 inline-flex items-center gap-2 text-sm font-semibold text-emerald-400 underline decoration-emerald-400/70 underline-offset-4 transition hover:text-emerald-300"
-                        aria-label="WhatsApp: +34 694 259 117"
+                        :aria-label="`WhatsApp: ${footerContact.phone}`"
                     >
                         <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                             <path d="M12.04 2a9.84 9.84 0 0 0-8.5 14.78L2 22l5.38-1.41A9.96 9.96 0 0 0 12.04 22 10 10 0 0 0 12.04 2Zm0 18.18a8.1 8.1 0 0 1-4.13-1.13l-.3-.18-3.19.84.85-3.1-.2-.32a8.15 8.15 0 1 1 6.97 3.89Zm4.47-6.1c-.24-.12-1.45-.71-1.67-.79-.23-.08-.39-.12-.55.12-.16.25-.63.8-.77.96-.14.17-.29.19-.53.07a6.64 6.64 0 0 1-1.97-1.21 7.38 7.38 0 0 1-1.36-1.7c-.14-.25-.01-.38.11-.5.11-.11.25-.29.37-.43.12-.14.16-.25.24-.41.08-.17.04-.31-.02-.43-.06-.12-.55-1.33-.75-1.82-.2-.48-.4-.41-.55-.42h-.47c-.16 0-.43.06-.65.31-.22.25-.85.83-.85 2.03s.87 2.36.99 2.52c.12.17 1.72 2.63 4.17 3.69.58.25 1.04.4 1.39.51.58.19 1.12.16 1.54.1.47-.07 1.45-.59 1.65-1.16.21-.57.21-1.06.15-1.16-.06-.11-.23-.17-.47-.29Z"/>
                         </svg>
-                        <span>WhatsApp · +34 694 259 117</span>
+                        <span>WhatsApp · {{ footerContact.phone }}</span>
                     </a>
                     <div class="mt-10 flex items-center gap-6">
                         <a
