@@ -310,6 +310,18 @@ const resolveAvailableBrand = (value: string | null | undefined): string | null 
 const selectedBrand = ref<string | null>(null);
 const selectedModel = ref<string | null>(null);
 const selectedYear = ref<number | null>(null);
+const vehicleStepTitle = computed(() => {
+    if (selectedBrand.value === null) {
+        return t('steps.vehicle');
+    }
+
+    const normalizedBrand = selectedBrand.value.charAt(0).toLocaleUpperCase(props.locale)
+        + selectedBrand.value.slice(1).toLocaleLowerCase(props.locale);
+
+    return [normalizedBrand, selectedYear.value, selectedModel.value]
+        .filter((value) => value !== null && value !== '')
+        .join(' ');
+});
 const screenStepButton = ref<HTMLButtonElement | null>(null);
 const modelSelectionSection = ref<HTMLElement | null>(null);
 
@@ -3416,7 +3428,7 @@ watch(
             <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <section class="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
                     <div class="grid gap-6">
-                        <button type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStepAndCenter('vehicle', 'vehicle-brand', true)">{{ t('steps.vehicle') }}</button>
+                        <button type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStepAndCenter('vehicle', 'vehicle-brand', true)">{{ vehicleStepTitle }}</button>
                         <div v-if="openSteps.includes('vehicle')">
 
                         <div

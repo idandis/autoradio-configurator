@@ -45,41 +45,21 @@ class DatabaseMigrationController extends Controller
                 @set_time_limit(0);
             }
 
-            $missingItalianTitles = ConfiguratorProduct::query()
-                ->where('category', 'screen')
-                ->whereNull('title_it')
-                ->count();
-
-            if ($missingItalianTitles > 0) {
-                $translationExitCode = Artisan::call('configurator:translate-titles', [
-                    'locale' => 'it',
-                    '--category' => 'screen',
-                    '--no-interaction' => true,
-                ]);
-
-                if ($translationExitCode !== 0) {
-                    Log::error('Traduzione titoli italiani fallita dalla dashboard.', [
-                        'exit_code' => $translationExitCode,
-                        'output' => Artisan::output(),
-                    ]);
-
-                    return back()->withErrors([
-                        'database' => 'Database aggiornato, ma la traduzione non è terminata: '.trim(Artisan::output()),
-                    ]);
+            foreach (['it' => 'italiani', 'en' => 'inglesi'] as $locale => $label) {
+                if ($error = $this->importMissingTranslations($locale, $label)) {
+                    return back()->withErrors(['database' => $error]);
                 }
             }
 
             $this->clearApplicationCaches();
 
             $opcacheReset = function_exists('opcache_reset') && @opcache_reset();
-            $translatedItalianTitles = $missingItalianTitles > 0
-                ? ConfiguratorProduct::query()->where('category', 'screen')->whereNotNull('title_it')->count()
-                : 0;
+            $translatedItalianTitles = ConfiguratorProduct::query()
+                ->where('category', 'screen')->whereNotNull('title_it')->count();
+            $translatedEnglishTitles = ConfiguratorProduct::query()
+                ->where('category', 'screen')->whereNotNull('title_en')->count();
             $status = 'Database e cache Laravel aggiornati correttamente.';
-
-            if ($missingItalianTitles > 0) {
-                $status .= " Traduzioni italiane presenti: {$translatedItalianTitles}.";
-            }
+            $status .= " Traduzioni presenti: {$translatedItalianTitles} italiane e {$translatedEnglishTitles} inglesi.";
 
             if ($opcacheReset) {
                 $status .= ' Anche la cache PHP OPcache è stata svuotata.';
@@ -101,6 +81,37 @@ class DatabaseMigrationController extends Controller
                 $lock->release();
             }
         }
+    }
+
+    private function importMissingTranslations(string $locale, string $label): ?string
+    {
+        $missing = ConfiguratorProduct::query()
+            ->where('category', 'screen')
+            ->whereNull('title_'.$locale)
+            ->count();
+
+        if ($missing === 0) {
+            return null;
+        }
+
+        $exitCode = Artisan::call('configurator:translate-titles', [
+            'locale' => $locale,
+            '--category' => 'screen',
+            '--no-interaction' => true,
+        ]);
+
+        if ($exitCode === 0) {
+            return null;
+        }
+
+        $output = trim(Artisan::output());
+        Log::error("Traduzione titoli {$label} fallita dalla dashboard.", [
+            'exit_code' => $exitCode,
+            'output' => $output,
+        ]);
+
+        return "Database aggiornato, ma la traduzione dei titoli {$label} non è terminata"
+            .($output !== '' ? ': '.$output : '.');
     }
 
     private function clearApplicationCaches(): void

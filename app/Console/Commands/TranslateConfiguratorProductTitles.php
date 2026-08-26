@@ -50,14 +50,14 @@ class TranslateConfiguratorProductTitles extends Command
         $bar = $this->output->createProgressBar($products->count());
         $bar->start();
         $catalog = $this->translationCatalog($locale);
-        $remaining = $products->filter(function ($product) use ($catalog, $column, &$translated, $bar) {
+        $remaining = $products->filter(function ($product) use ($catalog, $column, $locale, &$translated, $bar) {
             $entry = $catalog[$product->handle] ?? null;
             $title = is_array($entry) && ($entry['source'] ?? null) === $product->title
                 ? trim((string) ($entry['translation'] ?? ''))
                 : '';
 
-            if ($title === '' && $column === 'title_it') {
-                $title = $this->translateUpdatedItalianTitle((string) $product->title);
+            if ($title === '') {
+                $title = $this->translateUpdatedTitle((string) $product->title, $locale);
             }
 
             if ($title === '' || mb_strlen($title) > 1000) {
@@ -120,9 +120,9 @@ class TranslateConfiguratorProductTitles extends Command
         return is_array($catalog) ? $catalog : [];
     }
 
-    private function translateUpdatedItalianTitle(string $title): string
+    private function translateUpdatedTitle(string $title, string $locale): string
     {
-        $phrases = [
+        $phrases = $locale === 'it' ? [
             'Android Auto Inalámbrico' => 'Android Auto Wireless',
             'Apple CarPlay Inalámbrico' => 'Apple CarPlay Wireless',
             'con Visión Nocturna' => 'con Visione Notturna',
@@ -133,12 +133,27 @@ class TranslateConfiguratorProductTitles extends Command
             'Cámara Trasera' => 'Telecamera Posteriore',
             'Cámara Frontal' => 'Telecamera Anteriore',
             'para Coche' => 'per Auto',
+        ] : [
+            'Android Auto Inalámbrico' => 'Wireless Android Auto',
+            'Apple CarPlay Inalámbrico' => 'Wireless Apple CarPlay',
+            'con Visión Nocturna' => 'with Night Vision',
+            'con Líneas de Guiado' => 'with Guide Lines',
+            'Doble Din' => 'Double DIN',
+            'Pantalla Táctil' => 'Touchscreen',
+            'Pantalla' => 'Screen',
+            'Cámara Trasera' => 'Rear Camera',
+            'Cámara Frontal' => 'Front Camera',
+            'para Coche' => 'for Car',
         ];
 
         $translated = str_ireplace(array_keys($phrases), array_values($phrases), $title);
-        $translated = preg_replace('/\bpara\b/iu', 'per', $translated) ?? $translated;
-        $translated = preg_replace('/\by\b/iu', 'e', $translated) ?? $translated;
-        $translated = preg_replace('/\bconector\b/iu', 'connettore', $translated) ?? $translated;
+        $words = $locale === 'it'
+            ? ['para' => 'per', 'y' => 'e', 'conector' => 'connettore']
+            : ['para' => 'for', 'y' => 'and', 'con' => 'with', 'conector' => 'connector'];
+
+        foreach ($words as $source => $translation) {
+            $translated = preg_replace('/\b'.preg_quote($source, '/').'\b/iu', $translation, $translated) ?? $translated;
+        }
 
         return trim($translated);
     }

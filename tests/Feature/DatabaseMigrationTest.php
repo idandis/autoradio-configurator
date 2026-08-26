@@ -48,6 +48,7 @@ class DatabaseMigrationTest extends TestCase
         ConfiguratorProduct::factory()->create([
             'category' => 'screen',
             'title_it' => 'Titolo italiano',
+            'title_en' => 'English title',
         ]);
         Artisan::shouldReceive('call')->once()->with('config:clear', [
             '--no-interaction' => true,
