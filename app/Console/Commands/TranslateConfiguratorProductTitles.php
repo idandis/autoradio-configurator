@@ -28,12 +28,6 @@ class TranslateConfiguratorProductTitles extends Command
             return self::INVALID;
         }
 
-        if (! filled(config('services.openai.api_key'))) {
-            $this->error('OPENAI_API_KEY non configurata.');
-
-            return self::FAILURE;
-        }
-
         $column = 'title_'.$locale;
         $query = ConfiguratorProduct::query()
             ->where('category', (string) $this->option('category'))
@@ -45,7 +39,7 @@ class TranslateConfiguratorProductTitles extends Command
             $query->limit($limit);
         }
 
-        $products = $query->get(['id', 'title']);
+        $products = $query->get(['id', 'handle', 'title']);
         if ($products->isEmpty()) {
             $this->info('Nessun titolo da tradurre.');
 
@@ -55,8 +49,39 @@ class TranslateConfiguratorProductTitles extends Command
         $translated = 0;
         $bar = $this->output->createProgressBar($products->count());
         $bar->start();
+        $catalog = $this->translationCatalog($locale);
+        $remaining = $products->filter(function ($product) use ($catalog, $column, &$translated, $bar) {
+            $entry = $catalog[$product->handle] ?? null;
+            $title = is_array($entry) && ($entry['source'] ?? null) === $product->title
+                ? trim((string) ($entry['translation'] ?? ''))
+                : '';
 
-        foreach ($products->chunk(20) as $batch) {
+            if ($title === '' && $column === 'title_it') {
+                $title = $this->translateUpdatedItalianTitle((string) $product->title);
+            }
+
+            if ($title === '' || mb_strlen($title) > 1000) {
+                return true;
+            }
+
+            $product->update([$column => $title]);
+            $translated++;
+            $bar->advance();
+
+            return false;
+        })->values();
+
+        if ($remaining->isNotEmpty() && ! filled(config('services.openai.api_key'))) {
+            $bar->advance($remaining->count());
+            $bar->finish();
+            $this->newLine(2);
+            $this->info("Importate {$translated} traduzioni dal catalogo interno.");
+            $this->warn("Senza OPENAI_API_KEY restano {$remaining->count()} titoli non presenti nel catalogo interno.");
+
+            return self::SUCCESS;
+        }
+
+        foreach ($remaining->chunk(20) as $batch) {
             $translations = $this->translateBatch($batch->map(fn ($product) => [
                 'id' => $product->id,
                 'title' => $product->title,
@@ -79,6 +104,43 @@ class TranslateConfiguratorProductTitles extends Command
         $this->info("Tradotti {$translated} titoli in {$locale}.");
 
         return $translated === $products->count() ? self::SUCCESS : self::FAILURE;
+    }
+
+    /** @return array<string, array{source: string, translation: string}> */
+    private function translationCatalog(string $locale): array
+    {
+        $path = resource_path("data/screen-titles-{$locale}.json");
+
+        if (! is_file($path)) {
+            return [];
+        }
+
+        $catalog = json_decode((string) file_get_contents($path), true);
+
+        return is_array($catalog) ? $catalog : [];
+    }
+
+    private function translateUpdatedItalianTitle(string $title): string
+    {
+        $phrases = [
+            'Android Auto Inalámbrico' => 'Android Auto Wireless',
+            'Apple CarPlay Inalámbrico' => 'Apple CarPlay Wireless',
+            'con Visión Nocturna' => 'con Visione Notturna',
+            'con Líneas de Guiado' => 'con Linee Guida',
+            'Doble Din' => 'Doppio DIN',
+            'Pantalla Táctil' => 'Schermo Touchscreen',
+            'Pantalla' => 'Schermo',
+            'Cámara Trasera' => 'Telecamera Posteriore',
+            'Cámara Frontal' => 'Telecamera Anteriore',
+            'para Coche' => 'per Auto',
+        ];
+
+        $translated = str_ireplace(array_keys($phrases), array_values($phrases), $title);
+        $translated = preg_replace('/\bpara\b/iu', 'per', $translated) ?? $translated;
+        $translated = preg_replace('/\by\b/iu', 'e', $translated) ?? $translated;
+        $translated = preg_replace('/\bconector\b/iu', 'connettore', $translated) ?? $translated;
+
+        return trim($translated);
     }
 
     /** @param array<int, array{id: int, title: string}> $products */

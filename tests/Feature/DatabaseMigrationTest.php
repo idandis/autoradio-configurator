@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\ConfiguratorProduct;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
@@ -42,6 +43,22 @@ class DatabaseMigrationTest extends TestCase
         Cache::shouldReceive('lock')->once()->with('admin:database-migration', 300)->andReturn($lock);
         Artisan::shouldReceive('call')->once()->with('migrate', [
             '--force' => true,
+            '--no-interaction' => true,
+        ])->andReturn(0);
+        ConfiguratorProduct::factory()->create([
+            'category' => 'screen',
+            'title_it' => 'Titolo italiano',
+        ]);
+        Artisan::shouldReceive('call')->once()->with('config:clear', [
+            '--no-interaction' => true,
+        ])->andReturn(0);
+        Artisan::shouldReceive('call')->once()->with('route:clear', [
+            '--no-interaction' => true,
+        ])->andReturn(0);
+        Artisan::shouldReceive('call')->once()->with('view:clear', [
+            '--no-interaction' => true,
+        ])->andReturn(0);
+        Artisan::shouldReceive('call')->once()->with('event:clear', [
             '--no-interaction' => true,
         ])->andReturn(0);
 
