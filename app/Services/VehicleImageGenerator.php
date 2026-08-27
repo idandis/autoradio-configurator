@@ -105,7 +105,11 @@ class VehicleImageGenerator
     public function primaryModel(string $model): string
     {
         $primary = trim((string) Str::before($model, '|'));
-        $primary = preg_replace('/^\d+\s*:\s*/u', '', $primary) ?? $primary;
+
+        if (preg_match('/^\d+\s*:/u', $primary)) {
+            return '';
+        }
+
         $primary = preg_replace('/\s+[A-Z]{1,3}\d{1,3}$/iu', '', $primary) ?? $primary;
 
         return trim($primary);
