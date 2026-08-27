@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Jobs\GenerateVehicleImage;
 use App\Models\ConfiguratorProduct;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
@@ -17,50 +18,7 @@ class VehicleImageGenerator
      */
     public function syncAfterImport(): array
     {
-        $existingRanges = [];
-
-        foreach (File::glob(public_path('images/vehicles-dark/*')) ?: [] as $path) {
-            $stem = mb_strtolower(pathinfo($path, PATHINFO_FILENAME));
-
-            if (! preg_match('/^(.*)-(19\d{2}|20\d{2})-(19\d{2}|20\d{2})$/', $stem, $matches)) {
-                continue;
-            }
-
-            $existingRanges[$matches[1]][] = [(int) $matches[2], (int) $matches[3]];
-        }
-
-        $missing = ConfiguratorProduct::query()
-            ->where('category', 'screen')
-            ->whereNotNull('brand')
-            ->whereNotNull('model')
-            ->whereNotNull('year_from')
-            ->whereNotNull('year_to')
-            ->get(['brand', 'model', 'year_from', 'year_to'])
-            ->map(fn (ConfiguratorProduct $product) => [
-                'brand' => trim((string) $product->brand),
-                'model' => trim((string) $product->model),
-                'year_from' => (int) $product->year_from,
-                'year_to' => (int) $product->year_to,
-                'stem' => $this->stem(
-                    (string) $product->brand,
-                    (string) $product->model,
-                    (int) $product->year_from,
-                    (int) $product->year_to,
-                ),
-            ])
-            ->unique('stem')
-            ->reject(function (array $vehicle) use ($existingRanges) {
-                $ranges = collect($this->imageBases(
-                    $vehicle['brand'],
-                    $vehicle['model'],
-                    $vehicle['year_from'],
-                ))
-                    ->flatMap(fn (string $base) => $existingRanges[$base] ?? [])
-                    ->all();
-
-                return $this->isCovered($ranges, $vehicle['year_from'], $vehicle['year_to']);
-            })
-            ->values();
+        $missing = $this->missingVehicles();
 
         File::ensureDirectoryExists(storage_path('app'));
         File::put(
@@ -80,9 +38,77 @@ class VehicleImageGenerator
         return ['missing' => $missing->count(), 'queued' => $queued];
     }
 
+    /** @return Collection<int, array{brand: string, model: string, year_from: int, year_to: int, stem: string}> */
+    public function missingVehicles(): Collection
+    {
+        $existingRanges = [];
+
+        foreach (File::glob(public_path('images/vehicles-dark/*')) ?: [] as $path) {
+            $stem = mb_strtolower(pathinfo($path, PATHINFO_FILENAME));
+
+            if (! preg_match('/^(.*)-(19\d{2}|20\d{2})-(19\d{2}|20\d{2})$/', $stem, $matches)) {
+                continue;
+            }
+
+            $existingRanges[$matches[1]][] = [(int) $matches[2], (int) $matches[3]];
+        }
+
+        $missing = ConfiguratorProduct::query()
+            ->where('category', 'screen')
+            ->whereNotNull('brand')
+            ->whereNotNull('model')
+            ->whereNotNull('year_from')
+            ->whereNotNull('year_to')
+            ->where('brand', 'not like', '%|%')
+            ->get(['brand', 'model', 'year_from', 'year_to'])
+            ->map(function (ConfiguratorProduct $product) {
+                $brand = trim((string) $product->brand);
+                $model = $this->primaryModel((string) $product->model);
+                $yearFrom = (int) $product->year_from;
+                $yearTo = (int) $product->year_to;
+
+                return [
+                    'brand' => $brand,
+                    'model' => $model,
+                    'year_from' => $yearFrom,
+                    'year_to' => $yearTo,
+                    'stem' => $this->stem($brand, $model, $yearFrom, $yearTo),
+                ];
+            })
+            ->filter(fn (array $vehicle) => $vehicle['model'] !== '')
+            ->unique('stem')
+            ->reject(function (array $vehicle) use ($existingRanges) {
+                $ranges = collect($this->imageBases(
+                    $vehicle['brand'],
+                    $vehicle['model'],
+                    $vehicle['year_from'],
+                ))
+                    ->flatMap(fn (string $base) => $existingRanges[$base] ?? [])
+                    ->all();
+
+                return $this->isCovered($ranges, $vehicle['year_from'], $vehicle['year_to']);
+            })
+            ->values();
+
+        return $missing;
+    }
+
     public function stem(string $brand, string $model, int $yearFrom, int $yearTo): string
     {
         return Str::slug($brand.'-'.$model).'-'.$yearFrom.'-'.$yearTo;
+    }
+
+    /**
+     * Product compatibility fields may contain several variants. Vehicle images
+     * represent the first main model only, without chassis/platform suffixes.
+     */
+    public function primaryModel(string $model): string
+    {
+        $primary = trim((string) Str::before($model, '|'));
+        $primary = preg_replace('/^\d+\s*:\s*/u', '', $primary) ?? $primary;
+        $primary = preg_replace('/\s+[A-Z]{1,3}\d{1,3}$/iu', '', $primary) ?? $primary;
+
+        return trim($primary);
     }
 
     /**

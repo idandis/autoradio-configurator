@@ -18,12 +18,23 @@ class InstallationZoneService extends Model
 
     public function localizedName(?string $locale = null): string
     {
-        $translated = match ($locale ?? app()->getLocale()) {
+        $locale ??= app()->getLocale();
+        $translated = match ($locale) {
             'it' => $this->name_it,
             'en' => $this->name_en,
             default => null,
         };
 
-        return filled($translated) ? (string) $translated : (string) $this->name;
+        $name = filled($translated) ? (string) $translated : (string) $this->name;
+
+        if ($locale === 'it') {
+            return preg_replace('/\binstalaci[oó]n\b/iu', 'Installazione', $name) ?? $name;
+        }
+
+        if ($locale === 'en') {
+            return preg_replace('/\binstalaci[oó]n\b/iu', 'Installation', $name) ?? $name;
+        }
+
+        return $name;
     }
 }

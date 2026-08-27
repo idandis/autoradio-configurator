@@ -38,6 +38,7 @@ type SimpleOption = {
     productId?: number | null;
     variantId?: number | null;
     title: string;
+    sourceTitle?: string;
     productTitle?: string;
     variantTitle?: string | null;
     price: number;
@@ -182,7 +183,7 @@ const headerCopy = computed(() => ({
     it: {
         announcement: 'Ti diamo il benvenuto nel nostro negozio',
         home: 'Home',
-        contact: 'Contatti',
+        contact: 'Contattaci',
         about: 'Chi siamo',
         language: 'Italiano',
     },
@@ -194,6 +195,9 @@ const headerCopy = computed(() => ({
         language: 'English',
     },
 })[props.locale]);
+const headerContactUrl = computed(() => props.locale === 'it'
+    ? '/?form=autoradio&lang=it'
+    : 'https://www.autoradiocanario.com/pages/contact');
 const footerContact = computed(() => props.locale === 'it'
     ? {
         email: 'info@autoradioitaliano.it',
@@ -2103,7 +2107,7 @@ const optionInstallationCombination = (option: SimpleOption) => {
 };
 
 const zoneServiceMatchesSelection = (option: SimpleOption) => {
-    const title = normalizeInstallationValue(option.title);
+    const title = normalizeInstallationValue(option.sourceTitle ?? option.title);
     const hasScreen = selectedScreens.value.length > 0;
     const hasCamera = selectedCameras.value.length > 0;
     const hasSpeaker = selectedSpeakers.value.length > 0;
@@ -2133,7 +2137,7 @@ const zoneServiceMatchesSelection = (option: SimpleOption) => {
 };
 
 const installationIcons = (option: SimpleOption) => {
-    const title = normalizeInstallationValue(option.title);
+    const title = normalizeInstallationValue(option.sourceTitle ?? option.title);
 
     return {
         speaker: title.includes('altavoc'),
@@ -3348,7 +3352,7 @@ watch(
                         <a href="https://www.autoradiocanario.com/" class="border-b border-white pb-1 transition hover:text-amber-400">
                             {{ headerCopy.home }}
                         </a>
-                        <a href="https://www.autoradiocanario.com/pages/contact" class="transition hover:text-amber-400">
+                        <a :href="headerContactUrl" class="transition hover:text-amber-400">
                             {{ headerCopy.contact }}
                         </a>
                         <a href="https://www.autoradiocanario.com/pages/quienes-somos" class="transition hover:text-amber-400">
@@ -3391,7 +3395,7 @@ watch(
                     <a href="https://www.autoradiocanario.com/" class="rounded-lg px-3 py-3 hover:bg-white/5 hover:text-amber-400">
                         {{ headerCopy.home }}
                     </a>
-                    <a href="https://www.autoradiocanario.com/pages/contact" class="rounded-lg px-3 py-3 hover:bg-white/5 hover:text-amber-400">
+                    <a :href="headerContactUrl" class="rounded-lg px-3 py-3 hover:bg-white/5 hover:text-amber-400">
                         {{ headerCopy.contact }}
                     </a>
                     <a href="https://www.autoradiocanario.com/pages/quienes-somos" class="rounded-lg px-3 py-3 hover:bg-white/5 hover:text-amber-400">

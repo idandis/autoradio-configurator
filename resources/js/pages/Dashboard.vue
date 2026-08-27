@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
+import { ref } from 'vue';
 
 const props = defineProps<{
     stats: {
@@ -7,6 +8,14 @@ const props = defineProps<{
         cameras: number;
         speakers: number;
         vehicles: number;
+    };
+    postImportTasks: {
+        translationCount: number;
+        imageCount: number;
+        prompt: string;
+        fingerprint: string;
+        dismissed: boolean;
+        dismissalAvailable: boolean;
     };
     flashStatus?: string | null;
 }>();
@@ -17,6 +26,23 @@ const form = useForm({
 });
 
 const migrationForm = useForm({});
+const dismissTasksForm = useForm({
+    fingerprint: props.postImportTasks.fingerprint,
+});
+const taskCopyStatus = ref<'idle' | 'copied' | 'error'>('idle');
+
+const copyPostImportPrompt = async () => {
+    try {
+        await navigator.clipboard.writeText(props.postImportTasks.prompt);
+        taskCopyStatus.value = 'copied';
+    } catch {
+        taskCopyStatus.value = 'error';
+    }
+
+    window.setTimeout(() => {
+        taskCopyStatus.value = 'idle';
+    }, 2500);
+};
 
 const updateFile = (event: Event) => {
     const target = event.target as HTMLInputElement | null;
@@ -34,6 +60,14 @@ const migrateDatabase = () => {
     if (!window.confirm('Applicare ora tutti gli aggiornamenti disponibili al database?')) return;
 
     migrationForm.post('/dashboard/database/migrate', {
+        preserveScroll: true,
+    });
+};
+
+const dismissPostImportTasks = () => {
+    if (!window.confirm('Cancellare questa nota dalla Dashboard?')) return;
+
+    dismissTasksForm.post('/dashboard/post-import-tasks/dismiss', {
         preserveScroll: true,
     });
 };
@@ -61,6 +95,50 @@ const migrateDatabase = () => {
                 <p class="mt-2 text-3xl font-semibold">{{ props.stats.speakers }}</p>
             </div>
         </div>
+
+        <section
+            v-if="(postImportTasks.translationCount > 0 || postImportTasks.imageCount > 0) && !postImportTasks.dismissed"
+            class="rounded-xl border border-amber-500/40 bg-amber-500/5 p-5"
+        >
+            <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                    <h2 class="text-lg font-semibold text-amber-400">Attività dopo l’importazione</h2>
+                    <p class="mt-1 text-sm text-muted-foreground">
+                        Mancano {{ postImportTasks.translationCount }} traduzioni prodotto e
+                        {{ postImportTasks.imageCount }} immagini auto. Copia le istruzioni e incollale direttamente in Codex.
+                    </p>
+                </div>
+                <div class="flex shrink-0 flex-wrap gap-2">
+                    <button
+                        type="button"
+                        class="rounded-lg border border-amber-500/60 px-4 py-2.5 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/10"
+                        :disabled="dismissTasksForm.processing || !postImportTasks.dismissalAvailable"
+                        :title="postImportTasks.dismissalAvailable ? '' : 'Premi prima Aggiorna database'"
+                        @click="dismissPostImportTasks"
+                    >
+                        Segna come completata
+                    </button>
+                    <button
+                        type="button"
+                        class="rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-400"
+                        @click="copyPostImportPrompt"
+                    >
+                        {{ taskCopyStatus === 'copied' ? 'Copiato!' : taskCopyStatus === 'error' ? 'Copia non riuscita' : 'Copia per Codex' }}
+                    </button>
+                </div>
+            </div>
+            <textarea
+                :value="postImportTasks.prompt"
+                readonly
+                rows="12"
+                class="mt-4 w-full resize-y rounded-lg border border-sidebar-border/70 bg-background p-4 font-mono text-xs leading-5 text-foreground outline-none"
+                aria-label="Istruzioni post-importazione per Codex"
+            />
+        </section>
+
+        <section v-else-if="postImportTasks.translationCount === 0 && postImportTasks.imageCount === 0" class="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-5 py-4 text-sm text-emerald-300">
+            Nessuna attività post-importazione: traduzioni e immagini auto sono aggiornate.
+        </section>
 
         <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             <section class="rounded-xl border border-sidebar-border/70 bg-card p-6">

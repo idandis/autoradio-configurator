@@ -167,6 +167,7 @@ class ConfiguratorController extends Controller
                     'productId' => null,
                     'variantId' => null,
                     'title' => $service->localizedName(),
+                    'sourceTitle' => $service->name,
                     'productTitle' => $service->localizedName(),
                     'variantTitle' => null,
                     'price' => (float) $service->price,

@@ -10,6 +10,7 @@ use App\Http\Controllers\ConfigurationStatisticsController;
 use App\Http\Controllers\CustomersController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DatabaseMigrationController;
+use App\Http\Controllers\DismissPostImportTasksController;
 use App\Http\Controllers\ImportedProductsController;
 use App\Http\Controllers\InstallationZonesController;
 use App\Http\Controllers\ModelsController;
@@ -74,6 +75,8 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         ->middleware('throttle:3,10')
         ->name('dashboard.database.migrate');
     Route::post('/dashboard/import-csv', [ConfiguratorImportController::class, 'store'])->name('dashboard.import');
+    Route::post('/dashboard/post-import-tasks/dismiss', DismissPostImportTasksController::class)
+        ->name('dashboard.post-import-tasks.dismiss');
     Route::get('/brands', BrandsController::class)->name('brands.index');
     Route::get('/models', ModelsController::class)->name('models.index');
     Route::get('/models/edit', [ModelsController::class, 'edit'])->name('models.edit');

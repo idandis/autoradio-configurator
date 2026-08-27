@@ -101,8 +101,11 @@ class ConfiguratorCsvImporter
             'speaker_products' => 0,
             'variants' => 0,
         ];
+        $existingTranslations = ConfiguratorProduct::query()
+            ->get(['handle', 'title', 'title_it', 'title_en'])
+            ->keyBy('handle');
 
-        DB::transaction(function () use ($grouped, &$stats, $replaceExistingDataset): void {
+        DB::transaction(function () use ($grouped, &$stats, $replaceExistingDataset, $existingTranslations): void {
             if ($replaceExistingDataset) {
                 DB::table('configurator_variants')->delete();
                 DB::table('configurator_products')->delete();
@@ -118,9 +121,17 @@ class ConfiguratorCsvImporter
                     continue;
                 }
 
+                $previous = $existingTranslations->get($handle);
+                $titleChanged = ! $previous || $previous->title !== $product['product']['title'];
+                $productData = [
+                    ...$product['product'],
+                    'title_it' => $titleChanged ? null : $previous->title_it,
+                    'title_en' => $titleChanged ? null : $previous->title_en,
+                ];
+
                 $configProduct = ConfiguratorProduct::updateOrCreate(
                     ['handle' => $handle],
-                    $product['product'],
+                    $productData,
                 );
                 $configProduct->variants()->delete();
                 $configProduct->variants()->createMany($product['variants']);
