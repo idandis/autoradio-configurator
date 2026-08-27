@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { Head, useForm } from '@inertiajs/vue3';
-import { ref } from 'vue';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import { ref, watch } from 'vue';
 
 const props = defineProps<{
     stats: {
@@ -15,7 +15,6 @@ const props = defineProps<{
         prompt: string;
         fingerprint: string;
         dismissed: boolean;
-        dismissalAvailable: boolean;
     };
     flashStatus?: string | null;
 }>();
@@ -26,10 +25,17 @@ const form = useForm({
 });
 
 const migrationForm = useForm({});
-const dismissTasksForm = useForm({
-    fingerprint: props.postImportTasks.fingerprint,
-});
 const taskCopyStatus = ref<'idle' | 'copied' | 'error'>('idle');
+const tasksDismissedLocally = ref(false);
+const verificationRunning = ref(false);
+const verificationCompleted = ref(false);
+
+const syncDismissedState = () => {
+    tasksDismissedLocally.value = typeof window !== 'undefined'
+        && window.localStorage.getItem(`post-import-tasks:dismissed:${props.postImportTasks.fingerprint}`) === '1';
+};
+
+watch(() => props.postImportTasks.fingerprint, syncDismissedState, { immediate: true });
 
 const copyPostImportPrompt = async () => {
     try {
@@ -65,17 +71,24 @@ const migrateDatabase = () => {
 };
 
 const dismissPostImportTasks = () => {
-    if (!props.postImportTasks.dismissalAvailable) {
-        window.alert('Per attivare la cancellazione devi prima premere “Aggiorna database” nella Dashboard.');
-        return;
-    }
-
     if (!window.confirm('Cancellare questa nota dalla Dashboard?')) return;
 
-    dismissTasksForm.post('/dashboard/post-import-tasks/dismiss', {
-        preserveScroll: true,
-        onError: () => {
-            window.alert('Non è stato possibile cancellare la nota. Premi “Aggiorna database” e riprova.');
+    window.localStorage.setItem(`post-import-tasks:dismissed:${props.postImportTasks.fingerprint}`, '1');
+    tasksDismissedLocally.value = true;
+};
+
+const verifyCatalog = () => {
+    verificationRunning.value = true;
+
+    router.reload({
+        only: ['postImportTasks'],
+        onSuccess: () => {
+            window.localStorage.removeItem(`post-import-tasks:dismissed:${props.postImportTasks.fingerprint}`);
+            tasksDismissedLocally.value = false;
+            verificationCompleted.value = true;
+        },
+        onFinish: () => {
+            verificationRunning.value = false;
         },
     });
 };
@@ -105,12 +118,14 @@ const dismissPostImportTasks = () => {
         </div>
 
         <section
-            v-if="(postImportTasks.translationCount > 0 || postImportTasks.imageCount > 0) && !postImportTasks.dismissed"
+            v-if="(postImportTasks.translationCount > 0 || postImportTasks.imageCount > 0) && !postImportTasks.dismissed && !tasksDismissedLocally"
             class="rounded-xl border border-amber-500/40 bg-amber-500/5 p-5"
         >
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                    <h2 class="text-lg font-semibold text-amber-400">Attività dopo l’importazione</h2>
+                    <h2 class="text-lg font-semibold text-amber-400">
+                        {{ verificationCompleted ? 'Verifica catalogo completata' : 'Attività dopo l’importazione' }}
+                    </h2>
                     <p class="mt-1 text-sm text-muted-foreground">
                         Mancano {{ postImportTasks.translationCount }} traduzioni prodotto e
                         {{ postImportTasks.imageCount }} immagini auto. Copia le istruzioni e incollale direttamente in Codex.
@@ -120,8 +135,6 @@ const dismissPostImportTasks = () => {
                     <button
                         type="button"
                         class="rounded-lg border border-amber-500/60 px-4 py-2.5 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/10"
-                        :disabled="dismissTasksForm.processing"
-                        :title="postImportTasks.dismissalAvailable ? '' : 'Premi prima Aggiorna database'"
                         @click="dismissPostImportTasks"
                     >
                         Segna come completata
@@ -135,12 +148,6 @@ const dismissPostImportTasks = () => {
                     </button>
                 </div>
             </div>
-            <p
-                v-if="!postImportTasks.dismissalAvailable"
-                class="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200"
-            >
-                Per usare “Segna come completata”, carica la nuova migrazione e premi prima “Aggiorna database”.
-            </p>
             <textarea
                 :value="postImportTasks.prompt"
                 readonly
@@ -151,7 +158,8 @@ const dismissPostImportTasks = () => {
         </section>
 
         <section v-else-if="postImportTasks.translationCount === 0 && postImportTasks.imageCount === 0" class="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-5 py-4 text-sm text-emerald-300">
-            Nessuna attività post-importazione: traduzioni e immagini auto sono aggiornate.
+            <span class="font-semibold">{{ verificationCompleted ? 'Verifica completata:' : 'Tutto aggiornato:' }}</span>
+            tutte le autoradio hanno l’immagine auto corrispondente e tutti i titoli sono tradotti.
         </section>
 
         <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -226,6 +234,14 @@ const dismissPostImportTasks = () => {
                     >
                         Apri configuratore pubblico
                     </a>
+                    <button
+                        type="button"
+                        class="w-full rounded-lg border border-emerald-500/40 bg-emerald-500/5 px-4 py-3 text-left text-sm font-medium text-emerald-300 transition hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                        :disabled="verificationRunning"
+                        @click="verifyCatalog"
+                    >
+                        {{ verificationRunning ? 'Verifica in corso…' : 'Verifica immagini e traduzioni' }}
+                    </button>
                     <div class="rounded-lg border border-sidebar-border/70 px-4 py-3 text-sm text-muted-foreground">
                         In alternativa puoi importare da CLI con
                         <code class="ml-1 rounded bg-muted px-1.5 py-0.5 text-foreground">

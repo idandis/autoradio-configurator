@@ -195,9 +195,7 @@ const headerCopy = computed(() => ({
         language: 'English',
     },
 })[props.locale]);
-const headerContactUrl = computed(() => props.locale === 'it'
-    ? '/?form=autoradio&lang=it'
-    : 'https://www.autoradiocanario.com/pages/contact');
+const headerContactUrl = computed(() => `/?form=autoradio&lang=${props.locale}`);
 const footerContact = computed(() => props.locale === 'it'
     ? {
         email: 'info@autoradioitaliano.it',
@@ -335,8 +333,15 @@ const vehicleStepTitle = computed(() => {
         return t('steps.vehicle');
     }
 
-    const normalizedBrand = selectedBrand.value.charAt(0).toLocaleUpperCase(props.locale)
-        + selectedBrand.value.slice(1).toLocaleLowerCase(props.locale);
+    const normalizedBrand = selectedBrand.value
+        .split(/\s+/)
+        .map((word) => {
+            if (/^[A-Z0-9-]+$/.test(word) && word.length <= 3) return word;
+
+            return word.charAt(0).toLocaleUpperCase(props.locale)
+                + word.slice(1).toLocaleLowerCase(props.locale);
+        })
+        .join(' ');
 
     return [normalizedBrand, selectedYear.value, selectedModel.value]
         .filter((value) => value !== null && value !== '')
@@ -385,11 +390,18 @@ const selectVehicleModel = async (model: string) => {
     }
 
     selectedModel.value = model;
+    if (!openSteps.value.includes('screen')) {
+        openSteps.value = [...openSteps.value, 'screen'];
+    }
     await nextTick();
 
     window.requestAnimationFrame(() => {
-        screenStepButton.value?.focus({ preventScroll: true });
-        screenStepButton.value?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const firstScreen = displayedScreenVehicles.value[0];
+        const target = firstScreen
+            ? document.getElementById(`screen-product-${firstScreen.id}`)
+            : document.getElementById('screen-alternative-message');
+
+        target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });
 };
 const customerBudget = ref('');
@@ -490,7 +502,7 @@ const stepHasSelections = (step: string) => {
     }
 };
 const mainStepButtonClass = (step: string) => [
-    'relative mx-auto block w-fit min-w-64 rounded-lg border-2 py-4 pl-5 pr-12 text-base font-semibold uppercase tracking-wide transition',
+    'relative mx-auto block w-64 max-w-full overflow-hidden rounded-lg border-2 py-4 pl-5 pr-16 text-base font-semibold uppercase tracking-wide transition',
     stepHasSelections(step)
         ? 'border-black bg-amber-400 text-black ring-2 ring-amber-400 hover:bg-amber-300'
         : 'border-amber-400 bg-transparent text-amber-400 hover:border-black hover:bg-amber-400 hover:text-black hover:ring-2 hover:ring-amber-400',
@@ -3089,8 +3101,8 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
             <p><strong>AUTORADIOCANARIO</strong></p>
             <p>Avenida Mencey 49</p>
             <p>35120 Mogán (Las Palmas)</p>
-            <p>info@autoradiocanario.com</p>
-            <p>+34 694 259 117</p>
+            <p>${escapeHtml(footerContact.value.email)}</p>
+            <p>${escapeHtml(footerContact.value.phone)}</p>
         </div>
     </section>
     <p class="date"><strong>${escapeHtml(t('print.date'))}:</strong> ${escapeHtml(quoteDate)}</p>
@@ -3119,7 +3131,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         <div class="total-row"><div>${escapeHtml(t('quote.online_total'))}</div><div class="amount">${euroFormatter.value.format(onlineTotal.value)}</div></div>
     </section>
     <p class="shipping-notice">${escapeHtml(t('quote.home_delivery'))}</p>
-    <footer>INFO@AUTORADIOCANARIO.COM &nbsp;&nbsp; WWW.AUTORADIOCANARIO.COM &nbsp;&nbsp; TEL./WHATSAPP: +34 694 259 117</footer>
+    <footer>${escapeHtml(footerContact.value.email.toLocaleUpperCase())} &nbsp;&nbsp; WWW.AUTORADIOCANARIO.COM &nbsp;&nbsp; TEL./WHATSAPP: ${escapeHtml(footerContact.value.phone)}</footer>
 </main>
 ${shouldOpenPrintPreview ? '<script>window.addEventListener(\'load\', () => window.print());<\/script>' : ''}
 </body>
@@ -3290,7 +3302,7 @@ watch(
 <template>
     <Head :title="t('page_title')" />
 
-    <div class="min-h-screen bg-[#121212] text-white">
+    <div class="min-h-screen w-full max-w-full overflow-x-hidden bg-[#121212] text-white">
         <header class="border-b border-neutral-800 bg-[#121212]">
             <div class="bg-[#334fb4] text-white">
                 <div class="mx-auto grid h-12 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
@@ -3449,7 +3461,7 @@ watch(
                     <p class="mx-auto mt-2 max-w-sm text-sm leading-5 text-neutral-400 sm:mx-0 sm:mt-3 sm:max-w-3xl sm:text-base sm:leading-normal">
                         {{ t('intro.description') }}
                     </p>
-                    <div class="mt-4 max-w-[508px]">
+                    <div class="mx-auto mt-4 w-64 max-w-full sm:mx-0 sm:w-full sm:max-w-[508px]">
                         <div class="relative">
                             <label for="customer-budget" class="sr-only">{{ t('budget.label') }}</label>
                             <input
@@ -3457,20 +3469,26 @@ watch(
                                 v-model="customerBudget"
                                 type="text"
                                 inputmode="decimal"
-                                class="min-h-12 w-full rounded-lg border border-neutral-700 bg-[#121212] px-4 py-3 pr-10 text-sm text-white outline-none transition placeholder:text-neutral-400 focus:border-amber-400"
+                                class="min-h-12 w-full rounded-lg border px-4 py-3 pr-11 text-lg font-semibold outline-none transition placeholder:text-sm placeholder:font-normal"
+                                :class="normalizedBudget !== null
+                                    ? 'border-emerald-400/60 bg-emerald-400/10 text-emerald-300 placeholder:text-emerald-200/60 focus:border-emerald-400'
+                                    : 'border-amber-300/60 bg-amber-300/10 text-amber-200 placeholder:text-amber-200/70 focus:border-amber-300'"
                                 :placeholder="t('budget.placeholder')"
                             />
-                            <span class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-neutral-400">€</span>
+                            <span
+                                class="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-lg font-bold"
+                                :class="normalizedBudget !== null ? 'text-emerald-400' : 'text-amber-300'"
+                            >€</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
-                <section class="rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
-                    <div class="grid gap-6">
+            <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
+                <section class="min-w-0 max-w-full rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
+                    <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
                         <button type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStepAndCenter('vehicle', 'vehicle-brand', true)">
-                            <span :class="selectedBrand ? 'normal-case' : 'uppercase'">{{ vehicleStepTitle }}</span>
+                            <span class="block max-w-full truncate whitespace-nowrap" :class="selectedBrand ? 'normal-case' : 'uppercase'">{{ vehicleStepTitle }}</span>
                             <svg viewBox="0 0 24 24" fill="none" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 stroke-current transition-transform" :class="openSteps.includes('vehicle') ? '' : 'rotate-180'" aria-hidden="true">
                                 <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
@@ -3485,7 +3503,8 @@ watch(
                                 <select
                                     id="vehicle-brand"
                                     v-model="selectedBrand"
-                                    class="vehicle-option-select mobile-vehicle-select w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-base text-white sm:text-sm"
+                                    class="vehicle-option-select mobile-vehicle-select w-full rounded-lg border px-4 py-3 text-base outline-none transition sm:text-sm"
+                                    :class="selectedBrand ? 'vehicle-select-complete border-emerald-400/60 bg-emerald-400/10 text-emerald-400' : 'vehicle-select-pending border-red-500/60 bg-red-500/10 text-red-300'"
                                     @change="handleVehicleBrandChange"
                                 >
                                     <option :value="null">{{ t('fields.select_brand') }}</option>
@@ -3506,7 +3525,8 @@ watch(
                                 <select
                                     id="vehicle-year"
                                     v-model="selectedYear"
-                                    class="vehicle-option-select mobile-vehicle-select w-full rounded-lg border border-neutral-800 bg-[#121212] px-4 py-3 text-base text-white sm:text-sm"
+                                    class="vehicle-option-select mobile-vehicle-select w-full rounded-lg border px-4 py-3 text-base outline-none transition sm:text-sm"
+                                    :class="selectedYear !== null ? 'vehicle-select-complete border-emerald-400/60 bg-emerald-400/10 text-emerald-400' : 'vehicle-select-pending border-red-500/60 bg-red-500/10 text-red-300'"
                                     @change="handleVehicleYearChange"
                                 >
                                     <option :value="null">{{ t('fields.select_year') }}</option>
@@ -3559,12 +3579,12 @@ watch(
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button ref="screenStepButton" type="button" :class="mainStepButtonClass('screen')" @click="toggleScreenStep">
-                                <span v-if="selectedScreenVariantTitles.length === 0">{{ t('steps.screen') }}</span>
+                                <span v-if="selectedScreenVariantTitles.length === 0" class="block max-w-full truncate whitespace-nowrap">{{ t('steps.screen') }}</span>
                                 <span
                                     v-for="variantTitle in selectedScreenVariantTitles"
                                     v-else
                                     :key="variantTitle"
-                                    class="block normal-case"
+                                    class="block max-w-full truncate whitespace-nowrap normal-case"
                                 >
                                     {{ variantTitle }}
                                 </span>
@@ -3572,7 +3592,7 @@ watch(
                                     <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
                                 </svg>
                             </button>
-                            <div v-if="openSteps.includes('screen')" id="screen-step-content" class="mt-6">
+                            <div v-if="openSteps.includes('screen')" id="screen-step-content" class="mt-6 min-w-0 max-w-full">
                             <p
                                 v-if="displayedScreenOptionCount > 0"
                                 id="screen-availability-message"
@@ -3608,13 +3628,13 @@ watch(
                             <p v-else-if="hasNoSpecificScreenForBudget && showUniversalScreens && affordableUniversalScreens.length === 0" id="screen-alternative-message" class="rounded-xl border border-neutral-700 bg-[#121212] p-5 text-sm text-neutral-300">
                                 {{ t('budget.no_universal_screen') }}
                             </p>
-                            <div v-else-if="selectedYear !== null && displayedScreenVehicles.length" class="mt-4 grid gap-5">
+                            <div v-else-if="selectedYear !== null && displayedScreenVehicles.length" class="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
                                 <p v-if="showUniversalScreens" class="text-sm font-semibold text-amber-400">{{ t('budget.universal_results') }}</p>
                                 <article
                                     v-for="vehicle in displayedScreenVehicles"
                                     :key="vehicle.id"
                                     :id="`screen-product-${vehicle.id}`"
-                                    class="grid gap-5 rounded-xl border p-4 transition lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
+                                    class="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-5 overflow-hidden rounded-xl border p-4 transition lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
                                     :class="
                                         selectedVehicle?.id === vehicle.id
                                             ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400'
@@ -3763,9 +3783,9 @@ watch(
                             <div
                                 v-else-if="selectedBrand && selectedModel && selectedYear"
                                 id="screen-alternative-message"
-                                class="mt-4 flex flex-col items-center gap-3 text-center text-sm"
+                                class="mt-4 flex flex-col items-center gap-3 rounded-xl border border-red-500/60 bg-red-500/10 px-4 py-4 text-center text-sm"
                             >
-                                <p class="text-neutral-300">{{ t('screen.missing_message') }}</p>
+                                <p class="font-semibold text-red-300">{{ t('screen.missing_message') }}</p>
                                 <button
                                     type="button"
                                     class="rounded-lg bg-amber-400 px-5 py-3 font-semibold text-black transition hover:bg-amber-300"
@@ -3783,12 +3803,12 @@ watch(
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStepAndCenter('camera', 'camera-step-options')">
-                                <span v-if="cameraStepTitles.length === 0" class="block whitespace-nowrap uppercase">{{ t('steps.camera') }}</span>
+                                <span v-if="cameraStepTitles.length === 0" class="block max-w-full truncate whitespace-nowrap uppercase">{{ t('steps.camera') }}</span>
                                 <span
                                     v-for="(cameraTitle, index) in cameraStepTitles"
                                     v-else
                                     :key="`${index}-${cameraTitle}`"
-                                    class="block max-w-[calc(100vw-4rem)] truncate whitespace-nowrap normal-case sm:max-w-lg"
+                                    class="block max-w-full truncate whitespace-nowrap normal-case sm:max-w-lg"
                                 >
                                     {{ cameraTitle }}
                                 </span>
@@ -3796,8 +3816,8 @@ watch(
                                     <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
                                 </svg>
                             </button>
-                            <div v-if="openSteps.includes('camera')" id="camera-step-content" class="mt-6">
-                            <div id="camera-step-options" class="mt-4 grid gap-4 md:grid-cols-3">
+                            <div v-if="openSteps.includes('camera')" id="camera-step-content" class="mt-6 min-w-0 max-w-full">
+                            <div id="camera-step-options" class="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-3">
                                 <div
                                     v-for="camera in visibleCameraOptions"
                                     :key="camera.key"
@@ -3888,12 +3908,12 @@ watch(
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button type="button" :class="mainStepButtonClass('speaker')" @click="toggleStepAndCenter('speaker', 'speaker-step-controls')">
-                                <span v-if="speakerStepTitles.length === 0" class="block whitespace-nowrap uppercase">{{ t('steps.speaker') }}</span>
+                                <span v-if="speakerStepTitles.length === 0" class="block max-w-full truncate whitespace-nowrap uppercase">{{ t('steps.speaker') }}</span>
                                 <span
                                     v-for="(speakerTitle, index) in speakerStepTitles"
                                     v-else
                                     :key="`${index}-${speakerTitle}`"
-                                    class="block max-w-[calc(100vw-4rem)] truncate whitespace-nowrap normal-case sm:max-w-lg"
+                                    class="block max-w-full truncate whitespace-nowrap normal-case sm:max-w-lg"
                                 >
                                     {{ speakerTitle }}
                                 </span>
@@ -3901,10 +3921,10 @@ watch(
                                     <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
                                 </svg>
                             </button>
-                            <div v-if="openSteps.includes('speaker')" id="speaker-step-content" class="mt-6">
-                            <div id="speaker-step-controls" class="mt-4 grid max-w-2xl gap-4">
+                            <div v-if="openSteps.includes('speaker')" id="speaker-step-content" class="mt-6 min-w-0 max-w-full">
+                            <div id="speaker-step-controls" class="mobile-model-section mt-4 grid min-w-0 max-w-2xl grid-cols-[minmax(0,1fr)] gap-4">
                                 <div>
-                                    <div class="flex flex-wrap gap-2">
+                                    <div class="mobile-model-buttons flex flex-wrap gap-2">
                                         <button
                                             v-for="category in speakerCategories"
                                             :key="category"
@@ -3925,7 +3945,7 @@ watch(
                                 <p class="mb-2 block text-sm font-medium text-neutral-300">
                                     {{ t('speaker.size') }}
                                 </p>
-                                <div class="flex flex-wrap gap-2">
+                                <div class="mobile-model-buttons flex flex-wrap gap-2">
                                     <button
                                         v-for="size in speakerSizes"
                                         :key="size"
@@ -3987,7 +4007,7 @@ watch(
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button type="button" :class="mainStepButtonClass('installation')" @click="toggleStepAndCenter('installation', 'postal-code', true); installationRequested = true">
-                                <span class="block max-w-[calc(100vw-4rem)] truncate whitespace-nowrap sm:max-w-lg" :class="selectedInstallation ? 'normal-case' : 'uppercase'">{{ installationStepTitle }}</span>
+                                <span class="block max-w-full truncate whitespace-nowrap sm:max-w-lg" :class="selectedInstallation ? 'normal-case' : 'uppercase'">{{ installationStepTitle }}</span>
                                 <svg viewBox="0 0 24 24" fill="none" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 stroke-current transition-transform" :class="openSteps.includes('installation') ? '' : 'rotate-180'" aria-hidden="true">
                                     <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
                                 </svg>
@@ -4030,14 +4050,15 @@ watch(
                                         <a v-if="matchedInstallationZone.installerPhone" :href="`tel:${matchedInstallationZone.installerPhone}`" class="w-fit font-semibold text-amber-400 underline underline-offset-2">☎ {{ matchedInstallationZone.installerPhone }}</a>
                                     </div>
                                 </div>
-                                <p v-else-if="checkedPostalCode" id="installation-availability-message" class="mt-3 text-sm text-amber-400">
+                                <p v-else-if="checkedPostalCode" id="installation-availability-message" class="mt-3 rounded-lg border border-red-500/60 bg-red-500/10 px-4 py-3 text-sm text-red-300">
                                     {{ t('installation.unavailable') }}
                                     <a
-                                        :href="storefrontUrl('/pages/contact')"
+                                        :href="headerContactUrl"
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        class="font-semibold underline underline-offset-2 hover:text-amber-300"
-                                    >{{ t('installation.contact_details') }}</a>.
+                                        class="font-semibold underline underline-offset-2 hover:text-red-200"
+                                    >{{ t('installation.contact_details_link') }}</a>
+                                    {{ t('installation.contact_details_suffix') }}.
                                 </p>
                                 <p v-else class="mt-3 text-sm text-neutral-500">
                                     {{ t('installation.check_to_view') }}
@@ -4392,15 +4413,15 @@ watch(
                                 </p>
                                 <div v-if="hasSelectedProducts && !visibleInstallationOptions.length" class="mt-3 flex flex-wrap gap-3 text-sm">
                                     <a
-                                        href="mailto:info@autoradiocanario.com"
+                                        :href="`mailto:${footerContact.email}`"
                                         class="font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
-                                    >{{ t('installation.contact_email') }}: info@autoradiocanario.com</a>
+                                    >{{ t('installation.contact_email') }}: {{ footerContact.email }}</a>
                                     <a
-                                        href="https://wa.me/34694259117"
+                                        :href="footerContact.whatsappUrl"
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         class="font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300"
-                                    >{{ t('installation.contact_whatsapp') }}: +34 694 259 117</a>
+                                    >{{ t('installation.contact_whatsapp') }}: {{ footerContact.phone }}</a>
                                 </div>
 
                             </div>
@@ -4769,7 +4790,7 @@ watch(
                 </div>
             </div>
         </div>
-        <footer class="border-t border-neutral-800 bg-[#121212] text-white">
+        <footer class="w-full max-w-full overflow-x-hidden border-t border-neutral-800 bg-[#121212] text-white">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="flex flex-col items-center py-14 text-center sm:py-16">
                     <h2 class="text-base font-medium">{{ headerCopy.contact }}</h2>
@@ -5199,19 +5220,33 @@ watch(
         width: 16rem;
         max-width: 100%;
         margin-inline: auto;
-        border: 2px solid #d8ae2d;
         appearance: none;
-        background-color: #121212;
-        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23D8AE2D' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
         background-repeat: no-repeat;
         background-position: right 0.85rem center;
         padding-right: 2.5rem;
-        color: #d8ae2d;
     }
 
-    .mobile-vehicle-select:focus {
-        border-color: #d8ae2d;
-        outline: 2px solid rgba(216, 174, 45, 0.3);
+    .mobile-vehicle-select.vehicle-select-pending {
+        border: 2px solid rgba(239, 68, 68, 0.6);
+        background-color: rgba(239, 68, 68, 0.1);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23FCA5A5' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        color: #fca5a5;
+    }
+
+    .mobile-vehicle-select.vehicle-select-complete {
+        border: 2px solid rgba(52, 211, 153, 0.6);
+        background-color: rgba(52, 211, 153, 0.1);
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2334D399' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+        color: #34d399;
+    }
+
+    .mobile-vehicle-select.vehicle-select-pending:focus {
+        outline: 2px solid rgba(239, 68, 68, 0.3);
+        outline-offset: 2px;
+    }
+
+    .mobile-vehicle-select.vehicle-select-complete:focus {
+        outline: 2px solid rgba(52, 211, 153, 0.3);
         outline-offset: 2px;
     }
 

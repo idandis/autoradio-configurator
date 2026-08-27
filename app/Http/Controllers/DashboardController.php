@@ -3,10 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\ConfiguratorProduct;
-use App\Models\DismissedPostImportTask;
 use App\Services\VehicleImageGenerator;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -16,7 +15,11 @@ class DashboardController extends Controller
     {
         $translationTasks = ConfiguratorProduct::query()
             ->whereIn('category', ['screen', 'camera', 'speaker'])
-            ->where(fn ($query) => $query->whereNull('title_it')->orWhereNull('title_en'))
+            ->where(fn ($query) => $query
+                ->whereNull('title_it')
+                ->orWhere('title_it', '')
+                ->orWhereNull('title_en')
+                ->orWhere('title_en', ''))
             ->orderBy('category')
             ->orderBy('handle')
             ->get(['handle', 'category', 'title', 'title_it', 'title_en', 'brand', 'model', 'year_from', 'year_to']);
@@ -24,10 +27,7 @@ class DashboardController extends Controller
         $prompt = $this->postImportPrompt($translationTasks, $imageTasks);
         $fingerprint = hash('sha256', $prompt);
         $hasTasks = $translationTasks->isNotEmpty() || $imageTasks->isNotEmpty();
-        $dismissalAvailable = Schema::hasTable('dismissed_post_import_tasks');
-        $isDismissed = $hasTasks
-            && $dismissalAvailable
-            && DismissedPostImportTask::where('fingerprint', $fingerprint)->exists();
+        $isDismissed = $hasTasks && Cache::has('post-import-tasks:dismissed:'.$fingerprint);
 
         return Inertia::render('Dashboard', [
             'stats' => [
@@ -45,7 +45,6 @@ class DashboardController extends Controller
                 'prompt' => $prompt,
                 'fingerprint' => $fingerprint,
                 'dismissed' => $isDismissed,
-                'dismissalAvailable' => $dismissalAvailable,
             ],
             'flashStatus' => session('status'),
         ]);

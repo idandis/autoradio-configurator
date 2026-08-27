@@ -9,16 +9,23 @@ import AuthLayout from '@/layouts/AuthLayout.vue';
 import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { initializeTheme } from '@/composables/useAppearance';
 import { initializeFlashToast } from '@/lib/flashToast';
+import Configurator from '@/pages/Configurator.vue';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
+
+// Keep a visible build revision in the entry bundle so CDN/browser caches
+// receive a new asset URL after frontend releases.
+document.documentElement.dataset.frontendBuild = '2026-08-27-2';
 
 createInertiaApp({
     title: (title) => title || appName,
     resolve: async (name) => {
-        const page = await resolvePageComponent(
-            `./pages/${name}.vue`,
-            import.meta.glob('./pages/**/*.vue'),
-        );
+        const page = name === 'Configurator'
+            ? { default: Configurator }
+            : await resolvePageComponent(
+                `./pages/${name}.vue`,
+                import.meta.glob('./pages/**/*.vue'),
+            );
 
         if (!page.default.layout) {
             if (name.startsWith('Auth/')) {
