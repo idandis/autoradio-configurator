@@ -65,10 +65,18 @@ const migrateDatabase = () => {
 };
 
 const dismissPostImportTasks = () => {
+    if (!props.postImportTasks.dismissalAvailable) {
+        window.alert('Per attivare la cancellazione devi prima premere “Aggiorna database” nella Dashboard.');
+        return;
+    }
+
     if (!window.confirm('Cancellare questa nota dalla Dashboard?')) return;
 
     dismissTasksForm.post('/dashboard/post-import-tasks/dismiss', {
         preserveScroll: true,
+        onError: () => {
+            window.alert('Non è stato possibile cancellare la nota. Premi “Aggiorna database” e riprova.');
+        },
     });
 };
 </script>
@@ -112,7 +120,7 @@ const dismissPostImportTasks = () => {
                     <button
                         type="button"
                         class="rounded-lg border border-amber-500/60 px-4 py-2.5 text-sm font-semibold text-amber-300 transition hover:bg-amber-500/10"
-                        :disabled="dismissTasksForm.processing || !postImportTasks.dismissalAvailable"
+                        :disabled="dismissTasksForm.processing"
                         :title="postImportTasks.dismissalAvailable ? '' : 'Premi prima Aggiorna database'"
                         @click="dismissPostImportTasks"
                     >
@@ -127,6 +135,12 @@ const dismissPostImportTasks = () => {
                     </button>
                 </div>
             </div>
+            <p
+                v-if="!postImportTasks.dismissalAvailable"
+                class="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200"
+            >
+                Per usare “Segna come completata”, carica la nuova migrazione e premi prima “Aggiorna database”.
+            </p>
             <textarea
                 :value="postImportTasks.prompt"
                 readonly
