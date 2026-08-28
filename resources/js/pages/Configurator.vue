@@ -343,7 +343,7 @@ const vehicleStepTitle = computed(() => {
         })
         .join(' ');
 
-    return [normalizedBrand, selectedYear.value, selectedModel.value]
+    return [normalizedBrand, selectedModel.value, selectedYear.value]
         .filter((value) => value !== null && value !== '')
         .join(' ');
 });
@@ -454,18 +454,31 @@ const completeCustomQuote = () => {
     }
 };
 const installationRequested = ref(false);
+let brandTypeaheadBuffer = '';
+let brandTypeaheadTimer: ReturnType<typeof setTimeout> | null = null;
+const handleBrandTypeahead = (event: KeyboardEvent) => {
+    if (event.key.length !== 1 || !/[\p{L}\d]/u.test(event.key)) return;
+    brandTypeaheadBuffer += event.key.toLocaleLowerCase();
+    if (brandTypeaheadTimer) clearTimeout(brandTypeaheadTimer);
+    brandTypeaheadTimer = setTimeout(() => { brandTypeaheadBuffer = ''; }, 700);
+    const match = brands.value.find((brand) => brand.toLocaleLowerCase().startsWith(brandTypeaheadBuffer));
+    if (match) {
+        selectedBrand.value = match;
+        handleVehicleBrandChange();
+    }
+};
 const openSteps = ref<string[]>([]);
 const toggleStep = (step: string) => {
     openSteps.value = openSteps.value.includes(step)
         ? openSteps.value.filter((openStep) => openStep !== step)
         : [...openSteps.value, step];
 };
-const centerConfiguratorTarget = async (targetId: string, focus = false) => {
+const centerConfiguratorTarget = async (targetId: string, focus = false, block: ScrollLogicalPosition = 'center') => {
     await nextTick();
     window.requestAnimationFrame(() => {
         const target = document.getElementById(targetId);
         if (focus) target?.focus({ preventScroll: true });
-        target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target?.scrollIntoView({ behavior: 'smooth', block });
     });
 };
 const goToFullQuote = async () => {
@@ -478,10 +491,10 @@ const goToPrecheckStep = async () => {
     }
     await centerConfiguratorTarget('installation-precheck-step');
 };
-const toggleStepAndCenter = async (step: string, targetId: string, focus = false) => {
+const toggleStepAndCenter = async (step: string, targetId: string, focus = false, block: ScrollLogicalPosition = 'center') => {
     const isOpening = !openSteps.value.includes(step);
     toggleStep(step);
-    if (isOpening) await centerConfiguratorTarget(targetId, focus);
+    if (isOpening) await centerConfiguratorTarget(targetId, focus, block);
 };
 const stepHasSelections = (step: string) => {
     switch (step) {
@@ -502,17 +515,27 @@ const stepHasSelections = (step: string) => {
     }
 };
 const mainStepButtonClass = (step: string) => [
-    'relative mx-auto block w-64 max-w-full overflow-hidden rounded-lg border-2 py-4 pl-5 pr-16 text-base font-semibold uppercase tracking-wide transition',
+    'relative mx-auto block w-64 max-w-full overflow-visible rounded-lg border-2 py-4 pl-5 pr-16 text-base font-semibold uppercase tracking-wide transition',
     stepHasSelections(step)
         ? 'border-black bg-amber-400 text-black ring-2 ring-amber-400 hover:bg-amber-300'
         : 'border-amber-400 bg-transparent text-amber-400 hover:border-black hover:bg-amber-400 hover:text-black hover:ring-2 hover:ring-amber-400',
 ];
+const stepContextLabel = (step: 'vehicle' | 'screen' | 'camera' | 'speaker' | 'installation') => {
+    const labels = {
+        es: { vehicle: 'Coche', screen: 'Pantalla', camera: 'Cámara', speaker: 'Altavoz', installation: 'Instalación' },
+        it: { vehicle: 'Auto', screen: 'Schermo', camera: 'Camera', speaker: 'Altoparlante', installation: 'Installazione' },
+        en: { vehicle: 'Car', screen: 'Screen', camera: 'Camera', speaker: 'Speaker', installation: 'Installation' },
+    };
+
+    return labels[props.locale]?.[step] ?? labels.es[step];
+};
 const showMissingVehicleForm = ref(false);
 const missingVehicleSending = ref(false);
 const missingVehicleSent = ref(false);
 const missingVehicleError = ref('');
 const quoteTotals = ref<HTMLElement | null>(null);
 const checkoutConsentSection = ref<HTMLElement | null>(null);
+const cartCheckoutConsentSection = ref<HTMLElement | null>(null);
 const mobileQuoteTotals = ref<HTMLElement | null>(null);
 const quotePanel = ref<HTMLElement | null>(null);
 const quoteSummaryScroll = ref<HTMLElement | null>(null);
@@ -599,9 +622,9 @@ const handleMissingVehicleOption = (field: 'brand' | 'year', event: Event) => {
     openMissingVehicleForm();
 };
 
-const handleVehicleBrandChange = async (event: Event) => {
-    const value = (event.target as HTMLSelectElement).value;
-    handleMissingVehicleOption('brand', event);
+const handleVehicleBrandChange = async (event?: Event) => {
+    const value = event ? (event.target as HTMLSelectElement).value : (selectedBrand.value ?? '');
+    if (event) handleMissingVehicleOption('brand', event);
     if (value === missingBrandOption || value === '') return;
 
     await centerConfiguratorTarget('vehicle-year', true);
@@ -864,6 +887,71 @@ const selectedScreenVariantTitles = computed(() => [
         ),
     ),
 ]);
+
+const variantPickerVehicle = ref<Vehicle | null>(null);
+const showCart = ref(false);
+const cartQuantities = ref<Record<string, number>>({});
+const funnelCopy = computed(() => ({
+    es: { choose: 'Elige las variantes', add: 'Añadir al carrito', remove: 'Eliminar del carrito', selected: 'Variantes elegidas', change: 'Cambiar variantes', cart: 'Ver carrito', cartTitle: 'Tu carrito', empty: 'Tu carrito está vacío', quantity: 'Cantidad', back: 'Volver al configurador' },
+    it: { choose: 'Scegli le varianti', add: 'Aggiungi al carrello', remove: 'Elimina dal carrello', selected: 'Varianti scelte', change: 'Cambia varianti', cart: 'Vedi carrello', cartTitle: 'Il tuo carrello', empty: 'Il carrello è vuoto', quantity: 'Quantità', back: 'Torna al configuratore' },
+    en: { choose: 'Choose variants', add: 'Add to cart', remove: 'Remove from cart', selected: 'Selected variants', change: 'Change variants', cart: 'View cart', cartTitle: 'Your cart', empty: 'Your cart is empty', quantity: 'Quantity', back: 'Back to configurator' },
+})[props.locale]);
+
+const cartQuantity = (key: string) => cartQuantities.value[key] ?? 1;
+const setCartQuantity = (key: string, quantity: number) => {
+    cartQuantities.value = { ...cartQuantities.value, [key]: Math.max(1, quantity) };
+};
+const setCartQuantityFromInput = (key: string, event: Event) => {
+    const input = event.target as HTMLInputElement;
+    const quantity = Number.parseInt(input.value, 10);
+    setCartQuantity(key, Number.isFinite(quantity) ? quantity : 1);
+    input.value = String(cartQuantity(key));
+};
+const openVariantPicker = (vehicle: Vehicle) => { variantPickerVehicle.value = vehicle; };
+const closeVariantPicker = () => { variantPickerVehicle.value = null; };
+const returnToConfigurator = async () => {
+    variantPickerVehicle.value = null;
+    showCart.value = false;
+    openSteps.value = [];
+    await nextTick();
+    window.requestAnimationFrame(() => {
+        document.getElementById('mobile-vehicle-marker')?.scrollIntoView({ behavior: 'auto', block: 'start' });
+    });
+};
+const openCartFromVariantPicker = () => {
+    closeVariantPicker();
+    showCart.value = true;
+};
+const handleCartHistoryBack = () => {
+    if (showCart.value) {
+        showCart.value = false;
+        variantPickerVehicle.value = null;
+    }
+};
+const handlePrintPreviewNavigation = (event: MessageEvent) => {
+    if (event.data?.type === 'autoradio:return-to-configurator') void returnToConfigurator();
+};
+watch(showCart, (isOpen, wasOpen) => {
+    if (isOpen && !wasOpen) window.history.pushState({ autoradioCart: true }, '', window.location.href);
+});
+const isScreenChoiceSelected = (choice: VariantChoice) => selectedScreenVariantIds.value.includes(choice.id);
+const toggleScreenChoiceInCart = (choice: VariantChoice) => {
+    if (isScreenChoiceSelected(choice)) {
+        removeSelectedScreen(choice.id);
+        return;
+    }
+
+    selectedScreenVariantIds.value = [...selectedScreenVariantIds.value, choice.id];
+    setCartQuantity(`screen:${choice.id}`, 1);
+};
+const selectedScreensForVehicle = (vehicle: Vehicle) =>
+    vehicle.variants.flatMap(screenVariantChoices).filter((choice) => selectedScreenVariantIds.value.includes(choice.id));
+const screenChoicesForVehicle = (vehicle: Vehicle) =>
+    visibleScreenVariants(vehicle).flatMap(screenVariantChoices);
+const singleScreenChoice = (vehicle: Vehicle) => {
+    const choices = screenChoicesForVehicle(vehicle);
+    return choices.length === 1 ? choices[0] : null;
+};
 
 const screenVariantChoices = (variant: Variant): VariantChoice[] =>
     variant.colorOptions.length > 0 ? variant.colorOptions : [variant];
@@ -1484,6 +1572,8 @@ watch(
 );
 
 onMounted(async () => {
+    window.addEventListener('popstate', handleCartHistoryBack);
+    window.addEventListener('message', handlePrintPreviewNavigation);
     document.documentElement.lang = props.locale;
     void trackVisitorEntry();
     const params = new URLSearchParams(window.location.search);
@@ -1533,6 +1623,10 @@ onMounted(async () => {
             });
         }
     });
+});
+onBeforeUnmount(() => {
+    window.removeEventListener('popstate', handleCartHistoryBack);
+    window.removeEventListener('message', handlePrintPreviewNavigation);
 });
 onBeforeUnmount(() => {
     window.removeEventListener('keydown', closeImageZoomOnEscape);
@@ -1712,7 +1806,7 @@ const visibleCameraOptions = computed(() => {
             selectedYear.value >= option.yearFrom &&
             selectedYear.value <= option.yearTo
         );
-    });
+    }).toSorted((first, second) => Number(first.isStandard) - Number(second.isStandard));
 });
 
 const selectCameraVariant = (camera: SimpleOption, event: Event) => {
@@ -2342,21 +2436,31 @@ const goToSelectedProduct = async (
 
 const productsSubtotal = computed(
     () =>
-        selectedScreens.value.reduce((sum, screen) => sum + screen.price, 0) +
-        selectedCameras.value.reduce((sum, camera) => sum + camera.price, 0) +
-        selectedSpeakers.value.reduce((sum, speaker) => sum + speaker.price, 0) +
+        selectedScreens.value.reduce((sum, screen) => sum + screen.price * cartQuantity(`screen:${screen.id}`), 0) +
+        selectedCameras.value.reduce((sum, camera) => sum + camera.price * cartQuantity(`camera:${camera.key}`), 0) +
+        selectedSpeakers.value.reduce((sum, speaker) => sum + speaker.price * cartQuantity(`speaker:${speaker.key}`), 0) +
         selectedCustomProducts.value
             .filter((product) => product.category !== 'installation')
-            .reduce((sum, product) => sum + product.price, 0),
+            .reduce((sum, product) => sum + product.price * cartQuantity(`custom:${product.key}`), 0),
 );
+
+const cartItemCount = computed(() =>
+    selectedScreens.value.reduce((total, screen) => total + cartQuantity(`screen:${screen.id}`), 0)
+    + selectedCameras.value.reduce((total, camera) => total + cartQuantity(`camera:${camera.key}`), 0)
+    + selectedSpeakers.value.reduce((total, speaker) => total + cartQuantity(`speaker:${speaker.key}`), 0)
+    + selectedCustomProducts.value.reduce((total, product) => total + cartQuantity(`custom:${product.key}`), 0)
+    + (selectedInstallation.value ? cartQuantity(`installation:${selectedInstallation.value.key}`) : 0)
+    + (selectedPrecheckMethod.value === 'installer' ? cartQuantity('precheck:installer') : 0),
+);
+const cartItemCountLabel = computed(() => cartItemCount.value > 99 ? '99+' : String(cartItemCount.value));
 
 const installationCost = computed(
     () =>
-        precheckPrice.value +
-        (selectedInstallation.value?.price ?? 0) +
+        precheckPrice.value * (selectedPrecheckMethod.value === 'installer' ? cartQuantity('precheck:installer') : 1) +
+        (selectedInstallation.value?.price ?? 0) * (selectedInstallation.value ? cartQuantity(`installation:${selectedInstallation.value.key}`) : 1) +
         selectedCustomProducts.value
             .filter((product) => product.category === 'installation')
-            .reduce((sum, product) => sum + product.price, 0),
+            .reduce((sum, product) => sum + product.price * cartQuantity(`custom:${product.key}`), 0),
 );
 
 type DiscountTier = {
@@ -2403,8 +2507,8 @@ const automaticDiscountLabel = (tier: DiscountTier) => {
     }
 
     return {
-        es: `Descuento ${tier.fixedAmount} €`,
-        it: `Sconto ${tier.fixedAmount} €`,
+        es: `Descuento ${tier.fixedAmount} €`,
+        it: `Sconto ${tier.fixedAmount} €`,
         en: `€${tier.fixedAmount} discount`,
     }[props.locale];
 };
@@ -2414,9 +2518,9 @@ const automaticDiscountAppliedMessage = (tier: DiscountTier) => {
     }
 
     return {
-        es: `¡Ya tienes un descuento fijo de ${tier.fixedAmount} € aplicado!`,
-        it: `Hai già uno sconto fisso di ${tier.fixedAmount} € applicato!`,
-        en: `You already have a fixed €${tier.fixedAmount} discount applied!`,
+        es: `¡Ya tienes un descuento fijo de ${tier.fixedAmount} € aplicado!`,
+        it: `Hai già uno sconto fisso di ${tier.fixedAmount} € applicato!`,
+        en: `You already have a fixed €${tier.fixedAmount} discount applied!`,
     }[props.locale];
 };
 const automaticDiscountRemainingMessage = (tier: DiscountTier) => {
@@ -2431,9 +2535,9 @@ const automaticDiscountRemainingMessage = (tier: DiscountTier) => {
     }
 
     return {
-        es: `Añade solo ${amount} € más y obtén un descuento fijo de ${tier.fixedAmount} € en todo el pedido.`,
-        it: `Aggiungi solo altri ${amount} € e ottieni uno sconto fisso di ${tier.fixedAmount} € sull’intero ordine.`,
-        en: `Add just €${amount} more and get a fixed €${tier.fixedAmount} discount on the entire order.`,
+        es: `Añade solo ${amount} € más y obtén un descuento fijo de ${tier.fixedAmount} € en todo el pedido.`,
+        it: `Aggiungi solo altri ${amount} € e ottieni uno sconto fisso di ${tier.fixedAmount} € sull’intero ordine.`,
+        en: `Add just €${amount} more and get a fixed €${tier.fixedAmount} discount on the entire order.`,
     }[props.locale];
 };
 const discountAmount = computed(() => {
@@ -2468,7 +2572,7 @@ const checkoutLineItems = computed(() => {
         if (screen.shopifyVariantId) {
             items.push({
                 variantId: screen.shopifyVariantId,
-                quantity: 1,
+                quantity: cartQuantity(`screen:${screen.id}`),
             });
         }
     });
@@ -2477,7 +2581,7 @@ const checkoutLineItems = computed(() => {
         if (camera.shopifyVariantId) {
             items.push({
                 variantId: camera.shopifyVariantId,
-                quantity: 1,
+                quantity: cartQuantity(`camera:${camera.key}`),
             });
         }
     });
@@ -2486,14 +2590,14 @@ const checkoutLineItems = computed(() => {
         if (speaker.shopifyVariantId) {
             items.push({
                 variantId: speaker.shopifyVariantId,
-                quantity: 1,
+                quantity: cartQuantity(`speaker:${speaker.key}`),
             });
         }
     });
 
     selectedCustomProducts.value.forEach((product) => {
         if (product.category !== 'installation' && product.shopifyVariantId) {
-            items.push({ variantId: product.shopifyVariantId, quantity: 1 });
+            items.push({ variantId: product.shopifyVariantId, quantity: cartQuantity(`custom:${product.key}`) });
         }
     });
 
@@ -2921,7 +3025,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
             description: `${vehicle?.title ?? t('print.screen')} — ${t('print.variant', {
                 variant: [displayVariantTitle(screen.title), screen.color].filter(Boolean).join(' / '),
             })}`,
-            quantity: 1,
+            quantity: cartQuantity(`screen:${screen.id}`),
             price: screen.price,
         });
     });
@@ -2930,7 +3034,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         items.push({
             code: camera.sku || camera.key,
             description: camera.title,
-            quantity: 1,
+            quantity: cartQuantity(`camera:${camera.key}`),
             price: camera.price,
         });
     });
@@ -2939,7 +3043,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         items.push({
             code: speaker.sku || speaker.handle,
             description: speaker.productTitle,
-            quantity: 1,
+            quantity: cartQuantity(`speaker:${speaker.key}`),
             price: speaker.price,
         });
     });
@@ -2952,7 +3056,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
                 : product.title) + (product.category === 'installation'
                 ? ` — ${t('quote.installation_direct')}`
                 : ''),
-            quantity: 1,
+            quantity: cartQuantity(`custom:${product.key}`),
             price: product.price,
         });
     });
@@ -2961,7 +3065,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         items.push({
             code: selectedInstallation.value.sku || selectedInstallation.value.key,
             description: `${selectedInstallation.value.title} — ${t('quote.installation_direct')}`,
-            quantity: 1,
+            quantity: cartQuantity(`installation:${selectedInstallation.value.key}`),
             price: selectedInstallation.value.price,
         });
     }
@@ -2970,7 +3074,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         items.push({
             code: precheckProduct.value?.sku || 'PRECHECK',
             description: `${t('installation.precheck_installer_summary')} — ${t('quote.installation_direct')}`,
-            quantity: 1,
+            quantity: cartQuantity('precheck:installer'),
             price: precheckPrice.value,
         });
     }
@@ -3005,6 +3109,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
 <html lang="${props.locale}">
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title>${escapeHtml(quoteNumber)} — ${escapeHtml(t('print.document_title'))}</title>
     <style>
         @page { size: A4; margin: 12mm; }
@@ -3030,6 +3135,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         .issuer { text-align: right; }
         .date { margin: 14px 0; font-size: 13px; }
         table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; color: #292727; }
+        .table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
         th, td { border: 1px solid #b8b8b8; padding: 8px 7px; vertical-align: middle; }
         tr { break-inside: avoid; page-break-inside: avoid; }
         th { background: #fff; color: #292727; font-size: 12px; font-weight: 700; }
@@ -3056,8 +3162,44 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         .shipping-notice { margin: 8px 0 0; border: 1px solid #e4ad00; padding: 8px 10px; background: #fff8d8; color: #292727; font-size: 10px; font-weight: 700; text-align: center; }
         .service-amount-notice { margin: 5px 0 0; font-size: 9px; line-height: 1.4; color: #292727; break-inside: avoid; page-break-inside: avoid; }
         footer { margin: 12px -12mm 0; padding: 18px 12mm; background: #0067a9; color: #fff; text-align: center; font-size: 7px; font-weight: 700; letter-spacing: 1.2px; break-inside: avoid; page-break-inside: avoid; }
+        .screen-actions { display: none; }
+        @media screen and (max-width: 700px) {
+            body { padding: 14px; font-size: 14px; background: #f4f4f4; }
+            .screen-actions { position: relative; display: flex; justify-content: center; padding: 0 0 12px; }
+            .screen-actions { flex-wrap: wrap; gap: 10px; }
+            .screen-actions button { width: 100%; max-width: 420px; border: 0; border-radius: 10px; padding: 14px 18px; background: #d8ae2d; color: #000; font: 700 16px Arial, sans-serif; }
+            .screen-actions button.cart { background: #00a875; }
+            .screen-actions button.cart, .screen-actions button.configurator { color: #fff; }
+            .screen-actions button.configurator { background: #334fb4; }
+            .screen-actions button svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
+            .screen-actions button.back { background: #334fb4; }
+            .page { min-height: 0; gap: 0; background: #fff; overflow: hidden; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.12); }
+            .header { flex-direction: column; gap: 12px; padding: 14px; }
+            .brand img { width: 70px; height: 52px; }
+            .brand-name { font-size: 18px; }
+            .quote-title { width: 100%; text-align: left; border-top: 1px solid #ddd; padding-top: 10px; }
+            .quote-title h1 { margin: 0 0 5px; font-size: 21px; }
+            .vehicle-band { height: 150px; margin-top: 0; }
+            .vehicle-band img { width: 230px; height: 140px; }
+            .details { grid-template-columns: 1fr; gap: 16px; margin: 0; padding: 16px; }
+            .issuer { text-align: left; border-top: 1px solid #ddd; padding-top: 14px; }
+            .date { margin: 0; padding: 0 16px 14px; }
+            .table-scroll { border-top: 1px solid #bbb; border-bottom: 1px solid #bbb; }
+            table { min-width: 760px; }
+            th, td { padding: 10px 8px; }
+            .notes { margin-top: 0; padding: 18px 16px; font-size: 12px; line-height: 1.45; }
+            .checkout, .purchase-authorization, .service-amount-notice { font-size: 11px; }
+            .totals { margin-top: 0; border-left: 0; border-right: 0; font-size: 13px; }
+            .total-row { grid-template-columns: minmax(0,1fr) auto; }
+            .total-row div { padding: 11px 12px; }
+            .total-row:last-child { font-size: 15px; }
+            .shipping-notice { margin: 12px; font-size: 12px; }
+            footer { margin: 12px 0 0; padding: 18px 12px; font-size: 9px; }
+        }
         @media print {
             html, body { height: auto; }
+            .screen-actions { display: none !important; }
+            .table-scroll { overflow: visible; }
             .page { min-height: auto; break-after: avoid; page-break-after: avoid; }
             .totals { margin-top: 16px; }
             table, th, td, .totals, .total-row .amount, footer, .vehicle-band {
@@ -3069,6 +3211,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
     </style>
 </head>
 <body>
+<div class="screen-actions"><button type="button" class="cart" aria-label="Cart" onclick="window.close()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L20.5 8H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg></button><button type="button" class="configurator" aria-label="Configurator" onclick="if(window.opener){window.opener.postMessage({type:'autoradio:return-to-configurator'},'*')}window.close()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h5m6 0h5M4 17h9m6 0h1"/><circle cx="12" cy="7" r="3"/><circle cx="16" cy="17" r="3"/></svg></button><button type="button" onclick="window.print()">${escapeHtml(props.locale === 'es' ? 'Imprimir o guardar PDF' : props.locale === 'it' ? 'Stampa o salva PDF' : 'Print or save PDF')}</button></div>
 <main class="page">
     <header class="header">
         <div class="brand">
@@ -3106,10 +3249,10 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         </div>
     </section>
     <p class="date"><strong>${escapeHtml(t('print.date'))}:</strong> ${escapeHtml(quoteDate)}</p>
-    <table>
+    <div class="table-scroll"><table>
         <thead><tr><th>ID</th><th>${escapeHtml(t('print.description'))}</th><th>${escapeHtml(t('print.quantity'))}</th><th>${escapeHtml(t('print.unit_price'))}</th><th>${escapeHtml(t('print.amount'))}</th></tr></thead>
         <tbody>${rows}</tbody>
-    </table>
+    </table></div>
     <section class="notes">
         <strong>${escapeHtml(t('print.includes'))}:</strong>
         <ul>${includedItems}</ul>
@@ -3165,6 +3308,23 @@ watch(
 
 const checkoutConsentAccepted = ref(false);
 const showCheckoutConsentWarning = ref(false);
+const checkoutConsentAttention = ref(false);
+let checkoutConsentAttentionTimer: number | null = null;
+
+const dismissCheckoutConsentWarning = async () => {
+    showCheckoutConsentWarning.value = false;
+    checkoutConsentAttention.value = true;
+    await nextTick();
+    (showCart.value ? cartCheckoutConsentSection.value : checkoutConsentSection.value)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    if (checkoutConsentAttentionTimer !== null) window.clearTimeout(checkoutConsentAttentionTimer);
+    checkoutConsentAttentionTimer = window.setTimeout(() => {
+        checkoutConsentAttention.value = false;
+        checkoutConsentAttentionTimer = null;
+    }, 3500);
+};
+onBeforeUnmount(() => {
+    if (checkoutConsentAttentionTimer !== null) window.clearTimeout(checkoutConsentAttentionTimer);
+});
 
 const goToCheckout = async () => {
     if (!checkoutUrl.value) {
@@ -3183,6 +3343,7 @@ const goToCheckout = async () => {
 watch(checkoutConsentAccepted, (accepted) => {
     if (accepted) {
         showCheckoutConsentWarning.value = false;
+        checkoutConsentAttention.value = false;
         openSteps.value = [];
     }
 });
@@ -3302,7 +3463,7 @@ watch(
 <template>
     <Head :title="t('page_title')" />
 
-    <div class="min-h-screen w-full max-w-full overflow-x-hidden bg-[#121212] text-white">
+    <div class="min-h-screen w-full max-w-full overflow-x-clip bg-[#121212] text-white">
         <header class="border-b border-neutral-800 bg-[#121212]">
             <div class="bg-[#334fb4] text-white">
                 <div class="mx-auto grid h-12 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
@@ -3417,7 +3578,7 @@ watch(
             </div>
         </header>
 
-        <div class="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div class="mx-auto max-w-7xl px-4 py-8 pb-28 sm:px-6 lg:px-8 lg:pb-8">
             <div class="mb-8">
                 <div v-if="isAdmin" class="mb-8 grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     <button
@@ -3486,9 +3647,42 @@ watch(
 
             <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <section class="min-w-0 max-w-full rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
+                    <div
+                        v-if="selectedBrand && selectedModel && selectedYear"
+                        id="mobile-vehicle-marker"
+                        class="mb-6 scroll-mt-2 overflow-hidden rounded-xl border border-neutral-700 bg-[#121212] lg:hidden"
+                    >
+                        <div class="flex min-w-0 items-center justify-center gap-2 border-b border-neutral-800 px-3 py-3">
+                            <img
+                                v-if="selectedBrandImageUrl && failedBrandImage !== selectedBrandImageUrl"
+                                :src="selectedBrandImageUrl"
+                                :alt="selectedBrand"
+                                class="h-10 w-16 shrink-0 object-contain"
+                                @error="failedBrandImage = selectedBrandImageUrl"
+                            />
+                            <span class="shrink-0 text-xs font-medium uppercase tracking-wider text-neutral-500">{{ selectedBrand }}</span>
+                            <span class="min-w-0 truncate text-lg font-bold text-white">{{ selectedModel }}</span>
+                            <span class="shrink-0 text-sm text-neutral-400">{{ selectedYear }}</span>
+                        </div>
+                        <button
+                            v-if="selectedVehicleImageUrl && failedVehicleImage !== selectedVehicleImageUrl"
+                            type="button"
+                            class="flex h-52 w-full items-center justify-center p-3"
+                            :aria-label="t('vehicle.zoom')"
+                            @click="openImageZoom(selectedVehicleImageUrl, `${selectedBrand} ${selectedModel} ${selectedYear}`)"
+                        >
+                            <img
+                                :src="selectedVehicleImageUrl"
+                                :alt="`${selectedBrand} ${selectedModel} ${selectedYear}`"
+                                class="h-full w-full object-contain"
+                                @error="failedVehicleImage = selectedVehicleImageUrl"
+                            />
+                        </button>
+                    </div>
                     <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
                         <button type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStepAndCenter('vehicle', 'vehicle-brand', true)">
-                            <span class="block max-w-full truncate whitespace-nowrap" :class="selectedBrand ? 'normal-case' : 'uppercase'">{{ vehicleStepTitle }}</span>
+                            <span class="step-context-label">{{ stepContextLabel('vehicle') }}</span>
+                            <span class="block max-w-full truncate whitespace-nowrap" :class="selectedBrand ? 'normal-case' : 'uppercase'">{{ selectedBrand ? vehicleStepTitle : `+ ${stepContextLabel('vehicle')}` }}</span>
                             <svg viewBox="0 0 24 24" fill="none" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 stroke-current transition-transform" :class="openSteps.includes('vehicle') ? '' : 'rotate-180'" aria-hidden="true">
                                 <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
@@ -3506,6 +3700,7 @@ watch(
                                     class="vehicle-option-select mobile-vehicle-select w-full rounded-lg border px-4 py-3 text-base outline-none transition sm:text-sm"
                                     :class="selectedBrand ? 'vehicle-select-complete border-emerald-400/60 bg-emerald-400/10 text-emerald-400' : 'vehicle-select-pending border-red-500/60 bg-red-500/10 text-red-300'"
                                     @change="handleVehicleBrandChange"
+                                    @keydown="handleBrandTypeahead"
                                 >
                                     <option :value="null">{{ t('fields.select_brand') }}</option>
                                     <option :value="missingBrandOption" class="missing-vehicle-option">
@@ -3579,6 +3774,7 @@ watch(
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button ref="screenStepButton" type="button" :class="mainStepButtonClass('screen')" @click="toggleScreenStep">
+                                <span class="step-context-label">{{ stepContextLabel('screen') }}</span>
                                 <span v-if="selectedScreenVariantTitles.length === 0" class="block max-w-full truncate whitespace-nowrap">{{ t('steps.screen') }}</span>
                                 <span
                                     v-for="variantTitle in selectedScreenVariantTitles"
@@ -3634,11 +3830,11 @@ watch(
                                     v-for="vehicle in displayedScreenVehicles"
                                     :key="vehicle.id"
                                     :id="`screen-product-${vehicle.id}`"
-                                    class="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-5 overflow-hidden rounded-xl border p-4 transition lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
+                                    class="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-5 overflow-hidden rounded-xl border-2 p-4 transition lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]"
                                     :class="
                                         selectedVehicle?.id === vehicle.id
                                             ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400'
-                                            : 'border-neutral-800 bg-[#121212]'
+                                            : 'border-neutral-700 bg-[#121212]'
                                     "
                                 >
                                     <div v-if="requiresDashboardChoice(vehicle) && !selectedDashboardVariant(vehicle)" class="lg:col-span-2">
@@ -3714,66 +3910,66 @@ watch(
                                             {{ vehicle.title }}
                                         </h3>
                                         <div
-                                            class="quote-scrollbar max-h-72 overflow-y-auto pr-2"
-                                            @pointermove="updateVariantAutoScroll"
-                                            @pointerleave="stopVariantAutoScroll"
+                                            v-if="singleScreenChoice(vehicle)"
+                                            class="rounded-xl border p-4"
+                                            :class="isScreenChoiceSelected(singleScreenChoice(vehicle)!) ? 'border-emerald-400 bg-emerald-400/10' : 'border-neutral-700 bg-[#121212]'"
                                         >
-                                            <div class="grid gap-2">
-                                                <div
-                                                    v-for="variant in visibleScreenVariants(vehicle)"
-                                                    :key="variant.id"
-                                                    :id="`product-screen-${variant.id}`"
-                                                    class="group relative flex min-h-10 w-full items-center gap-3 rounded-lg border px-3 py-2 text-sm font-medium leading-tight transition"
-                                                    :class="
-                                                        isScreenVariantOverBudget(variant)
-                                                            ? 'cursor-not-allowed border-neutral-700 bg-neutral-900 text-neutral-500 grayscale'
-                                                            : isScreenVariantSelected(variant)
-                                                            ? 'border-amber-400 bg-amber-400 text-black'
-                                                            : 'border-amber-400 bg-[#121212] text-amber-400 hover:bg-amber-400/10'
-                                                    "
-                                                    @pointerup.capture="showOverBudgetMessageOnTouch(variant, $event)"
-                                                >
-                                                    <button type="button" class="min-w-0 flex-1 truncate text-left disabled:cursor-not-allowed" :disabled="isScreenVariantOverBudget(variant)" @click="toggleScreenVariant(variant)">
-                                                        {{ displayVariantTitle(variant.title) }}
-                                                    </button>
-                                                    <span
-                                                        v-if="isRecommendedScreenVariant(vehicle, variant)"
-                                                        class="pointer-events-none absolute left-2 top-0.5 z-10 inline-flex -rotate-2 rounded-sm bg-emerald-400 px-1.5 py-0.5 text-[8px] font-black uppercase leading-none tracking-wide text-black shadow-sm sm:px-2 sm:text-[9px]"
-                                                    >
-                                                        {{ t('screen.recommended') }}
-                                                    </span>
-                                                    <label v-if="variant.colorOptions.length > 1" class="flex shrink-0 items-center gap-1.5 text-xs">
-                                                        <span class="sr-only">{{ t('screen.color') }}</span>
-                                                        <select
-                                                            :value="selectedScreenChoice(variant).id"
-                                                            class="rounded border border-current bg-[#121212] px-2 py-1 text-amber-400"
-                                                            @change="selectScreenColor(variant, $event)"
-                                                        >
-                                                            <option v-for="choice in variant.colorOptions" :key="choice.id" :value="choice.id" :disabled="isScreenChoiceOverBudget(choice)">
-                                                                {{ choice.color }}
-                                                            </option>
-                                                        </select>
-                                                    </label>
-                                                    <span
-                                                        class="relative z-10 ml-auto shrink-0 whitespace-nowrap text-xs"
-                                                        :class="
-                                                            isScreenVariantOverBudget(variant)
-                                                                ? 'text-neutral-500'
-                                                                : isScreenVariantSelected(variant)
-                                                                ? 'text-black/70'
-                                                                : 'text-amber-400'
-                                                        "
-                                                    >
-                                                        {{ selectedScreenChoice(variant).price.toFixed(2) }} €
-                                                    </span>
-                                                    <span
-                                                        v-if="isScreenVariantOverBudget(variant)"
-                                                        class="pointer-events-none absolute inset-0 z-20 flex items-center justify-center rounded-lg bg-neutral-900/95 px-3 text-center text-xs font-semibold text-neutral-200 shadow-lg transition-opacity duration-75"
-                                                        :class="touchedOverBudgetVariantId === variant.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'"
-                                                    >
-                                                        {{ t('budget.variant_over') }}
-                                                    </span>
+                                            <div class="flex items-start justify-between gap-3">
+                                                <div class="min-w-0">
+                                                    <p class="truncate font-semibold text-white">{{ displayVariantTitle(singleScreenChoice(vehicle)!.title) }}</p>
+                                                    <p class="mt-1 text-lg font-bold text-amber-400">{{ singleScreenChoice(vehicle)!.price.toFixed(2) }} €</p>
                                                 </div>
+                                                <div v-if="isScreenChoiceSelected(singleScreenChoice(vehicle)!)" class="flex shrink-0 items-center gap-1.5">
+                                                    <input type="number" min="1" inputmode="numeric" class="h-11 w-14 rounded-lg border border-neutral-600 bg-black px-1 text-center text-lg font-bold text-white outline-none focus:border-emerald-400" :value="cartQuantity(`screen:${singleScreenChoice(vehicle)!.id}`)" @change="setCartQuantityFromInput(`screen:${singleScreenChoice(vehicle)!.id}`, $event)" />
+                                                    <span class="grid gap-1"><button type="button" class="flex h-5 w-8 items-center justify-center rounded border border-neutral-600 text-xs" @click="setCartQuantity(`screen:${singleScreenChoice(vehicle)!.id}`, cartQuantity(`screen:${singleScreenChoice(vehicle)!.id}`) + 1)">▲</button><button type="button" class="flex h-5 w-8 items-center justify-center rounded border border-neutral-600 text-xs" @click="setCartQuantity(`screen:${singleScreenChoice(vehicle)!.id}`, cartQuantity(`screen:${singleScreenChoice(vehicle)!.id}`) - 1)">▼</button></span>
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                class="mt-4 w-full rounded-lg px-4 py-3 font-bold transition"
+                                                :class="isScreenChoiceSelected(singleScreenChoice(vehicle)!) ? 'border border-red-500 bg-red-500/10 text-red-300 hover:bg-red-500 hover:text-white' : 'bg-amber-400 text-black hover:bg-amber-300'"
+                                                @click="toggleScreenChoiceInCart(singleScreenChoice(vehicle)!)"
+                                            >
+                                                {{ isScreenChoiceSelected(singleScreenChoice(vehicle)!) ? funnelCopy.remove : funnelCopy.add }}
+                                            </button>
+                                        </div>
+                                        <div v-else-if="selectedScreensForVehicle(vehicle).length" class="rounded-xl border border-emerald-400/50 bg-emerald-400/10 p-4 lg:hidden">
+                                            <p class="text-xs font-semibold uppercase tracking-wider text-emerald-400">{{ funnelCopy.selected }}</p>
+                                            <div v-for="choice in selectedScreensForVehicle(vehicle)" :key="choice.id" class="mt-2 flex items-center justify-between gap-3">
+                                                <span class="min-w-0 truncate font-semibold text-white">{{ displayVariantTitle(choice.title) }}</span>
+                                                <span class="shrink-0 font-bold text-emerald-300">{{ choice.price.toFixed(2) }} € × {{ cartQuantity(`screen:${choice.id}`) }}</span>
+                                            </div>
+                                            <button type="button" class="mt-4 w-full rounded-lg border border-emerald-400 px-4 py-2.5 font-semibold text-emerald-300 transition hover:bg-emerald-400 hover:text-black" @click="openVariantPicker(vehicle)">
+                                                {{ funnelCopy.change }}
+                                            </button>
+                                        </div>
+                                        <button v-else type="button" class="w-full rounded-xl bg-amber-400 px-5 py-4 text-base font-bold text-black transition hover:bg-amber-300 lg:hidden" @click="openVariantPicker(vehicle)">
+                                            {{ funnelCopy.choose }}
+                                        </button>
+                                        <div v-if="!singleScreenChoice(vehicle)" class="hidden space-y-2 lg:block">
+                                            <div
+                                                v-for="choice in screenChoicesForVehicle(vehicle)"
+                                                :key="`desktop-screen-choice-${choice.id}`"
+                                                class="flex min-h-12 items-center gap-3 rounded-lg border px-3 py-2 transition"
+                                                :class="isScreenChoiceSelected(choice) ? 'border-emerald-400 bg-emerald-400/10' : 'border-neutral-700 bg-[#121212]'"
+                                            >
+                                                <button type="button" class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left" @click="toggleScreenChoiceInCart(choice)">
+                                                    <span class="min-w-0 truncate text-sm font-semibold text-white">{{ displayVariantTitle(choice.title) }}</span>
+                                                    <span class="shrink-0 whitespace-nowrap text-sm font-bold" :class="isScreenChoiceSelected(choice) ? 'text-emerald-300' : 'text-amber-400'">{{ choice.price.toFixed(2) }} €</span>
+                                                </button>
+                                                <div v-if="isScreenChoiceSelected(choice)" class="flex shrink-0 items-center gap-1">
+                                                    <button type="button" class="h-7 w-7 rounded border border-neutral-600 bg-black text-sm" @click="setCartQuantity(`screen:${choice.id}`, cartQuantity(`screen:${choice.id}`) - 1)">−</button>
+                                                    <input type="number" min="1" inputmode="numeric" class="h-7 w-10 rounded border border-neutral-600 bg-black px-1 text-center text-sm font-bold text-white outline-none focus:border-emerald-400" :value="cartQuantity(`screen:${choice.id}`)" @change="setCartQuantityFromInput(`screen:${choice.id}`, $event)" />
+                                                    <button type="button" class="h-7 w-7 rounded border border-neutral-600 bg-black text-sm" @click="setCartQuantity(`screen:${choice.id}`, cartQuantity(`screen:${choice.id}`) + 1)">+</button>
+                                                </div>
+                                                <button
+                                                    type="button"
+                                                    class="shrink-0 rounded-md px-3 py-2 text-xs font-bold transition"
+                                                    :class="isScreenChoiceSelected(choice) ? 'border border-red-500 bg-red-500/10 text-red-300 hover:bg-red-500 hover:text-white' : 'bg-amber-400 text-black hover:bg-amber-300'"
+                                                    @click="toggleScreenChoiceInCart(choice)"
+                                                >
+                                                    {{ isScreenChoiceSelected(choice) ? '−' : '+' }}
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -3802,7 +3998,8 @@ watch(
                             v-if="selectedModel && visibleCameraOptions.length > 0"
                             class="border-t border-neutral-800 pt-6"
                         >
-                            <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStepAndCenter('camera', 'camera-step-options')">
+                            <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStepAndCenter('camera', 'camera-step-options', false, 'start')">
+                                <span class="step-context-label">{{ stepContextLabel('camera') }}</span>
                                 <span v-if="cameraStepTitles.length === 0" class="block max-w-full truncate whitespace-nowrap uppercase">{{ t('steps.camera') }}</span>
                                 <span
                                     v-for="(cameraTitle, index) in cameraStepTitles"
@@ -3829,11 +4026,7 @@ watch(
                                             : 'border-neutral-800 bg-[#121212] hover:border-neutral-700'
                                     "
                                 >
-                                    <button
-                                        type="button"
-                                        @click="toggleCamera(camera.key)"
-                                        class="block min-w-0 w-full max-w-full overflow-hidden rounded-t-xl p-0 text-left"
-                                    >
+                                    <div class="block min-w-0 w-full max-w-full overflow-hidden rounded-t-xl p-0 text-left">
                                         <div
                                             v-if="camera.image"
                                             class="relative h-48 min-w-0 w-full max-w-full overflow-hidden rounded-lg transition sm:h-56"
@@ -3845,7 +4038,7 @@ watch(
                                                 class="absolute inset-0 h-full w-full object-contain object-center"
                                             />
                                         </div>
-                                    </button>
+                                    </div>
 
                                     <div v-if="camera.variants && camera.variants.length > 1" class="px-2 pt-2">
                                         <select
@@ -3860,17 +4053,14 @@ watch(
                                         </select>
                                     </div>
 
-                                    <button
-                                        type="button"
-                                        class="block min-w-0 w-full max-w-full overflow-hidden rounded-b-xl p-2 text-left"
-                                        @click="toggleCamera(camera.key)"
-                                    >
+                                    <div class="block min-w-0 w-full max-w-full overflow-hidden rounded-b-xl p-3 text-left">
                                         <span class="flex min-w-0 items-center justify-between gap-1">
                                             <span class="min-w-0 flex-1 truncate whitespace-nowrap text-xs font-medium">{{ camera.isStandardFront ? t('camera.standard_front') : camera.title }}</span>
-                                            <span class="shrink-0 whitespace-nowrap text-sm font-semibold">{{ camera.price.toFixed(2) }} €</span>
+                                            <span class="shrink-0 whitespace-nowrap text-sm font-semibold">{{ (camera.price * cartQuantity(`camera:${camera.key}`)).toFixed(2) }} €</span>
                                         </span>
-                                        <span class="mt-1 block text-xs font-bold uppercase tracking-wide text-amber-400">{{ t('camera.add_action') }}</span>
-                                    </button>
+                                        <div v-if="selectedCameraKeys.includes(camera.key)" class="mt-3 flex items-center justify-end gap-1.5"><input type="number" min="1" max="4" inputmode="numeric" class="h-10 w-14 rounded-lg border border-neutral-600 bg-black text-center font-bold text-white" :value="cartQuantity(`camera:${camera.key}`)" @change="setCartQuantityFromInput(`camera:${camera.key}`, $event)" /><span class="grid gap-1"><button type="button" class="h-[18px] w-7 rounded border border-neutral-600 text-[10px]" @click="setCartQuantity(`camera:${camera.key}`, cartQuantity(`camera:${camera.key}`) + 1)">▲</button><button type="button" class="h-[18px] w-7 rounded border border-neutral-600 text-[10px]" @click="setCartQuantity(`camera:${camera.key}`, cartQuantity(`camera:${camera.key}`) - 1)">▼</button></span></div>
+                                        <button type="button" class="mt-3 w-full rounded-lg px-3 py-2.5 text-sm font-bold transition" :class="selectedCameraKeys.includes(camera.key) ? 'border border-red-500 bg-red-500/10 text-red-300' : 'bg-amber-400 text-black'" @click="toggleCamera(camera.key)">{{ selectedCameraKeys.includes(camera.key) ? funnelCopy.remove : funnelCopy.add }}</button>
+                                    </div>
 
                                     <div
                                         v-if="!camera.isStandard"
@@ -3908,6 +4098,7 @@ watch(
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button type="button" :class="mainStepButtonClass('speaker')" @click="toggleStepAndCenter('speaker', 'speaker-step-controls')">
+                                <span class="step-context-label">{{ stepContextLabel('speaker') }}</span>
                                 <span v-if="speakerStepTitles.length === 0" class="block max-w-full truncate whitespace-nowrap uppercase">{{ t('steps.speaker') }}</span>
                                 <span
                                     v-for="(speakerTitle, index) in speakerStepTitles"
@@ -3968,11 +4159,7 @@ watch(
                                     class="group relative overflow-hidden rounded-xl border transition"
                                     :class="selectedSpeakerKeys.includes(speaker.key) ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-800 bg-[#121212] hover:border-neutral-700'"
                                 >
-                                    <button
-                                        type="button"
-                                        class="grid h-full w-full gap-3 p-4 pt-16 text-left"
-                                        @click="toggleSpeaker(speaker.key)"
-                                    >
+                                    <div class="grid h-full w-full gap-3 p-4 pt-16 text-left">
                                         <img
                                             v-if="speaker.image"
                                             :src="speaker.image"
@@ -3983,9 +4170,11 @@ watch(
                                         <div>
                                             <p class="font-medium">{{ speaker.productTitle }}</p>
                                             <p v-if="speaker.title !== speaker.productTitle" class="mt-1 text-sm text-neutral-400">{{ speaker.title }}</p>
-                                            <p class="mt-2 text-lg font-semibold">{{ speaker.price.toFixed(2) }} €</p>
+                                            <p class="mt-2 text-lg font-semibold">{{ (speaker.price * cartQuantity(`speaker:${speaker.key}`)).toFixed(2) }} €</p>
                                         </div>
-                                    </button>
+                                        <div v-if="selectedSpeakerKeys.includes(speaker.key)" class="flex items-center justify-end gap-1.5"><input type="number" min="1" max="4" inputmode="numeric" class="h-10 w-14 rounded-lg border border-neutral-600 bg-black text-center font-bold text-white" :value="cartQuantity(`speaker:${speaker.key}`)" @change="setCartQuantityFromInput(`speaker:${speaker.key}`, $event)" /><span class="grid gap-1"><button type="button" class="h-[18px] w-7 rounded border border-neutral-600 text-[10px]" @click="setCartQuantity(`speaker:${speaker.key}`, cartQuantity(`speaker:${speaker.key}`) + 1)">▲</button><button type="button" class="h-[18px] w-7 rounded border border-neutral-600 text-[10px]" @click="setCartQuantity(`speaker:${speaker.key}`, cartQuantity(`speaker:${speaker.key}`) - 1)">▼</button></span></div>
+                                        <button type="button" class="w-full rounded-lg px-3 py-2.5 text-sm font-bold transition" :class="selectedSpeakerKeys.includes(speaker.key) ? 'border border-red-500 bg-red-500/10 text-red-300' : 'bg-amber-400 text-black'" @click="toggleSpeaker(speaker.key)">{{ selectedSpeakerKeys.includes(speaker.key) ? funnelCopy.remove : funnelCopy.add }}</button>
+                                    </div>
                                     <a
                                         :href="productUrl(speaker.handle)"
                                         target="_blank"
@@ -4007,6 +4196,7 @@ watch(
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button type="button" :class="mainStepButtonClass('installation')" @click="toggleStepAndCenter('installation', 'postal-code', true); installationRequested = true">
+                                <span class="step-context-label">{{ stepContextLabel('installation') }}</span>
                                 <span class="block max-w-full truncate whitespace-nowrap sm:max-w-lg" :class="selectedInstallation ? 'normal-case' : 'uppercase'">{{ installationStepTitle }}</span>
                                 <svg viewBox="0 0 24 24" fill="none" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 stroke-current transition-transform" :class="openSteps.includes('installation') ? '' : 'rotate-180'" aria-hidden="true">
                                     <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
@@ -4311,17 +4501,16 @@ watch(
                                             <span class="mt-1 block text-sm leading-5 text-neutral-400">{{ t('installation.precheck_self_description') }}</span>
                                             <span class="mt-3 block text-sm font-bold text-emerald-400">{{ t('installation.precheck_free_action') }}</span>
                                         </button>
-                                        <button
-                                            type="button"
-                                            :disabled="!selectedServiceZone"
+                                        <div
                                             class="rounded-xl border p-4 text-left transition disabled:cursor-not-allowed disabled:opacity-40"
                                             :class="selectedPrecheckMethod === 'installer' ? 'border-amber-400 bg-amber-400/10' : 'border-neutral-700 bg-neutral-900 hover:border-amber-400'"
-                                            @click="togglePrecheckMethod('installer')"
                                         >
                                             <span class="block font-semibold text-white">{{ t('installation.precheck_installer_title') }}</span>
                                             <span class="mt-1 block text-sm leading-5 text-neutral-400">{{ t('installation.precheck_installer_description') }}</span>
-                                            <span class="mt-3 block whitespace-nowrap text-sm font-bold text-amber-400">{{ t('installation.precheck_paid_action', { price: (precheckProduct?.price ?? 25).toFixed(2) }) }}</span>
-                                        </button>
+                                            <span class="mt-3 block whitespace-nowrap text-sm font-bold text-amber-400">{{ (precheckProduct?.price ?? 25).toFixed(2) }} €</span>
+                                            <div v-if="selectedPrecheckMethod === 'installer'" class="mt-3 flex items-center justify-end gap-1.5"><input type="number" min="1" max="4" inputmode="numeric" class="h-10 w-14 rounded-lg border border-neutral-600 bg-black text-center font-bold text-white" :value="cartQuantity('precheck:installer')" @change="setCartQuantityFromInput('precheck:installer', $event)" /><span class="grid gap-1"><button type="button" class="h-[18px] w-7 rounded border border-neutral-600 text-[10px]" @click="setCartQuantity('precheck:installer', cartQuantity('precheck:installer') + 1)">▲</button><button type="button" class="h-[18px] w-7 rounded border border-neutral-600 text-[10px]" @click="setCartQuantity('precheck:installer', cartQuantity('precheck:installer') - 1)">▼</button></span></div>
+                                            <button type="button" class="mt-3 w-full rounded-lg px-3 py-2.5 text-sm font-bold transition disabled:opacity-40" :disabled="!selectedServiceZone" :class="selectedPrecheckMethod === 'installer' ? 'border border-red-500 bg-red-500/10 text-red-300' : 'bg-amber-400 text-black'" @click="togglePrecheckMethod('installer')">{{ selectedPrecheckMethod === 'installer' ? funnelCopy.remove : funnelCopy.add }}</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -4351,17 +4540,12 @@ watch(
                                     v-for="installation in visibleInstallationOptions"
                                     :key="installation.key"
                                     :id="`product-installation-${installation.key}`"
-                                    role="button"
-                                    tabindex="0"
-                                    class="relative cursor-pointer overflow-hidden rounded-xl border transition"
+                                    class="relative overflow-hidden rounded-xl border transition"
                                     :class="
                                         selectedInstallationKey === installation.key
                                             ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400'
                                             : 'border-neutral-700 bg-neutral-900 hover:border-amber-400'
                                     "
-                                    @click="selectedInstallationKey = selectedInstallationKey === installation.key ? null : installation.key"
-                                    @keydown.enter.prevent="selectedInstallationKey = selectedInstallationKey === installation.key ? null : installation.key"
-                                    @keydown.space.prevent="selectedInstallationKey = selectedInstallationKey === installation.key ? null : installation.key"
                                 >
                                     <div class="absolute left-4 top-4 flex items-center gap-2" aria-hidden="true">
                                         <span
@@ -4400,11 +4584,10 @@ watch(
                                             {{ installation.title }}
                                         </p>
                                         <p class="text-lg font-semibold text-white">
-                                            {{ installation.price.toFixed(2) }} €
+                                            {{ (installation.price * cartQuantity(`installation:${installation.key}`)).toFixed(2) }} €
                                         </p>
-                                        <p class="text-xs font-bold uppercase tracking-wide text-amber-400">
-                                            {{ t('installation.installation_action') }}
-                                        </p>
+                                        <div v-if="selectedInstallationKey === installation.key" class="flex items-center justify-end gap-1.5"><input type="number" min="1" max="4" inputmode="numeric" class="h-10 w-14 rounded-lg border border-neutral-600 bg-black text-center font-bold text-white" :value="cartQuantity(`installation:${installation.key}`)" @change="setCartQuantityFromInput(`installation:${installation.key}`, $event)" /><span class="grid gap-1"><button type="button" class="h-[18px] w-7 rounded border border-neutral-600 text-[10px]" @click="setCartQuantity(`installation:${installation.key}`, cartQuantity(`installation:${installation.key}`) + 1)">▲</button><button type="button" class="h-[18px] w-7 rounded border border-neutral-600 text-[10px]" @click="setCartQuantity(`installation:${installation.key}`, cartQuantity(`installation:${installation.key}`) - 1)">▼</button></span></div>
+                                        <button type="button" class="mt-1 w-full rounded-lg px-3 py-2.5 text-sm font-bold transition" :class="selectedInstallationKey === installation.key ? 'border border-red-500 bg-red-500/10 text-red-300' : 'bg-amber-400 text-black'" @click="selectedInstallationKey = selectedInstallationKey === installation.key ? null : installation.key">{{ selectedInstallationKey === installation.key ? funnelCopy.remove : funnelCopy.add }}</button>
                                     </div>
                                 </article>
                             </div>
@@ -4431,7 +4614,7 @@ watch(
                     </div>
                 </section>
 
-                <aside ref="quotePanel" class="flex flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-[#121212] p-4 lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] lg:self-start">
+                <aside ref="quotePanel" class="hidden flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-[#121212] p-4 lg:sticky lg:top-6 lg:flex lg:h-[calc(100vh-3rem)] lg:self-start">
                     <div class="shrink-0 overflow-hidden rounded-xl border border-neutral-800 bg-[#121212]">
                         <div
                             v-if="selectedBrand"
@@ -4549,7 +4732,7 @@ watch(
                                     </p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
-                                    {{ screen.price.toFixed(2) }} €
+                                    {{ screen.price.toFixed(2) }} €
                                 </p>
                             </div>
 
@@ -4572,7 +4755,7 @@ watch(
                                     <p class="text-sm text-neutral-500">{{ t('speaker.label') }}</p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
-                                    {{ speaker.price.toFixed(2) }} €
+                                    {{ speaker.price.toFixed(2) }} €
                                 </p>
                             </div>
 
@@ -4595,7 +4778,7 @@ watch(
                                     <p class="text-sm text-neutral-500">{{ t('camera.label') }}</p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
-                                    {{ camera.price.toFixed(2) }} €
+                                    {{ camera.price.toFixed(2) }} €
                                 </p>
                             </div>
 
@@ -4613,7 +4796,7 @@ watch(
                                     </p>
                                     <p class="text-sm text-neutral-500">{{ product.sku || product.category }}</p>
                                 </div>
-                                <p class="shrink-0 whitespace-nowrap font-semibold">{{ product.price.toFixed(2) }} €</p>
+                                <p class="shrink-0 whitespace-nowrap font-semibold">{{ product.price.toFixed(2) }} €</p>
                             </div>
 
                             <div v-if="selectedInstallation" class="flex items-start justify-between gap-4">
@@ -4631,7 +4814,7 @@ watch(
                                     <p class="text-sm text-neutral-500">{{ t('installation.label') }}</p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
-                                    {{ selectedInstallation.price.toFixed(2) }} €
+                                    {{ selectedInstallation.price.toFixed(2) }} €
                                 </p>
                             </div>
 
@@ -4646,7 +4829,7 @@ watch(
                                     <p class="hidden font-medium text-neutral-100 lg:block">{{ t('installation.precheck_installer_summary') }}</p>
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold text-white">
-                                    {{ precheckPrice.toFixed(2) }} €
+                                    {{ precheckPrice.toFixed(2) }} €
                                 </p>
                             </div>
                         </div>
@@ -4658,38 +4841,38 @@ watch(
                         <div class="shrink-0 rounded-xl border border-neutral-800 bg-neutral-900 p-2.5">
                             <div class="flex items-center justify-between text-sm text-neutral-400">
                                 <span>{{ t('quote.subtotal') }}</span>
-                                <span>{{ productsSubtotal.toFixed(2) }} €</span>
+                                <span>{{ productsSubtotal.toFixed(2) }} €</span>
                             </div>
                             <div
                                 v-if="discountAmount > 0"
                                 class="mt-2 flex items-center justify-between text-sm text-emerald-400"
                             >
                                 <span>{{ discountLabel }}</span>
-                                <span>−{{ discountAmount.toFixed(2) }} €</span>
+                                <span>−{{ discountAmount.toFixed(2) }} €</span>
                             </div>
                             <div class="mt-3 flex items-center justify-between gap-3 border-t border-neutral-700 pt-3">
                                 <span class="text-base font-semibold text-white">{{ t('quote.estimated_total') }}</span>
                                 <span class="shrink-0 whitespace-nowrap text-xl font-bold text-white">
-                                    {{ estimatedTotal.toFixed(2) }} €
+                                    {{ estimatedTotal.toFixed(2) }} €
                                 </span>
                             </div>
                             <div class="mt-3 flex items-center justify-between gap-3 rounded-lg border border-amber-400/50 bg-amber-400/10 px-3 py-3">
                                 <span class="text-base font-semibold text-white">{{ t('quote.online_total') }}</span>
                                 <span class="shrink-0 whitespace-nowrap text-2xl font-bold text-amber-400">
-                                    {{ onlineTotal.toFixed(2) }} €
+                                    {{ onlineTotal.toFixed(2) }} €
                                 </span>
                             </div>
                             <div v-if="installationCost > 0" class="mt-2 rounded-lg border border-sky-400/30 bg-sky-400/5 px-3 py-3">
                                 <div class="flex items-center justify-between gap-4 text-sm text-sky-200">
                                     <span class="font-semibold">{{ t('quote.installation_direct') }}</span>
-                                    <span class="shrink-0 whitespace-nowrap text-lg font-bold">{{ installationCost.toFixed(2) }} €</span>
+                                    <span class="shrink-0 whitespace-nowrap text-lg font-bold">{{ installationCost.toFixed(2) }} €</span>
                                 </div>
                             </div>
                         </div>
                     </div>
                     </div>
 
-                    <div class="shrink-0 space-y-2 pt-2">
+                    <div class="flex shrink-0 flex-col gap-2 pt-2">
                         <div class="flex flex-col items-center justify-center rounded-lg border border-amber-400/60 bg-amber-400/10 px-3 py-2 text-center text-xs font-semibold text-amber-300">
                             <span class="flex items-center justify-center gap-2">
                                 <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
@@ -4709,7 +4892,7 @@ watch(
                             <p class="mt-1 text-xs leading-5 text-neutral-400">{{ t('quote.trust_details') }}</p>
                         </div>
 
-                        <label ref="checkoutConsentSection" class="flex cursor-pointer items-start gap-2 px-1 text-xs leading-5 text-neutral-400">
+                        <label ref="checkoutConsentSection" class="flex cursor-pointer items-start gap-2 rounded-lg px-1 text-xs leading-5 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 p-3 ring-2 ring-amber-400' : ''">
                             <input
                                 v-model="checkoutConsentAccepted"
                                 type="checkbox"
@@ -4746,46 +4929,46 @@ watch(
                         <button
                             type="button"
                             @click="goToCheckout"
-                            class="w-full rounded-xl bg-red-600 px-5 py-3 text-base font-semibold text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            class="order-2 flex h-12 w-full items-center justify-center rounded-xl bg-red-600 text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                             :disabled="!canCheckout"
+                            :aria-label="t('actions.add_to_cart')"
+                            :title="t('actions.add_to_cart')"
                         >
-                            {{ t('actions.add_to_cart') }}
+                            <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h4" /></svg>
                         </button>
 
                         <button
                             type="button"
-                            class="w-full rounded-xl border border-amber-400 px-5 py-3 text-base font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-600"
+                            class="order-1 flex h-12 w-full items-center justify-center rounded-xl border border-amber-400 text-amber-400 transition hover:bg-amber-400 hover:text-black disabled:cursor-not-allowed disabled:border-neutral-700 disabled:text-neutral-600"
                             :disabled="!hasSelectedProducts"
+                            :aria-label="t('actions.download_quote')"
+                            :title="t('actions.download_quote')"
                             @click="downloadQuote"
                         >
-                            {{ t('actions.download_quote') }}
+                            <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" /></svg>
                         </button>
                     </div>
                 </aside>
 
                 <div
-                    v-if="hasSelectedProducts"
                     ref="mobileQuoteTotals"
                     class="fixed inset-x-0 bottom-0 z-40 border-t-2 border-amber-400 bg-[#121212]/95 p-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-10px_30px_rgba(216,174,45,0.14)] backdrop-blur lg:hidden"
-                    :class="showMobileQuoteTotals ? 'visible opacity-100' : 'pointer-events-none invisible opacity-0'"
                 >
                     <div class="mx-auto max-w-md space-y-1.5">
-                        <div class="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
+                        <div v-if="hasSelectedProducts" class="rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2">
                             <div class="flex items-center justify-between">
                                 <span class="text-base font-semibold text-white">{{ t('quote.online_total') }}</span>
                                 <span class="shrink-0 whitespace-nowrap text-xl font-semibold text-amber-400">
-                                    {{ onlineTotal.toFixed(2) }} €
+                                    {{ onlineTotal.toFixed(2) }} €
                                 </span>
                             </div>
                         </div>
 
-                        <button
-                            type="button"
-                            class="w-full rounded-lg bg-red-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-red-500"
-                            @click="goToFullQuote"
-                        >
-                            {{ t('actions.view_quote') }}
-                        </button>
+                        <div>
+                            <button type="button" class="flex h-12 w-full items-center justify-center rounded-lg bg-emerald-600 text-white transition hover:bg-emerald-500 disabled:opacity-35" :disabled="!hasSelectedProducts" :aria-label="funnelCopy.cart" :title="funnelCopy.cart" @click="showCart = true">
+                                <span class="relative"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L20.5 8H6" /><circle cx="10" cy="20" r="1" /><circle cx="18" cy="20" r="1" /></svg><span v-if="cartItemCount > 0" class="absolute -right-3 -top-3 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-black leading-none text-white ring-2 ring-emerald-600">{{ cartItemCountLabel }}</span></span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -4904,8 +5087,155 @@ watch(
         </footer>
 
         <div
+            v-if="variantPickerVehicle"
+            class="fixed inset-0 z-[95] overflow-y-auto bg-[#0b0b0b] text-white"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="funnelCopy.choose"
+        >
+            <div class="mx-auto min-h-full max-w-4xl px-4 py-6 sm:px-8 sm:py-10">
+                <div class="flex items-center justify-between gap-4 border-b border-neutral-800 pb-5">
+                    <div class="min-w-0">
+                        <p class="text-sm font-semibold uppercase tracking-[0.2em] text-amber-400">{{ funnelCopy.choose }}</p>
+                        <h2 class="mt-2 truncate text-xl font-bold sm:text-3xl">{{ variantPickerVehicle.title }}</h2>
+                    </div>
+                    <button type="button" class="shrink-0 rounded-full border border-neutral-600 px-4 py-2 text-sm font-semibold hover:border-white" @click="closeVariantPicker">✕</button>
+                </div>
+                <div class="mt-6 grid gap-3">
+                    <template v-for="variant in visibleScreenVariants(variantPickerVehicle)" :key="variant.id">
+                        <div
+                            v-for="choice in screenVariantChoices(variant)"
+                            :key="choice.id"
+                            class="grid grid-cols-[minmax(0,1fr)_auto] gap-3 rounded-xl border p-4 sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center"
+                            :class="isScreenChoiceOverBudget(choice)
+                                ? 'border-neutral-800 bg-neutral-900 text-neutral-500'
+                                : isScreenChoiceSelected(choice)
+                                    ? 'border-emerald-400 bg-emerald-400/10 ring-1 ring-emerald-400'
+                                    : 'border-neutral-700 bg-[#121212]'"
+                        >
+                            <div class="col-span-2 min-w-0 sm:col-span-1">
+                                <div class="flex flex-wrap items-center gap-2">
+                                    <span class="font-semibold">{{ displayVariantTitle(choice.title) }}</span>
+                                    <span v-if="choice.color" class="text-sm text-neutral-400">· {{ choice.color }}</span>
+                                    <span v-if="isRecommendedScreenVariant(variantPickerVehicle, variant)" class="rounded bg-emerald-400 px-2 py-1 text-[10px] font-black uppercase text-black">{{ t('screen.recommended') }}</span>
+                                </div>
+                                <p class="mt-1 text-lg font-bold text-amber-400">{{ choice.price.toFixed(2) }} €</p>
+                            </div>
+                            <button
+                                type="button"
+                                class="min-w-0 rounded-lg px-3 py-3 text-sm font-bold transition disabled:cursor-not-allowed disabled:bg-neutral-700 disabled:text-neutral-400 sm:px-5 sm:text-base"
+                                :class="isScreenChoiceSelected(choice) ? 'border border-red-500 bg-red-500/10 text-red-300 hover:bg-red-500 hover:text-white' : 'bg-amber-400 text-black hover:bg-amber-300'"
+                                :disabled="isScreenChoiceOverBudget(choice)"
+                                @click="toggleScreenChoiceInCart(choice)"
+                            >
+                                {{ isScreenChoiceSelected(choice) ? funnelCopy.remove : funnelCopy.add }}
+                            </button>
+                            <label class="flex shrink-0 items-center justify-end gap-1.5" :class="isScreenChoiceSelected(choice) ? '' : 'pointer-events-none opacity-35'">
+                                <span class="sr-only">{{ funnelCopy.quantity }}</span>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    inputmode="numeric"
+                                    class="h-12 w-16 rounded-lg border border-neutral-600 bg-black px-1 text-center text-lg font-bold text-white outline-none focus:border-emerald-400 sm:w-20 sm:px-2"
+                                    :value="cartQuantity(`screen:${choice.id}`)"
+                                    :disabled="!isScreenChoiceSelected(choice)"
+                                    @change="setCartQuantityFromInput(`screen:${choice.id}`, $event)"
+                                />
+                                <span class="grid gap-1">
+                                    <button type="button" class="flex h-[22px] w-8 items-center justify-center rounded border border-neutral-600 text-xs hover:border-emerald-400" :disabled="!isScreenChoiceSelected(choice)" @click="setCartQuantity(`screen:${choice.id}`, cartQuantity(`screen:${choice.id}`) + 1)">▲</button>
+                                    <button type="button" class="flex h-[22px] w-8 items-center justify-center rounded border border-neutral-600 text-xs hover:border-emerald-400" :disabled="!isScreenChoiceSelected(choice)" @click="setCartQuantity(`screen:${choice.id}`, cartQuantity(`screen:${choice.id}`) - 1)">▼</button>
+                                </span>
+                            </label>
+                        </div>
+                    </template>
+                </div>
+                <div class="sticky bottom-0 z-10 -mx-4 mt-10 border-t border-neutral-800 bg-[#0b0b0b]/95 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-[0_-15px_35px_rgba(0,0,0,0.55)] backdrop-blur sm:-mx-8 sm:px-8">
+                    <div class="mx-auto grid max-w-2xl gap-2 sm:grid-cols-[auto_1fr]">
+                        <button type="button" class="order-2 flex h-12 items-center justify-center rounded-xl bg-emerald-600 px-5 text-white transition hover:bg-emerald-500" :aria-label="funnelCopy.cart" @click="openCartFromVariantPicker">
+                            <span class="relative"><svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L20.5 8H6" /><circle cx="10" cy="20" r="1" /><circle cx="18" cy="20" r="1" /></svg><span v-if="cartItemCount > 0" class="absolute -right-3 -top-3 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-black leading-none text-white ring-2 ring-emerald-600">{{ cartItemCountLabel }}</span></span>
+                        </button>
+                        <button type="button" class="order-1 flex h-12 items-center justify-center rounded-xl bg-[#334fb4] text-white transition hover:bg-[#405dc7]" :aria-label="funnelCopy.back" :title="funnelCopy.back" @click="returnToConfigurator"><svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h5m6 0h5M4 17h9m6 0h1" /><circle cx="12" cy="7" r="3" /><circle cx="16" cy="17" r="3" /></svg></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div v-if="showCart" class="fixed inset-0 z-[96] overflow-y-auto bg-[#0b0b0b] text-white" role="dialog" aria-modal="true" :aria-label="funnelCopy.cartTitle">
+            <div class="mx-auto min-h-full max-w-3xl px-4 py-6 sm:px-8 sm:py-10">
+                <div class="flex items-center justify-between border-b border-neutral-800 pb-5">
+                    <h2 class="text-2xl font-bold sm:text-3xl">{{ funnelCopy.cartTitle }}</h2>
+                    <button type="button" class="rounded-full border border-neutral-600 px-4 py-2 text-sm font-semibold hover:border-white" @click="showCart = false">✕</button>
+                </div>
+                <div v-if="selectedBrand" class="mt-6 overflow-hidden rounded-2xl border border-neutral-800 bg-[#121212]">
+                    <div class="flex items-center justify-center gap-3 border-b border-neutral-800 p-4">
+                        <img v-if="selectedBrandImageUrl && failedBrandImage !== selectedBrandImageUrl" :src="selectedBrandImageUrl" :alt="selectedBrand" class="h-14 w-24 object-contain" @error="failedBrandImage = selectedBrandImageUrl" />
+                        <p class="text-sm uppercase tracking-wider text-neutral-500">{{ selectedBrand }}</p>
+                        <p v-if="selectedModel" class="text-xl font-bold">{{ selectedModel }}</p>
+                        <p v-if="selectedYear" class="text-neutral-400">{{ selectedYear }}</p>
+                    </div>
+                    <button v-if="selectedVehicleImageUrl && failedVehicleImage !== selectedVehicleImageUrl" type="button" class="flex h-52 w-full items-center justify-center p-3 sm:h-64" @click="openImageZoom(selectedVehicleImageUrl, `${selectedBrand} ${selectedModel} ${selectedYear}`)">
+                        <img :src="selectedVehicleImageUrl" :alt="`${selectedBrand} ${selectedModel} ${selectedYear}`" class="h-full w-full object-contain" @error="failedVehicleImage = selectedVehicleImageUrl" />
+                    </button>
+                </div>
+                <p class="mt-7 text-sm font-semibold uppercase tracking-[0.24em] text-amber-400">{{ t('quote.title') }}</p>
+                <div v-if="customDiscount || activeDiscount || nextDiscount" class="mt-4 rounded-xl border px-4 py-3 text-sm" :class="customDiscount || activeDiscount ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300' : 'border-amber-400/50 bg-amber-400/10 text-amber-300'">
+                    <template v-if="customDiscount">{{ discountLabel }}</template>
+                    <template v-else-if="activeDiscount">{{ automaticDiscountAppliedMessage(activeDiscount) }}</template>
+                    <template v-else-if="nextDiscount">{{ automaticDiscountRemainingMessage(nextDiscount) }}</template>
+                </div>
+                <p v-if="!hasSelectedProducts" class="py-16 text-center text-neutral-400">{{ funnelCopy.empty }}</p>
+                <div v-else class="mt-6 space-y-3">
+                    <div v-for="screen in selectedScreens" :key="`cart-screen-${screen.id}`" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3">
+                        <div class="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg border border-neutral-700 bg-black"><img v-if="screen.image || vehicleForScreenVariant(screen.id)?.image" :src="screen.image || vehicleForScreenVariant(screen.id)?.image || ''" alt="" class="h-full w-full object-contain" /></div>
+                        <div class="min-w-0"><p class="line-clamp-2 font-semibold">{{ vehicleForScreenVariant(screen.id)?.title }}</p><p class="truncate text-sm text-neutral-400">{{ displayVariantTitle(screen.title) }}</p><p class="mt-1 font-bold text-amber-400">{{ (screen.price * cartQuantity(`screen:${screen.id}`)).toFixed(2) }} €</p></div>
+                        <button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white transition hover:border-red-400 hover:text-red-400" :aria-label="t('actions.remove_product')" @click="removeSelectedScreen(screen.id)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button>
+                        <div class="flex items-center justify-end gap-2"><span class="mr-1 text-xs text-neutral-500">{{ funnelCopy.quantity }}</span><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`screen:${screen.id}`, cartQuantity(`screen:${screen.id}`) - 1)">−</button><span class="w-6 text-center font-bold">{{ cartQuantity(`screen:${screen.id}`) }}</span><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`screen:${screen.id}`, cartQuantity(`screen:${screen.id}`) + 1)">+</button></div>
+                    </div>
+                    <div v-for="camera in selectedCameras" :key="`cart-camera-${camera.key}`" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg border border-neutral-700 bg-black"><img v-if="camera.image" :src="camera.image" alt="" class="h-full w-full object-contain" /></div><div class="min-w-0"><p class="line-clamp-2 font-semibold">{{ camera.title }}</p><p class="mt-1 text-amber-400">{{ (camera.price * cartQuantity(`camera:${camera.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white hover:text-red-400" @click="toggleCamera(camera.key)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`camera:${camera.key}`, cartQuantity(`camera:${camera.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`camera:${camera.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`camera:${camera.key}`, cartQuantity(`camera:${camera.key}`) + 1)">+</button></div></div>
+                    <div v-for="speaker in selectedSpeakers" :key="`cart-speaker-${speaker.key}`" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg border border-neutral-700 bg-black"><img v-if="speaker.image" :src="speaker.image" alt="" class="h-full w-full object-contain" /></div><div class="min-w-0"><p class="line-clamp-2 font-semibold">{{ speaker.productTitle }}</p><p v-if="speaker.title !== speaker.productTitle" class="truncate text-sm text-neutral-400">{{ speaker.title }}</p><p class="mt-1 text-amber-400">{{ (speaker.price * cartQuantity(`speaker:${speaker.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white hover:text-red-400" @click="toggleSpeaker(speaker.key)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`speaker:${speaker.key}`, cartQuantity(`speaker:${speaker.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`speaker:${speaker.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`speaker:${speaker.key}`, cartQuantity(`speaker:${speaker.key}`) + 1)">+</button></div></div>
+                    <div v-for="product in selectedCustomProducts" :key="`cart-custom-${product.key}`" class="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"><button type="button" @click="toggleCustomProduct(product.key)">🗑</button><div class="min-w-0"><p class="truncate font-semibold">{{ product.title }}</p><p class="text-amber-400">{{ (product.price * cartQuantity(`custom:${product.key}`)).toFixed(2) }} €</p></div><div class="col-span-2 flex items-center justify-end gap-2 sm:col-span-1"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) + 1)">+</button></div></div>
+                    <div v-if="selectedInstallation" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="relative flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg bg-amber-400"><img  :src="selectedInstallation.image || '/images/icons/installation-tools.png'" :alt="stepContextLabel('installation')" class="h-full w-full object-cover" /></div><div class="min-w-0"><p class="line-clamp-2 font-semibold">{{ selectedInstallation.title }}</p><p class="mt-1 text-amber-400">{{ (selectedInstallation.price * cartQuantity(`installation:${selectedInstallation.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white transition hover:border-red-400 hover:text-red-400" :aria-label="t('actions.remove_product')" @click="selectedInstallationKey = null"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`installation:${selectedInstallation.key}`, cartQuantity(`installation:${selectedInstallation.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`installation:${selectedInstallation.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`installation:${selectedInstallation.key}`, cartQuantity(`installation:${selectedInstallation.key}`) + 1)">+</button></div></div>
+                    <div v-if="selectedPrecheckMethod === 'installer'" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3">
+                        <div class="flex h-[76px] w-[76px] items-center justify-center rounded-lg bg-amber-400 text-black">
+                            <svg class="h-12 w-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="m8 12 2.6 2.6L16.5 9" /></svg>
+                        </div>
+                        <div class="min-w-0"><p class="line-clamp-2 font-semibold">{{ t('installation.precheck_installer_title') }}</p><p class="mt-1 text-amber-400">{{ ((precheckProduct?.price ?? 25) * cartQuantity('precheck:installer')).toFixed(2) }} €</p></div>
+                        <button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white transition hover:border-red-400 hover:text-red-400" :aria-label="t('actions.remove_product')" @click="selectedPrecheckMethod = null"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button>
+                        <div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity('precheck:installer', cartQuantity('precheck:installer') - 1)">−</button><b class="w-6 text-center">{{ cartQuantity('precheck:installer') }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity('precheck:installer', cartQuantity('precheck:installer') + 1)">+</button></div>
+                    </div>
+                </div>
+                <div v-if="hasSelectedProducts" class="mt-8 space-y-5 border-t border-neutral-800 pt-5">
+                    <div class="rounded-xl border border-neutral-800 bg-[#121212] p-4">
+                        <div class="flex justify-between text-neutral-400"><span>{{ t('quote.subtotal') }}</span><span>{{ productsSubtotal.toFixed(2) }} €</span></div>
+                        <div v-if="discountAmount > 0" class="mt-3 flex justify-between text-emerald-400"><span>{{ discountLabel }}</span><span>−{{ discountAmount.toFixed(2) }} €</span></div>
+                        <div class="mt-4 flex items-center justify-between border-t border-neutral-700 pt-4"><span class="text-lg font-bold">{{ t('quote.estimated_total') }}</span><span class="text-2xl font-bold">{{ estimatedTotal.toFixed(2) }} €</span></div>
+                        <div v-if="installationCost > 0" class="mt-3 flex justify-between rounded-lg border border-sky-400/30 bg-sky-400/5 px-3 py-3 text-sky-200"><span>{{ t('quote.installation_direct') }}</span><b>{{ installationCost.toFixed(2) }} €</b></div>
+                    </div>
+
+                    <div class="rounded-xl border border-amber-400/60 bg-amber-400/10 px-4 py-3 text-center text-sm font-semibold text-amber-300">
+                        <p>🚚 &nbsp;{{ t('quote.home_delivery_title') }}</p><p>{{ t('quote.home_delivery_estimate') }}</p><p class="text-xs text-amber-200/80">{{ t('quote.shipping_tracking') }}</p>
+                    </div>
+                    <div class="rounded-xl border border-neutral-700 bg-[#121212] px-4 py-4 text-center"><p class="font-semibold text-amber-400">{{ t('quote.trust_title') }}</p><p class="mt-2 text-sm leading-6 text-neutral-400">{{ t('quote.trust_details') }}</p></div>
+
+                    <label ref="cartCheckoutConsentSection" class="flex cursor-pointer items-start gap-3 rounded-xl text-sm leading-6 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 p-4 ring-2 ring-amber-400' : ''">
+                        <input v-model="checkoutConsentAccepted" type="checkbox" class="mt-1 h-4 w-4 shrink-0 accent-amber-400" />
+                        <span>{{ t('checkout_consent.checkbox') }} <a href="https://www.autoradiocanario.com/policies/terms-of-service" target="_blank" rel="noopener noreferrer" class="block text-neutral-300 underline">{{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}</a></span>
+                    </label>
+                    <p class="text-center text-sm leading-6 text-neutral-400">{{ t('quote.checkout_trust') }}</p>
+
+                    <div class="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2 border-t-2 border-amber-400 bg-[#0b0b0b]/95 px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-15px_35px_rgba(0,0,0,0.55)] backdrop-blur sm:-mx-8 sm:px-8">
+                        <div class="order-0 flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2"><span class="text-sm font-bold text-white">{{ t('quote.online_total') }}</span><span class="shrink-0 whitespace-nowrap text-xl font-bold text-amber-400">{{ onlineTotal.toFixed(2) }} €</span></div>
+                        <button type="button" class="order-4 flex h-11 w-full items-center justify-center rounded-lg bg-red-600 text-white transition hover:bg-red-500 disabled:opacity-50" :disabled="!canCheckout" :aria-label="t('actions.add_to_cart')" :title="t('actions.add_to_cart')" @click="goToCheckout"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h4" /></svg></button>
+                        <button type="button" class="order-2 flex h-11 w-full items-center justify-center rounded-lg border border-amber-400 text-amber-400 transition hover:bg-amber-400 hover:text-black" :aria-label="t('actions.download_quote')" :title="t('actions.download_quote')" @click="downloadQuote"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" /></svg></button>
+                        <button type="button" class="order-1 flex h-11 w-full items-center justify-center rounded-lg bg-[#334fb4] text-white transition hover:bg-[#405dc7]" :aria-label="funnelCopy.back" :title="funnelCopy.back" @click="returnToConfigurator"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h5m6 0h5M4 17h9m6 0h1" /><circle cx="12" cy="7" r="3" /><circle cx="16" cy="17" r="3" /></svg></button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div
             v-if="zoomedImage"
-            class="fixed inset-0 z-[70] flex cursor-zoom-out items-center justify-center bg-black/90 p-4 backdrop-blur-sm sm:p-8"
+            class="fixed inset-0 z-[110] flex cursor-zoom-out items-center justify-center bg-black/90 p-4 backdrop-blur-sm sm:p-8"
             role="dialog"
             aria-modal="true"
             :aria-label="zoomedImage.alt"
@@ -4921,16 +5251,16 @@ watch(
 
         <div
             v-if="showCheckoutConsentWarning"
-            class="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+            class="fixed inset-0 z-[110] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
             role="alertdialog"
             aria-modal="true"
-            @click.self="showCheckoutConsentWarning = false"
+            @click.self="dismissCheckoutConsentWarning"
         >
             <section class="w-full max-w-sm rounded-2xl border border-neutral-700 bg-[#181818] p-6 shadow-2xl">
                 <button
                     type="button"
                     class="w-full rounded-lg bg-amber-400 px-4 py-3 text-sm font-semibold text-black transition hover:bg-amber-300"
-                    @click="showCheckoutConsentWarning = false"
+                    @click="dismissCheckoutConsentWarning"
                 >
                     {{ t('checkout_consent.dismiss') }}
                 </button>
@@ -5008,7 +5338,7 @@ watch(
                                 {{ [displayVariantTitle(product.variantTitle), product.sku, product.category].filter(Boolean).join(' · ') }}
                             </p>
                         </div>
-                        <span class="shrink-0 font-semibold text-amber-400">{{ product.price.toFixed(2) }} €</span>
+                        <span class="shrink-0 font-semibold text-amber-400">{{ product.price.toFixed(2) }} €</span>
                         <button
                             type="button"
                             class="w-24 shrink-0 rounded-lg px-3 py-2 text-xs font-semibold transition"
@@ -5173,6 +5503,28 @@ watch(
 </template>
 
 <style scoped>
+.step-context-label {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    z-index: 2;
+    max-width: calc(100% - 5rem);
+    transform: translate(-50%, -50%);
+    overflow: hidden;
+    border: 1px solid currentColor;
+    border-radius: 9999px;
+    background: #121212;
+    padding: 0.1rem 0.65rem;
+    color: #d8ae2d;
+    font-size: 0.625rem;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: 0.08em;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
 .quote-scrollbar {
     scrollbar-color: #525252 #171717;
     scrollbar-width: thin;
