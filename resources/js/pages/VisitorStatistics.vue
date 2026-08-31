@@ -7,6 +7,11 @@ type Visitor = {
     id: number; created_at: string; country_code: string | null; region: string | null; city: string | null;
     device_type: string | null; language: string | null; referrer: string | null; utm_source: string | null; utm_campaign: string | null;
 };
+type ExtraEuVisitor = {
+    id: number; country_code: string; region: string | null; city: string | null; device_type: string | null;
+    browser_language: string | null; referrer: string | null; requested_path: string | null; user_agent: string | null;
+    hits: number; first_seen_at: string; last_seen_at: string;
+};
 
 const props = defineProps<{
     visitors: { data: Visitor[]; from: number | null; to: number | null; total: number; links: Array<{ url: string | null; label: string; active: boolean }> };
@@ -14,6 +19,8 @@ const props = defineProps<{
     countries: string[];
     stats: { total: number; today: number; last_7_days: number; last_30_days: number };
     analysis: { timeline: Item[]; countries: Item[]; regions: Item[]; cities: Item[]; devices: Item[]; languages: Item[]; sources: Item[] };
+    extraEuVisitors: { data: ExtraEuVisitor[]; from: number | null; to: number | null; total: number; links: Array<{ url: string | null; label: string; active: boolean }> };
+    extraEuTotal: number;
 }>();
 
 const filters = reactive({ date_from: '', date_to: '', country: '', device: '', ...props.filters });
@@ -78,6 +85,15 @@ watch(() => props.visitors.data, () => { selectedIds.value = []; });
             <div class="flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3"><p class="text-sm text-muted-foreground">{{ selectedIds.length }} visite selezionate</p><button :disabled="selectedIds.length === 0" class="rounded-lg bg-destructive px-4 py-2 text-sm text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-40" @click="deleteSelected">Elimina selezionate</button></div>
             <div class="overflow-x-auto"><table class="w-full min-w-[1150px] text-sm"><thead class="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground"><tr><th class="px-4 py-3"><input type="checkbox" :checked="allPageSelected" aria-label="Seleziona tutte le visite della pagina" @change="togglePageSelection" /></th><th v-for="head in ['Primo ingresso','Paese','Regione','Città','Dispositivo','Lingua','Provenienza','Campagna','Azioni']" :key="head" class="px-4 py-3">{{ head }}</th></tr></thead><tbody class="divide-y"><tr v-for="visitor in visitors.data" :key="visitor.id" class="hover:bg-muted/20"><td class="px-4 py-3"><input v-model="selectedIds" type="checkbox" :value="visitor.id" :aria-label="`Seleziona visita ${visitor.id}`" /></td><td class="whitespace-nowrap px-4 py-3">{{ dateTime(visitor.created_at) }}</td><td class="px-4 py-3">{{ visitor.country_code||'—' }}</td><td class="px-4 py-3">{{ visitor.region||'—' }}</td><td class="px-4 py-3">{{ visitor.city||'—' }}</td><td class="px-4 py-3 capitalize">{{ visitor.device_type||'—' }}</td><td class="px-4 py-3 uppercase">{{ visitor.language||'—' }}</td><td class="max-w-60 truncate px-4 py-3">{{ source(visitor) }}</td><td class="px-4 py-3">{{ visitor.utm_campaign||'—' }}</td><td class="px-4 py-3"><button class="text-sm text-destructive hover:underline" @click="deleteVisitor(visitor)">Elimina</button></td></tr><tr v-if="!visitors.data.length"><td colspan="10" class="py-12 text-center text-muted-foreground">Nessun visitatore trovato.</td></tr></tbody></table></div>
             <div class="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-4"><p class="text-sm text-muted-foreground">{{ visitors.from??0 }}–{{ visitors.to??0 }} di {{ visitors.total }}</p><nav class="flex flex-wrap gap-1"><template v-for="link in visitors.links" :key="link.label"><Link v-if="link.url" :href="link.url" preserve-state class="rounded border px-3 py-2 text-sm" :class="link.active?'bg-primary text-primary-foreground':'hover:bg-accent'"><span v-html="link.label"></span></Link><span v-else class="rounded border px-3 py-2 text-sm opacity-40" v-html="link.label"></span></template></nav></div>
+        </section>
+
+        <section class="overflow-hidden rounded-xl border border-red-300/70 bg-card">
+            <div class="border-b border-red-200 bg-red-50 px-5 py-4 dark:bg-red-950/20">
+                <h2 class="text-lg font-semibold">Extra UE <span class="ml-2 rounded-full bg-red-100 px-2.5 py-1 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{{ extraEuTotal }}</span></h2>
+                <p class="mt-1 text-sm text-muted-foreground">Visitatori extraeuropei, registrati separatamente ed esclusi dalle statistiche del configuratore.</p>
+            </div>
+            <div class="overflow-x-auto"><table class="w-full min-w-[1500px] text-sm"><thead class="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground"><tr><th v-for="head in ['Prima visita','Ultima visita','Accessi','Paese','Regione','Città','Dispositivo','Lingua browser','Provenienza','Pagina','User agent']" :key="head" class="px-4 py-3">{{ head }}</th></tr></thead><tbody class="divide-y"><tr v-for="visitor in extraEuVisitors.data" :key="visitor.id" class="hover:bg-muted/20"><td class="whitespace-nowrap px-4 py-3">{{ dateTime(visitor.first_seen_at) }}</td><td class="whitespace-nowrap px-4 py-3">{{ dateTime(visitor.last_seen_at) }}</td><td class="px-4 py-3 font-semibold">{{ visitor.hits }}</td><td class="px-4 py-3 font-semibold">{{ visitor.country_code }}</td><td class="px-4 py-3">{{ visitor.region||'—' }}</td><td class="px-4 py-3">{{ visitor.city||'—' }}</td><td class="px-4 py-3 capitalize">{{ visitor.device_type||'—' }}</td><td class="max-w-52 truncate px-4 py-3" :title="visitor.browser_language||''">{{ visitor.browser_language||'—' }}</td><td class="max-w-60 truncate px-4 py-3" :title="visitor.referrer||''">{{ visitor.referrer||'Diretto' }}</td><td class="max-w-52 truncate px-4 py-3" :title="visitor.requested_path||''">{{ visitor.requested_path||'—' }}</td><td class="max-w-80 truncate px-4 py-3" :title="visitor.user_agent||''">{{ visitor.user_agent||'—' }}</td></tr><tr v-if="!extraEuVisitors.data.length"><td colspan="11" class="py-10 text-center text-muted-foreground">Nessun visitatore extra UE.</td></tr></tbody></table></div>
+            <div v-if="extraEuVisitors.links.length > 3" class="flex flex-wrap items-center justify-between gap-3 border-t px-4 py-4"><p class="text-sm text-muted-foreground">{{ extraEuVisitors.from??0 }}–{{ extraEuVisitors.to??0 }} di {{ extraEuVisitors.total }}</p><nav class="flex flex-wrap gap-1"><template v-for="link in extraEuVisitors.links" :key="link.label"><Link v-if="link.url" :href="link.url" preserve-state class="rounded border px-3 py-2 text-sm" :class="link.active?'bg-primary text-primary-foreground':'hover:bg-accent'"><span v-html="link.label"></span></Link><span v-else class="rounded border px-3 py-2 text-sm opacity-40" v-html="link.label"></span></template></nav></div>
         </section>
     </div>
 </template>

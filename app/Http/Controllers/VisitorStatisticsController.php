@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ConfigurationStatistic;
+use App\Models\ExtraEuVisitor;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
@@ -46,6 +47,11 @@ class VisitorStatisticsController extends Controller
                 'languages' => $this->grouped($query, 'language'),
                 'sources' => $this->sources($query),
             ],
+            'extraEuVisitors' => ExtraEuVisitor::query()
+                ->latest('last_seen_at')
+                ->paginate(30, ['*'], 'extra_eu_page')
+                ->withQueryString(),
+            'extraEuTotal' => ExtraEuVisitor::query()->count(),
         ]);
     }
 

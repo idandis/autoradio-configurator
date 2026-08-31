@@ -88,23 +88,32 @@ class LocaleTest extends TestCase
             ->assertSessionHas('locale', 'it');
     }
 
-    public function test_browser_language_is_used_on_the_first_visit(): void
+    public function test_country_is_used_on_the_first_visit(): void
     {
-        $this->withHeader('Accept-Language', 'it-IT,it;q=0.9,en;q=0.8')
+        $this->withHeader('CF-IPCountry', 'IT')
             ->get('/configurator')
             ->assertSessionHas('locale', 'it')
             ->assertInertia(fn (Assert $page) => $page->where('locale', 'it'));
 
         $this->flushSession();
 
-        $this->withHeader('Accept-Language', 'en-US,en;q=0.9')
+        $this->withHeader('CF-IPCountry', 'US')
             ->get('/configurator')
             ->assertSessionHas('locale', 'en');
 
         $this->flushSession();
 
-        $this->withHeader('Accept-Language', 'fr-FR,fr;q=0.9')
+        $this->withHeader('CF-IPCountry', 'ES')
             ->get('/configurator')
             ->assertSessionHas('locale', 'es');
+    }
+
+    public function test_country_header_works_behind_an_additional_reverse_proxy(): void
+    {
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.10'])
+            ->withHeader('CF-IPCountry', 'IT')
+            ->withHeader('Accept-Language', 'it-IT,it;q=0.9')
+            ->get('/configurator')
+            ->assertSessionHas('locale', 'it');
     }
 }

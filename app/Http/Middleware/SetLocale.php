@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\VisitorGeolocation;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
@@ -10,6 +11,8 @@ use Symfony\Component\HttpFoundation\Response;
 class SetLocale
 {
     private const SUPPORTED_LOCALES = ['es', 'it', 'en'];
+
+    public function __construct(private readonly VisitorGeolocation $visitorGeolocation) {}
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -22,7 +25,7 @@ class SetLocale
         } elseif (! in_array($request->session()->get('locale'), self::SUPPORTED_LOCALES, true)) {
             $request->session()->put(
                 'locale',
-                $request->getPreferredLanguage(self::SUPPORTED_LOCALES) ?? 'es',
+                $this->localeFromCountry($request),
             );
         }
 
@@ -36,6 +39,18 @@ class SetLocale
         App::setLocale($locale);
 
         return $next($request);
+    }
+
+    private function localeFromCountry(Request $request): string
+    {
+        $countryCode = $this->visitorGeolocation->countryCode($request);
+
+        return match ($countryCode) {
+            'IT' => 'it',
+            'ES' => 'es',
+            null => 'es',
+            default => 'en',
+        };
     }
 
     private function localeFromStorefrontReferrer(?string $referrer): ?string

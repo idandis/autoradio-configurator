@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
+            'extra-eu' => \App\Http\Middleware\BlockOutsideEurope::class,
         ]);
 
         $middleware->web(append: [

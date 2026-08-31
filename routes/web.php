@@ -33,19 +33,21 @@ use Inertia\Inertia;
     ]);
 });*/
 
-Route::get('/', ConfiguratorController::class);
+Route::middleware('extra-eu')->group(function () {
+    Route::get('/', ConfiguratorController::class);
 
-Route::get('/configurator', ConfiguratorController::class)->name('configurator.show');
-Route::post('/configurator/missing-vehicle', [ConfiguratorController::class, 'missingVehicle'])->name('configurator.missing-vehicle');
-Route::get('/configurator/postal-code/{postalCode}', ConfiguratorPostalCodeController::class)
-    ->where('postalCode', '\\d{5}')
-    ->name('configurator.postal-code');
-Route::post('/configurator/quote-number', QuoteNumberController::class)
-    ->middleware('throttle:20,1')
-    ->name('configurator.quote-number');
-Route::post('/configurator/statistics', [ConfigurationStatisticController::class, 'store'])
-    ->middleware('throttle:120,1')
-    ->name('configurator.statistics.store');
+    Route::get('/configurator', ConfiguratorController::class)->name('configurator.show');
+    Route::post('/configurator/missing-vehicle', [ConfiguratorController::class, 'missingVehicle'])->name('configurator.missing-vehicle');
+    Route::get('/configurator/postal-code/{postalCode}', ConfiguratorPostalCodeController::class)
+        ->where('postalCode', '\\d{5}')
+        ->name('configurator.postal-code');
+    Route::post('/configurator/quote-number', QuoteNumberController::class)
+        ->middleware('throttle:20,1')
+        ->name('configurator.quote-number');
+    Route::post('/configurator/statistics', [ConfigurationStatisticController::class, 'store'])
+        ->middleware('throttle:120,1')
+        ->name('configurator.statistics.store');
+});
 
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/configuration-statistics', ConfigurationStatisticsController::class)
