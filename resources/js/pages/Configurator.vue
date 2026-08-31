@@ -27,6 +27,7 @@ type Vehicle = {
     model: string | null;
     yearFrom: number | null;
     yearTo: number | null;
+    din: string | null;
     image: string | null;
     originalDashboardImages: DashboardImage[];
     variants: Variant[];
@@ -95,6 +96,8 @@ type CustomProduct = {
 };
 
 type SharedConfigurationPayload = {
+    mode?: 'specific' | 'universal' | null;
+    din?: '1DIN' | '2DIN' | null;
     brand: string | null;
     model: string | null;
     year: number | null;
@@ -328,6 +331,13 @@ const resolveAvailableBrand = (value: string | null | undefined): string | null 
 const selectedBrand = ref<string | null>(null);
 const selectedModel = ref<string | null>(null);
 const selectedYear = ref<number | null>(null);
+type ConfiguratorMode = 'specific' | 'universal';
+const configuratorMode = ref<ConfiguratorMode | null>(null);
+type UniversalDin = '1DIN' | '2DIN';
+const universalDinOptions: UniversalDin[] = ['1DIN', '2DIN'];
+const selectedUniversalDin = ref<UniversalDin | null>(null);
+const isSpecificMode = computed(() => configuratorMode.value === 'specific');
+const isUniversalMode = computed(() => configuratorMode.value === 'universal');
 const vehicleStepTitle = computed(() => {
     if (selectedBrand.value === null) {
         return t('steps.vehicle');
@@ -379,7 +389,6 @@ const selectVehicleModel = async (model: string) => {
         checkedPostalCode.value = null;
         resolvedInstallationArea.value = null;
         postalCodeError.value = null;
-        showUniversalScreens.value = false;
         checkoutConsentAccepted.value = false;
         openSteps.value = ['vehicle'];
         await nextTick();
@@ -405,7 +414,6 @@ const selectVehicleModel = async (model: string) => {
     });
 };
 const customerBudget = ref('');
-const showUniversalScreens = ref(false);
 const selectedScreenVariantIds = ref<number[]>([]);
 const selectedCameraKeys = ref<string[]>([]);
 const selectedCameraVariantIds = ref<Record<string, number>>({});
@@ -468,6 +476,60 @@ const handleBrandTypeahead = (event: KeyboardEvent) => {
     }
 };
 const openSteps = ref<string[]>([]);
+const modeSensitiveSelectionCount = computed(() => {
+    const specificCameraCount = selectedCameraKeys.value.filter((key) =>
+        !props.cameraOptions.find((option) => option.key === key)?.isStandard,
+    ).length;
+
+    return selectedScreenVariantIds.value.length + specificCameraCount;
+});
+const setConfiguratorMode = async (mode: ConfiguratorMode) => {
+    if (configuratorMode.value === mode) return;
+
+    if (
+        configuratorMode.value !== null
+        && modeSensitiveSelectionCount.value > 0
+        && !window.confirm(t('mode.change_confirmation'))
+    ) {
+        return;
+    }
+
+    selectedScreenVariantIds.value = [];
+    selectedDashboardVariants.value = {};
+    selectedCameraKeys.value = selectedCameraKeys.value.filter((key) =>
+        props.cameraOptions.find((option) => option.key === key)?.isStandard,
+    );
+    selectedInstallationKey.value = null;
+    selectedPrecheckMethod.value = null;
+    installationRequested.value = false;
+    checkoutConsentAccepted.value = false;
+    selectedUniversalDin.value = null;
+    variantPickerVehicle.value = null;
+    showCart.value = false;
+    configuratorMode.value = mode;
+    openSteps.value = mode === 'specific' ? ['vehicle'] : ['screen'];
+
+    await nextTick();
+    window.requestAnimationFrame(() => {
+        document.getElementById(mode === 'specific' ? 'vehicle-brand' : 'screen-step-content')
+            ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+};
+const selectUniversalDin = (din: UniversalDin) => {
+    if (selectedUniversalDin.value === din) return;
+
+    if (selectedScreenVariantIds.value.length > 0 && !window.confirm(t('mode.din_change_confirmation'))) {
+        return;
+    }
+
+    selectedScreenVariantIds.value = [];
+    selectedDashboardVariants.value = {};
+    selectedInstallationKey.value = null;
+    selectedPrecheckMethod.value = null;
+    installationRequested.value = false;
+    checkoutConsentAccepted.value = false;
+    selectedUniversalDin.value = din;
+};
 const toggleStep = (step: string) => {
     openSteps.value = openSteps.value.includes(step)
         ? openSteps.value.filter((openStep) => openStep !== step)
@@ -915,7 +977,8 @@ const returnToConfigurator = async () => {
     openSteps.value = [];
     await nextTick();
     window.requestAnimationFrame(() => {
-        document.getElementById('mobile-vehicle-marker')?.scrollIntoView({ behavior: 'auto', block: 'start' });
+        document.getElementById(isUniversalMode.value ? 'screen-step-content' : 'mobile-vehicle-marker')
+            ?.scrollIntoView({ behavior: 'auto', block: 'start' });
     });
 };
 const openCartFromVariantPicker = () => {
@@ -1034,7 +1097,8 @@ const hasSpecificScreenVariants = computed(() =>
 );
 
 const hasNoSpecificScreenForBudget = computed(() =>
-    normalizedBudget.value !== null
+    isSpecificMode.value
+    && normalizedBudget.value !== null
     && selectedModel.value !== null
     && hasSpecificScreenVariants.value
     && affordableSpecificScreens.value.length === 0,
@@ -1057,17 +1121,19 @@ const useLowestSpecificVariantBudget = () => {
 };
 
 const displayedScreenVehicles = computed(() =>
-    hasNoSpecificScreenForBudget.value && showUniversalScreens.value
-        ? affordableUniversalScreens.value
+    isUniversalMode.value
+        ? selectedUniversalDin.value === null
+            ? []
+            : affordableUniversalScreens.value.filter((screen) => screen.din === selectedUniversalDin.value)
         : affordableSpecificScreens.value,
 );
 
 const displayedScreenOptionCount = computed(() => displayedScreenVehicles.value.length);
 
-const selectableScreenVehicles = computed(() => [
-    ...compatibleVehicles.value,
-    ...props.universalScreens,
-]);
+const allScreenVehicles = computed(() => [...props.vehicles, ...props.universalScreens]);
+const selectableScreenVehicles = computed(() =>
+    isUniversalMode.value ? props.universalScreens : compatibleVehicles.value,
+);
 
 const isScreenVariantSelected = (variant: Variant) =>
     screenVariantChoices(variant).some((choice) => selectedScreenVariantIds.value.includes(choice.id));
@@ -1284,7 +1350,7 @@ const updateVariantAutoScroll = (event: PointerEvent) => {
     }
 };
 
-const CONFIGURATOR_STATE_KEY = 'autoradiocanario-configurator-state-v1';
+const CONFIGURATOR_STATE_KEY = 'autoradiocanario-configurator-state-v2';
 const CONFIGURATOR_STATE_TTL = 60 * 60 * 1000;
 let configuratorStateHydrated = false;
 
@@ -1302,6 +1368,12 @@ const restoreConfiguratorState = async () => {
         }
 
         const state = stored.state;
+        configuratorMode.value = state.configuratorMode === 'specific' || state.configuratorMode === 'universal'
+            ? state.configuratorMode
+            : null;
+        selectedUniversalDin.value = state.selectedUniversalDin === '1DIN' || state.selectedUniversalDin === '2DIN'
+            ? state.selectedUniversalDin
+            : null;
         const brand = typeof state.selectedBrand === 'string' && brands.value.includes(state.selectedBrand)
             ? state.selectedBrand
             : null;
@@ -1324,7 +1396,7 @@ const restoreConfiguratorState = async () => {
         selectedModel.value = modelIsValid ? state.selectedModel : null;
 
         const availableVariantIds = new Set(
-            [...props.vehicles, ...props.universalScreens].flatMap((vehicle) =>
+            allScreenVehicles.value.flatMap((vehicle) =>
                 vehicle.variants.flatMap((variant) => screenVariantChoices(variant).map((choice) => choice.id)),
             ),
         );
@@ -1335,18 +1407,44 @@ const restoreConfiguratorState = async () => {
         selectedScreenVariantIds.value = Array.isArray(state.selectedScreenVariantIds)
             ? state.selectedScreenVariantIds.filter((id: unknown) => typeof id === 'number' && availableVariantIds.has(id))
             : [];
-        const storedCameraKeys = Array.isArray(state.selectedCameraKeys)
+        if (configuratorMode.value === null) {
+            const universalVariantIds = new Set(
+                props.universalScreens.flatMap((vehicle) =>
+                    vehicle.variants.flatMap((variant) => screenVariantChoices(variant).map((choice) => choice.id)),
+                ),
+            );
+            configuratorMode.value = selectedScreenVariantIds.value.some((id) => universalVariantIds.has(id))
+                ? 'universal'
+                : brand !== null || modelIsValid ? 'specific' : null;
+        }
+        if (configuratorMode.value === 'universal' && selectedUniversalDin.value === null) {
+            const restoredUniversalScreen = props.universalScreens.find((screen) =>
+                screen.variants.some((variant) =>
+                    screenVariantChoices(variant).some((choice) => selectedScreenVariantIds.value.includes(choice.id)),
+                ),
+            );
+            selectedUniversalDin.value = restoredUniversalScreen?.din === '1DIN' || restoredUniversalScreen?.din === '2DIN'
+                ? restoredUniversalScreen.din
+                : null;
+        }
+        const storedCameraKeys: string[] = Array.isArray(state.selectedCameraKeys)
             ? state.selectedCameraKeys.filter((key: unknown): key is string => typeof key === 'string')
             : [];
         selectedCameraKeys.value = storedCameraKeys
             .map((key) => key.replace(/--variant-\d+$/, ''))
             .filter((key) => availableCameraKeys.has(key));
         selectedCameraVariantIds.value = typeof state.selectedCameraVariantIds === 'object' && state.selectedCameraVariantIds !== null
-            ? Object.fromEntries(Object.entries(state.selectedCameraVariantIds).filter(([key, id]) =>
-                availableCameraKeys.has(key)
-                && typeof id === 'number'
-                && props.cameraOptions.find((option) => option.key === key)?.variants?.some((variant) => variant.id === id),
-            ))
+            ? Object.entries(state.selectedCameraVariantIds).reduce<Record<string, number>>((variants, [key, id]) => {
+                if (
+                    availableCameraKeys.has(key)
+                    && typeof id === 'number'
+                    && props.cameraOptions.find((option) => option.key === key)?.variants?.some((variant) => variant.id === id)
+                ) {
+                    variants[key] = id;
+                }
+
+                return variants;
+            }, {})
             : {};
         storedCameraKeys.forEach((key) => {
             const match = key.match(/^(.*)--variant-(\d+)$/);
@@ -1413,6 +1511,20 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
             && year >= entry.yearFrom
             && year <= entry.yearTo
         );
+    const containsUniversalScreen = configuration.screens.some((screen) =>
+        props.universalScreens.some((candidate) => candidate.handle === screen.product),
+    );
+    configuratorMode.value = configuration.mode === 'universal' || (!validVehicle && containsUniversalScreen)
+        ? 'universal'
+        : 'specific';
+    const sharedUniversalScreen = configuration.screens
+        .map((screen) => props.universalScreens.find((candidate) => candidate.handle === screen.product))
+        .find((screen): screen is Vehicle => Boolean(screen));
+    selectedUniversalDin.value = configuration.din === '1DIN' || configuration.din === '2DIN'
+        ? configuration.din
+        : sharedUniversalScreen?.din === '1DIN' || sharedUniversalScreen?.din === '2DIN'
+            ? sharedUniversalScreen.din
+            : null;
 
     selectedBrand.value = validVehicle ? resolvedBrand : null;
     await nextTick();
@@ -1423,7 +1535,7 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
 
     const restoredDashboardVariants: Record<number, string> = {};
     selectedScreenVariantIds.value = configuration.screens.flatMap((screen) => {
-        const vehicle = selectableScreenVehicles.value.find((candidate) => candidate.handle === screen.product);
+        const vehicle = allScreenVehicles.value.find((candidate) => candidate.handle === screen.product);
         const token = screen.variant;
         const variant = vehicle?.variants
             .flatMap(screenVariantChoices)
@@ -1495,6 +1607,12 @@ const restoreSharedConfiguration = async () => {
     const productHandles = params.getAll('product');
     const variantTokens = params.getAll('variant');
     await applySharedConfiguration({
+        mode: params.get('mode') === 'universal'
+            ? 'universal'
+            : params.get('mode') === 'specific' ? 'specific' : null,
+        din: params.get('din') === '1DIN' || params.get('din') === '2DIN'
+            ? params.get('din') as UniversalDin
+            : null,
         brand: params.get('marca') ?? params.get('brand'),
         model: params.get('model'),
         year: /^\d{4}$/.test(params.get('year') ?? '') ? Number(params.get('year')) : null,
@@ -1521,6 +1639,8 @@ const persistConfiguratorState = () => {
         window.localStorage.setItem(CONFIGURATOR_STATE_KEY, JSON.stringify({
             expiresAt: Date.now() + CONFIGURATOR_STATE_TTL,
             state: {
+                configuratorMode: configuratorMode.value,
+                selectedUniversalDin: selectedUniversalDin.value,
                 selectedBrand: selectedBrand.value,
                 selectedModel: selectedModel.value,
                 selectedYear: selectedYear.value,
@@ -1549,6 +1669,8 @@ const persistConfiguratorState = () => {
 watch(
     [
         selectedBrand,
+        configuratorMode,
+        selectedUniversalDin,
         selectedModel,
         selectedYear,
         customerBudget,
@@ -1586,6 +1708,7 @@ onMounted(async () => {
         await restoreConfiguratorState();
 
         if (incomingBrand) {
+            configuratorMode.value = 'specific';
             selectedYear.value = null;
             selectedModel.value = null;
             selectedScreenVariantIds.value = [];
@@ -1775,6 +1898,10 @@ const visibleCameraOptions = computed(() => {
     return cameraOptionsWithSelectedVariants.value.filter((option) => {
         if (option.isStandard) {
             return true;
+        }
+
+        if (!isSpecificMode.value) {
+            return false;
         }
 
         if (
@@ -2849,9 +2976,11 @@ const sharedConfigurationPayload = computed<SharedConfigurationPayload | null>((
     });
 
     return {
-        brand: selectedBrand.value,
-        model: selectedModel.value,
-        year: selectedYear.value,
+        mode: configuratorMode.value,
+        din: isUniversalMode.value ? selectedUniversalDin.value : null,
+        brand: isSpecificMode.value ? selectedBrand.value : null,
+        model: isSpecificMode.value ? selectedModel.value : null,
+        year: isSpecificMode.value ? selectedYear.value : null,
         screens,
         cameras: selectedCameras.value.map((camera) =>
             (camera.variants?.length ?? 0) > 1 && camera.variantId
@@ -3001,10 +3130,10 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
     const clientPhone = withoutClientData ? '' : quoteClientPhone.value.trim();
     const clientEmail = withoutClientData ? '' : quoteClientEmail.value.trim();
     const customsTaxes = withoutClientData ? '' : quoteCustomsTaxes.value.trim();
-    const vehicle = [selectedBrand.value, selectedModel.value, selectedYear.value]
-        .filter(Boolean)
-        .join(' ');
-    const vehicleImage = selectedVehicleImageUrl.value
+    const vehicle = isSpecificMode.value
+        ? [selectedBrand.value, selectedModel.value, selectedYear.value].filter(Boolean).join(' ')
+        : '';
+    const vehicleImage = isSpecificMode.value && selectedVehicleImageUrl.value
         ? new URL(selectedVehicleImageUrl.value, window.location.origin).href
         : null;
     const items: Array<{
@@ -3237,7 +3366,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
             ${clientName ? `<p><strong>${escapeHtml(clientName)}</strong></p>` : ''}
             ${clientPhone ? `<p>${escapeHtml(t('print.phone'))}: ${escapeHtml(clientPhone)}</p>` : ''}
             ${clientEmail ? `<p>${escapeHtml(t('print.email'))}: ${escapeHtml(clientEmail)}</p>` : ''}
-            <p>${escapeHtml(t('print.vehicle'))}: ${escapeHtml(vehicle || t('print.not_specified'))}</p>
+            <p>${escapeHtml(t('print.vehicle'))}: ${escapeHtml(vehicle || (isUniversalMode.value ? t('mode.universal_title') : t('print.not_specified')))}</p>
         </div>
         <div class="issuer">
             <h2>${escapeHtml(t('print.issued_by'))}:</h2>
@@ -3432,9 +3561,9 @@ watch(
 
 watch(
     compatibleVehicles,
-    (vehicles) => {
+    () => {
         const availableVariantIds = new Set(
-            selectableScreenVehicles.value.flatMap((vehicle) =>
+            allScreenVehicles.value.flatMap((vehicle) =>
                 vehicle.variants.flatMap((variant) => screenVariantChoices(variant).map((choice) => choice.id)),
             ),
         );
@@ -3444,10 +3573,6 @@ watch(
     },
     { immediate: true },
 );
-
-watch([selectedBrand, selectedModel, selectedYear, normalizedBudget], () => {
-    showUniversalScreens.value = false;
-});
 
 watch(
     selectedScreens,
@@ -3578,7 +3703,29 @@ watch(
             </div>
         </header>
 
-        <div class="mx-auto max-w-7xl px-4 py-8 pb-28 sm:px-6 lg:px-8 lg:pb-8">
+        <main v-if="configuratorMode === null" class="mx-auto flex min-h-[calc(100vh-12rem)] max-w-5xl items-center px-4 py-12 sm:px-6 lg:px-8">
+            <div class="w-full text-center">
+                <p class="text-xs font-semibold uppercase tracking-[0.24em] text-amber-400 sm:text-sm">{{ t('mode.eyebrow') }}</p>
+                <h1 class="mx-auto mt-3 max-w-3xl text-3xl font-semibold tracking-tight sm:text-5xl">{{ t('mode.title') }}</h1>
+                <p class="mx-auto mt-4 max-w-2xl text-sm leading-6 text-neutral-400 sm:text-base">{{ t('mode.description') }}</p>
+                <div class="mx-auto mt-10 grid max-w-4xl gap-5 md:grid-cols-2">
+                    <button type="button" class="group rounded-2xl border-2 border-neutral-700 bg-neutral-900 p-7 text-left transition hover:border-amber-400 hover:bg-amber-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:p-9" @click="setConfiguratorMode('specific')">
+                        <span class="flex h-12 w-12 items-center justify-center rounded-full bg-amber-400 text-2xl text-black">🚘</span>
+                        <span class="mt-6 block text-xl font-bold text-white sm:text-2xl">{{ t('mode.specific_title') }}</span>
+                        <span class="mt-3 block text-sm leading-6 text-neutral-400">{{ t('mode.specific_description') }}</span>
+                        <span class="mt-6 inline-flex items-center font-semibold text-amber-400">{{ t('mode.choose') }} <span class="ml-2 transition group-hover:translate-x-1">→</span></span>
+                    </button>
+                    <button type="button" class="group rounded-2xl border-2 border-neutral-700 bg-neutral-900 p-7 text-left transition hover:border-amber-400 hover:bg-amber-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:p-9" @click="setConfiguratorMode('universal')">
+                        <span class="flex h-12 w-12 items-center justify-center rounded-full bg-amber-400 text-2xl text-black">📻</span>
+                        <span class="mt-6 block text-xl font-bold text-white sm:text-2xl">{{ t('mode.universal_title') }}</span>
+                        <span class="mt-3 block text-sm leading-6 text-neutral-400">{{ t('mode.universal_description') }}</span>
+                        <span class="mt-6 inline-flex items-center font-semibold text-amber-400">{{ t('mode.choose') }} <span class="ml-2 transition group-hover:translate-x-1">→</span></span>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <div v-else class="mx-auto max-w-7xl px-4 py-8 pb-28 sm:px-6 lg:px-8 lg:pb-8">
             <div class="mb-8">
                 <div v-if="isAdmin" class="mb-8 grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     <button
@@ -3610,6 +3757,13 @@ watch(
                     >
                         {{ t('admin.dashboard') }}
                     </a>
+                </div>
+
+                <div class="mb-7 flex justify-center sm:justify-start">
+                    <div class="inline-grid grid-cols-2 rounded-xl border border-neutral-700 bg-neutral-950 p-1" role="group" :aria-label="t('mode.switch_label')">
+                        <button type="button" class="rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-5 sm:text-sm" :class="isSpecificMode ? 'bg-amber-400 text-black' : 'text-neutral-300 hover:bg-neutral-800'" @click="setConfiguratorMode('specific')">{{ t('mode.specific_short') }}</button>
+                        <button type="button" class="rounded-lg px-3 py-2 text-xs font-semibold transition sm:px-5 sm:text-sm" :class="isUniversalMode ? 'bg-amber-400 text-black' : 'text-neutral-300 hover:bg-neutral-800'" @click="setConfiguratorMode('universal')">{{ t('mode.universal_short') }}</button>
+                    </div>
                 </div>
 
                 <div class="mx-auto text-center sm:mx-0 sm:text-left">
@@ -3648,7 +3802,7 @@ watch(
             <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <section class="min-w-0 max-w-full rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
                     <div
-                        v-if="selectedBrand && selectedModel && selectedYear"
+                        v-if="isSpecificMode && selectedBrand && selectedModel && selectedYear"
                         id="mobile-vehicle-marker"
                         class="mb-6 scroll-mt-2 overflow-hidden rounded-xl border border-neutral-700 bg-[#121212] lg:hidden"
                     >
@@ -3680,14 +3834,14 @@ watch(
                         </button>
                     </div>
                     <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
-                        <button type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStepAndCenter('vehicle', 'vehicle-brand', true)">
+                        <button v-if="isSpecificMode" type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStepAndCenter('vehicle', 'vehicle-brand', true)">
                             <span class="step-context-label">{{ stepContextLabel('vehicle') }}</span>
                             <span class="block max-w-full truncate whitespace-nowrap" :class="selectedBrand ? 'normal-case' : 'uppercase'">{{ selectedBrand ? vehicleStepTitle : `+ ${stepContextLabel('vehicle')}` }}</span>
                             <svg viewBox="0 0 24 24" fill="none" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 stroke-current transition-transform" :class="openSteps.includes('vehicle') ? '' : 'rotate-180'" aria-hidden="true">
                                 <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
                         </button>
-                        <div v-if="openSteps.includes('vehicle')">
+                        <div v-if="isSpecificMode && openSteps.includes('vehicle')">
 
                         <div
                             class="grid gap-4"
@@ -3770,7 +3924,7 @@ watch(
 
                         </div>
                         <div
-                            v-if="selectedModel"
+                            v-if="isUniversalMode || selectedModel"
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button ref="screenStepButton" type="button" :class="mainStepButtonClass('screen')" @click="toggleScreenStep">
@@ -3789,16 +3943,35 @@ watch(
                                 </svg>
                             </button>
                             <div v-if="openSteps.includes('screen')" id="screen-step-content" class="mt-6 min-w-0 max-w-full">
+                            <div v-if="isUniversalMode" class="mb-6 rounded-xl border border-neutral-700 bg-[#121212] p-5">
+                                <p class="text-center text-lg font-semibold text-white">{{ t('mode.din_question') }}</p>
+                                <div class="mx-auto mt-4 grid max-w-lg grid-cols-2 gap-3">
+                                    <button
+                                        v-for="din in universalDinOptions"
+                                        :key="din"
+                                        type="button"
+                                        class="rounded-xl border-2 px-4 py-5 text-lg font-bold transition"
+                                        :class="selectedUniversalDin === din
+                                            ? 'border-amber-400 bg-amber-400 text-black ring-2 ring-amber-400/30'
+                                            : 'border-neutral-600 bg-neutral-900 text-white hover:border-amber-400 hover:text-amber-400'"
+                                        @click="selectUniversalDin(din)"
+                                    >
+                                        {{ din === '1DIN' ? t('mode.one_din') : t('mode.two_din') }}
+                                    </button>
+                                </div>
+                            </div>
                             <p
                                 v-if="displayedScreenOptionCount > 0"
                                 id="screen-availability-message"
                                 class="mb-4 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 text-center text-sm font-semibold text-emerald-400"
                             >
-                                {{ displayedScreenOptionCount === 1
-                                    ? t('screen.available_option', { vehicle: `${selectedBrand} ${selectedModel} ${selectedYear}` })
-                                    : t('screen.available_options', { count: displayedScreenOptionCount, vehicle: `${selectedBrand} ${selectedModel} ${selectedYear}` }) }}
+                                {{ isUniversalMode
+                                    ? (displayedScreenOptionCount === 1 ? t('screen.universal_available_option') : t('screen.universal_available_options', { count: displayedScreenOptionCount }))
+                                    : (displayedScreenOptionCount === 1
+                                        ? t('screen.available_option', { vehicle: `${selectedBrand} ${selectedModel} ${selectedYear}` })
+                                        : t('screen.available_options', { count: displayedScreenOptionCount, vehicle: `${selectedBrand} ${selectedModel} ${selectedYear}` })) }}
                             </p>
-                            <div v-if="hasNoSpecificScreenForBudget && !showUniversalScreens" id="screen-alternative-message" class="rounded-xl border border-neutral-700 bg-[#121212] p-5">
+                            <div v-if="hasNoSpecificScreenForBudget" id="screen-alternative-message" class="rounded-xl border border-neutral-700 bg-[#121212] p-5">
                                 <p class="text-sm leading-6 text-neutral-200">{{ t('budget.no_specific_screen') }}</p>
                                 <div v-if="lowestSpecificVariantPrice !== null" class="mt-3 flex flex-wrap items-center gap-3">
                                     <p class="text-sm font-semibold text-amber-400">
@@ -3813,7 +3986,7 @@ watch(
                                     </button>
                                 </div>
                                 <div class="mt-4 flex flex-wrap gap-3">
-                                    <button type="button" class="rounded-lg bg-amber-400 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300" @click="showUniversalScreens = true">
+                                    <button type="button" class="rounded-lg bg-amber-400 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300" @click="setConfiguratorMode('universal')">
                                         {{ t('budget.show_universal_yes') }}
                                     </button>
                                     <button type="button" class="rounded-lg border border-neutral-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-800" @click="toggleStep('screen')">
@@ -3821,11 +3994,11 @@ watch(
                                     </button>
                                 </div>
                             </div>
-                            <p v-else-if="hasNoSpecificScreenForBudget && showUniversalScreens && affordableUniversalScreens.length === 0" id="screen-alternative-message" class="rounded-xl border border-neutral-700 bg-[#121212] p-5 text-sm text-neutral-300">
+                            <p v-else-if="isUniversalMode && selectedUniversalDin !== null && displayedScreenVehicles.length === 0" id="screen-alternative-message" class="rounded-xl border border-neutral-700 bg-[#121212] p-5 text-sm text-neutral-300">
                                 {{ t('budget.no_universal_screen') }}
                             </p>
-                            <div v-else-if="selectedYear !== null && displayedScreenVehicles.length" class="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
-                                <p v-if="showUniversalScreens" class="text-sm font-semibold text-amber-400">{{ t('budget.universal_results') }}</p>
+                            <div v-else-if="(isUniversalMode || selectedYear !== null) && displayedScreenVehicles.length" class="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-5">
+                                <p v-if="isUniversalMode" class="rounded-lg border border-amber-400/30 bg-amber-400/5 p-3 text-sm leading-6 text-amber-200">{{ t('mode.universal_notice') }}</p>
                                 <article
                                     v-for="vehicle in displayedScreenVehicles"
                                     :key="vehicle.id"
@@ -3977,7 +4150,7 @@ watch(
                                 </article>
                             </div>
                             <div
-                                v-else-if="selectedBrand && selectedModel && selectedYear"
+                                v-else-if="isSpecificMode && selectedBrand && selectedModel && selectedYear"
                                 id="screen-alternative-message"
                                 class="mt-4 flex flex-col items-center gap-3 rounded-xl border border-red-500/60 bg-red-500/10 px-4 py-4 text-center text-sm"
                             >
@@ -3988,14 +4161,14 @@ watch(
                                     @click="openMissingScreenForm"
                                 >{{ t('screen.missing_action') }}</button>
                             </div>
-                            <p v-else id="screen-alternative-message" class="mt-4 text-sm text-neutral-500">
+                            <p v-else-if="isSpecificMode" id="screen-alternative-message" class="mt-4 text-sm text-neutral-500">
                                 {{ t('screen.select_vehicle') }}
                             </p>
                             </div>
                         </div>
 
                         <div
-                            v-if="selectedModel && visibleCameraOptions.length > 0"
+                            v-if="(isUniversalMode || selectedModel) && visibleCameraOptions.length > 0"
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStepAndCenter('camera', 'camera-step-options', false, 'start')">
@@ -4080,7 +4253,7 @@ watch(
                                 </div>
                             </div>
                             <p
-                                v-if="selectedBrand && selectedModel && selectedYear && !hasSpecificCameraOption"
+                                v-if="isSpecificMode && selectedBrand && selectedModel && selectedYear && !hasSpecificCameraOption"
                                 class="mt-4 flex w-full flex-col items-center gap-1 text-center text-sm text-neutral-300"
                             >
                                 <span>{{ t('camera.missing_question') }}</span>
@@ -4094,7 +4267,7 @@ watch(
                         </div>
 
                         <div
-                            v-if="hasSelectedProducts"
+                            v-if="isUniversalMode || hasSelectedProducts"
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button type="button" :class="mainStepButtonClass('speaker')" @click="toggleStepAndCenter('speaker', 'speaker-step-controls')">
@@ -4617,7 +4790,7 @@ watch(
                 <aside ref="quotePanel" class="hidden flex-col overflow-hidden rounded-2xl border border-neutral-800 bg-[#121212] p-4 lg:sticky lg:top-6 lg:flex lg:h-[calc(100vh-3rem)] lg:self-start">
                     <div class="shrink-0 overflow-hidden rounded-xl border border-neutral-800 bg-[#121212]">
                         <div
-                            v-if="selectedBrand"
+                            v-if="isSpecificMode && selectedBrand"
                             class="grid"
                         >
                             <div class="flex min-w-0 flex-col items-center gap-2 border-b border-neutral-800 bg-[#121212] p-4 sm:flex-row sm:gap-4">
@@ -5101,6 +5274,9 @@ watch(
                     </div>
                     <button type="button" class="shrink-0 rounded-full border border-neutral-600 px-4 py-2 text-sm font-semibold hover:border-white" @click="closeVariantPicker">✕</button>
                 </div>
+                <button type="button" class="mt-4 rounded-lg border border-amber-400 px-4 py-2 text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black" @click="setConfiguratorMode(isSpecificMode ? 'universal' : 'specific')">
+                    {{ isSpecificMode ? t('mode.go_universal') : t('mode.go_specific') }}
+                </button>
                 <div class="mt-6 grid gap-3">
                     <template v-for="variant in visibleScreenVariants(variantPickerVehicle)" :key="variant.id">
                         <div
@@ -5166,7 +5342,10 @@ watch(
                     <h2 class="text-2xl font-bold sm:text-3xl">{{ funnelCopy.cartTitle }}</h2>
                     <button type="button" class="rounded-full border border-neutral-600 px-4 py-2 text-sm font-semibold hover:border-white" @click="showCart = false">✕</button>
                 </div>
-                <div v-if="selectedBrand" class="mt-6 overflow-hidden rounded-2xl border border-neutral-800 bg-[#121212]">
+                <button type="button" class="mt-4 rounded-lg border border-amber-400 px-4 py-2 text-sm font-semibold text-amber-400 transition hover:bg-amber-400 hover:text-black" @click="setConfiguratorMode(isSpecificMode ? 'universal' : 'specific')">
+                    {{ isSpecificMode ? t('mode.go_universal') : t('mode.go_specific') }}
+                </button>
+                <div v-if="isSpecificMode && selectedBrand" class="mt-6 overflow-hidden rounded-2xl border border-neutral-800 bg-[#121212]">
                     <div class="flex items-center justify-center gap-3 border-b border-neutral-800 p-4">
                         <img v-if="selectedBrandImageUrl && failedBrandImage !== selectedBrandImageUrl" :src="selectedBrandImageUrl" :alt="selectedBrand" class="h-14 w-24 object-contain" @error="failedBrandImage = selectedBrandImageUrl" />
                         <p class="text-sm uppercase tracking-wider text-neutral-500">{{ selectedBrand }}</p>

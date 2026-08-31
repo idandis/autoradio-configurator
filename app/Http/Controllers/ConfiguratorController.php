@@ -73,6 +73,7 @@ class ConfiguratorController extends Controller
             ->where('brand', '!=', '')
             ->whereNotNull('model')
             ->where('model', '!=', '')
+            ->whereRaw('LOWER(TRIM(model)) != ?', ['universal'])
             ->whereNotNull('year_from')
             ->whereNotNull('year_to')
             ->orderBy('brand')
@@ -81,19 +82,15 @@ class ConfiguratorController extends Controller
 
         $universalScreenProducts = ConfiguratorProduct::with('variants')
             ->where('category', 'screen')
-            ->where(function ($query) {
-                $query->whereRaw('LOWER(model) = ?', ['universal'])
-                    ->orWhere(function ($query) {
-                        $query->where(function ($query) {
-                            $query->whereNull('model')->orWhere('model', '');
-                        })->where(function ($query) {
-                            $query->whereRaw('LOWER(title) LIKE ?', ['%universal%'])
-                                ->orWhereRaw('LOWER(handle) LIKE ?', ['%universal%']);
-                        });
-                    });
-            })
+            ->whereRaw('LOWER(TRIM(model)) = ?', ['universal'])
             ->orderBy('price_min')
-            ->get();
+            ->get()
+            ->filter(fn (ConfiguratorProduct $product) => in_array(
+                preg_replace('/\s+/u', '', mb_strtoupper((string) ($product->meta['din'] ?? ''))),
+                ['1DIN', '2DIN'],
+                true,
+            ))
+            ->values();
 
         $cameraProducts = ConfiguratorProduct::with('variants')
             ->where('category', 'camera')
@@ -216,6 +213,9 @@ class ConfiguratorController extends Controller
                 'model' => $vehicleFields['model'],
                 'yearFrom' => $product->year_from,
                 'yearTo' => $product->year_to,
+                'din' => ($din = preg_replace('/\s+/u', '', mb_strtoupper((string) ($product->meta['din'] ?? '')))) !== ''
+                    ? $din
+                    : null,
                 'image' => $product->image_url,
                 'originalDashboardImages' => $product->meta['original_dashboard_images'] ?? [],
                 'variants' => $product->variants

@@ -13,6 +13,8 @@ class SharedConfigurationController extends Controller
     {
         $validated = $request->validate([
             'configuration' => ['required', 'array'],
+            'configuration.mode' => ['nullable', 'in:specific,universal'],
+            'configuration.din' => ['nullable', 'in:1DIN,2DIN'],
             'configuration.brand' => ['nullable', 'string', 'max:255'],
             'configuration.model' => ['nullable', 'string', 'max:255'],
             'configuration.year' => ['nullable', 'integer', 'between:1900,2100'],

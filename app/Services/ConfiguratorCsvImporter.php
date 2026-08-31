@@ -246,8 +246,9 @@ class ConfiguratorCsvImporter
         }
         $type = strtoupper(trim((string) $this->value($primaryRow, ['Type', 'Product Type'])));
         $tags = trim((string) $this->value($primaryRow, ['Tags', 'Product Tags']));
+        $explicitModel = $this->normalizeBrand($this->value($primaryRow, $this->modelHeaders()));
         $category = $this->detectCategory($handle, $title, $type, $tags);
-        $isUniversalScreen = $this->isUniversalScreen($handle, $title, $tags);
+        $isUniversalScreen = $this->isUniversalModel($explicitModel);
 
         if ($category === null && $isUniversalScreen) {
             $category = 'screen';
@@ -269,7 +270,6 @@ class ConfiguratorCsvImporter
         $brand = $category === 'camera'
             ? $this->normalizeBrand($this->value($primaryRow, $this->radioTypeHeaders()))
             : $this->resolveBrand($primaryRow, $category);
-        $explicitModel = $this->normalizeBrand($this->value($primaryRow, $this->modelHeaders()));
         $explicitYears = $this->parseExplicitYears(
             $this->value($primaryRow, $this->yearHeaders())
         );
@@ -374,7 +374,7 @@ class ConfiguratorCsvImporter
                 'meta' => [
                     'type' => $this->value($primaryRow, ['Type', 'Product Type']),
                     'screen_size' => $this->value($primaryRow, ['PULGADAS (product.metafields.custom.pulgadas)']),
-                    'din' => $this->value($primaryRow, ['DIN (product.metafields.custom.dimensioni_schermo)']),
+                    'din' => $this->normalizeDin($this->value($primaryRow, $this->dinHeaders())),
                     'cam' => $this->value($primaryRow, ['CAM (product.metafields.custom.cam)']),
                     'shopify_product_id' => $this->value($primaryRow, ['ID']),
                     'speaker_nominal_size' => $this->value($primaryRow, [
@@ -494,13 +494,24 @@ class ConfiguratorCsvImporter
         return null;
     }
 
-    private function isUniversalScreen(string $handle, string $title, string $tags = ''): bool
+    private function isUniversalModel(?string $model): bool
     {
-        $needle = mb_strtolower(trim($handle.' '.$title.' '.$tags));
+        return mb_strtolower(trim((string) $model)) === 'universal';
+    }
 
-        return str_contains($needle, 'universal') &&
-            preg_match('/autoradio|auto radio|pantalla|screen|carplay|android auto|\b(?:1|2)\s*din\b/u', $needle) === 1 &&
-            preg_match('/camara|cámara|camera|altavoz|altavoces|speaker|tweeter|subwoofer/u', $needle) !== 1;
+    private function normalizeDin(mixed $value): ?string
+    {
+        $value = mb_strtoupper(trim((string) $value));
+
+        if (preg_match('/\b1\s*DIN\b/u', $value)) {
+            return '1DIN';
+        }
+
+        if (preg_match('/\b2\s*DIN\b/u', $value)) {
+            return '2DIN';
+        }
+
+        return $value !== '' ? $value : null;
     }
 
     private function parseSpeakerSizes(mixed $value): array
@@ -675,6 +686,15 @@ class ConfiguratorCsvImporter
         return [
             'Product.custom.anno',
             'Metafield: custom.anno [single_line_text_field]',
+        ];
+    }
+
+    private function dinHeaders(): array
+    {
+        return [
+            'Product.custom.dimensioni_schermo',
+            'Metafield: custom.dimensioni_schermo [single_line_text_field]',
+            'DIN (product.metafields.custom.dimensioni_schermo)',
         ];
     }
 

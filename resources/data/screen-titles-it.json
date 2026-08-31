@@ -508,8 +508,8 @@
         "translation": "Autoradio Android 15 con Schermo QLED 9” GPS e WiFi per Volvo C30 / S40 / V50 / C70 2006–2012 – Multimedia Premium Plug & Play"
     },
     "autoradio-android-15-con-pantalla-qled-9-para-mercedes-benz-sl-r230-sl350-sl500-sl55-sl600-sl65-2001-2007-con-carplay-y-gps": {
-        "source": "Autoradio Android 15 con Pantalla QLED 9” para Mercedes-Benz SL R230 (SL350, SL500, SL55, SL600, SL65) 2001-2007 con CarPlay y GPS",
-        "translation": "Autoradio Android 15 con Schermo QLED 9” per Mercedes-Benz SL R230 (SL350, SL500, SL55, SL600, SL65) 2001-2007 con CarPlay e GPS"
+        "source": "Autoradio Android 9\" CarPlay 4G GPS para Mercedes-Benz SL R230 2008–2012",
+        "translation": "Autoradio Android 9\" CarPlay 4G GPS per Mercedes-Benz SL R230 2008–2012"
     },
     "autoradio-android-15-con-pantalla-tactil-9-y-carplay-inalambrico-para-nissan-nv200-evalia-2009-2016-gps-wifi-4g-multimedia-hd": {
         "source": "Autoradio Android 15 con Pantalla Táctil 9” y CarPlay Inalámbrico para Nissan NV200 Evalia 2009-2016 GPS WiFi 4G Multimedia HD",
@@ -676,8 +676,8 @@
         "translation": "Autoradio Android 9\\\" 2 DIN CarPlay per Seat Ibiza/Arona 2017-2021"
     },
     "autoradio-android-9-2-din-para-mercedes-benz-w169-w245-w639-w906-2004-2014": {
-        "source": "Autoradio Android 9\" 2 Din para Mercedes-Benz W169/W245/W639/W906 (2004–2014)",
-        "translation": "Autoradio Android 9\\\" 2 Din per Mercedes-Benz W169/W245/W639/W906 (2004–2014)"
+        "source": "JUNSUN Autoradio Android 9\" 8-Core CarPlay 4G para Mercedes W169/W245/W639/W906 2004–2014",
+        "translation": "JUNSUN Autoradio Android 9\" 8-Core CarPlay 4G per Mercedes W169/W245/W639/W906 2004–2014"
     },
     "autoradio-android-9-2-din-para-peugeot-508-2011-2018": {
         "source": "Autoradio Android 9\" 2Din para Peugeot 508 2011–2018",
@@ -764,8 +764,8 @@
         "translation": "Autoradio Android 9\" QLED CarPlay GPS per Toyota Corolla Verso 2004-2009"
     },
     "autoradio-android-9-qled-con-carplay-para-mercedes-benz-clase-a-w169-a160-a180-a200-a220": {
-        "source": "Autoradio Android 9” QLED con CarPlay para Mercedes-Benz Clase A W169 A160 A180 A200 A220",
-        "translation": "Autoradio Android 9\" QLED con CarPlay per Mercedes-Benz Classe A W169 A160 A180 A200 A220"
+        "source": "Autoradio Android 9\" CarPlay para Mercedes Clase A W169 y Clase B 2009–2012",
+        "translation": "Autoradio Android 9\" CarPlay per Mercedes Classe A W169 e Classe B 2009–2012"
     },
     "autoradio-android-9-qled-con-carplay-y-android-auto-wireless-4g-para-peugeot-boxer-fiat-ducato-citroen-jumper-2006-2022": {
         "source": "Autoradio Android 9” QLED con CarPlay y Android Auto Wireless + 4G para Peugeot Boxer / Fiat Ducato / Citroën Jumper 2006-2022",
@@ -948,8 +948,8 @@
         "translation": "Schermo Android 10” CarPlay GPS per Nissan X-Trail T32 (2013-2022) e Qashqai J11 – Potenza, Connettività Totale e Controllo Intelligente"
     },
     "pantalla-android-10-hd-con-carplay-y-android-auto-inalambrico-gps-y-wifi-sistema-multimedia-8-core-para-vito-2014-2020": {
-        "source": "Pantalla Android 10\" HD con CarPlay y Android Auto Inalámbrico, GPS y WiFi – Sistema Multimedia 8 Core para Vito 2014-2020",
-        "translation": "Schermo Android 10” HD con CarPlay e Android Auto senza fili, GPS e WiFi – Sistema multimediale 8 Core per Vito 2014-2020"
+        "source": "Autoradio Android 10\" 8-Core CarPlay para Mercedes-Benz Vito W447 2014–2020",
+        "translation": "Autoradio Android 10\" 8-Core CarPlay per Mercedes-Benz Vito W447 2014–2020"
     },
     "pantalla-android-10-multimedia-con-gps-carplay-y-android-auto-para-toyota-land-cruiser-100-vxr-navegacion-avanzada-control-volante-y-audio-potente": {
         "source": "Pantalla Android 10” con GPS, CarPlay y Android Auto para Toyota Land Cruiser 100-VXR 2003-2006 versión con aire acondicionado automático.",
@@ -1450,5 +1450,93 @@
     "wireless-carplay-android-auto-navigation-upgrade-for-audi-a1-q3-2012-2018-mmi-2g-3g-hn-rmc-with-airplay-mirror-link-function": {
         "source": "Wireless CarPlay Android Auto Navigation Upgrade For Audi A1 Q3 2012-2018 MMI 2G/3G HN+ RMC With AirPlay Mirror Link Function",
         "translation": "Aggiornamento navigazione Wireless CarPlay e Android Auto per Audi A1 Q3 2012–2018 MMI 2G/3G HN+ RMC con AirPlay e funzione Mirror Link"
+    },
+    "2": {
+        "source": "Autoradio Android 14- 9,7” 8GB+128GB con Cámaras 360° – Nissan Juke 2011-2018 / Infiniti ESQ 2014-2019 – 15% DTO. STOCK",
+        "translation": "Autoradio Android 14 9,7” 8GB+128GB con telecamere 360° – Nissan Juke 2011-2018 / Infiniti ESQ 2014-2019 – 15% SCONTO. DISPONIBILE"
+    },
+    "7-9-10inch-car-radio-2-din-gps-android-auto-carplay-apple-wireless-carplay-automotive-multimedia-player-car-intelligent-systems": {
+        "source": "Car Radio Inteligente 10'' 2Din Multimédia",
+        "translation": "Autoradio intelligente 10'' 2DIN multimediale"
+    },
+    "7-inch-car-radio-multimedia-video-player-wireless-carplay-android-auto-bluetooth-tf-card-car-touch-screen-rear-view-camera": {
+        "source": "Autoradio Universal Portatil 7\" con CarPlay y Android Auto",
+        "translation": "Autoradio universale portatile 7\" con CarPlay e Android Auto"
+    },
+    "autoradio-1-din-10-4-giratoria-con-carplay-y-android-auto": {
+        "source": "Autoradio MP5 1 DIN 10,4\" Giratoria con CarPlay y Android Auto Inalámbricos – No Android",
+        "translation": "Autoradio MP5 1 DIN 10,4\" girevole con CarPlay e Android Auto wireless – Non Android"
+    },
+    "autoradio-1-din-50w-boss-mr632uab-bluetooth-blanca": {
+        "source": "Autoradio 1 DIN 50W Boss MR632UAB Bluetooth Blanca",
+        "translation": "Autoradio 1 DIN 50W Boss MR632UAB Bluetooth bianca"
+    },
+    "autoradio-1din-7-con-carplay-y-android-auto-bluetooth-usb-mirror-link-pantalla-multimedia": {
+        "source": "Autoradio 1DIN 7” con CarPlay y Android Auto Bluetooth USB Mirror Link Pantalla Multimedia",
+        "translation": "Autoradio 1DIN 7” con CarPlay e Android Auto, Bluetooth, USB, Mirror Link e schermo multimediale"
+    },
+    "autoradio-7-2din-con-bluetooth-y-radio-fm-para-todos-los-modelos": {
+        "source": "Autoradio 7\" 2DIN con Bluetooth y Radio FM para Todos los Modelos",
+        "translation": "Autoradio 7\" 2DIN con Bluetooth e radio FM per tutti i modelli"
+    },
+    "autoradio-10-1-1-din-con-pantalla-rotatoria": {
+        "source": "Autoradio 10.1\" 1 DIN con pantalla rotatoria",
+        "translation": "Autoradio 10.1\" 1 DIN con schermo girevole"
+    },
+    "autoradio-10-1-1din-android-auto-con-gps-universal": {
+        "source": "Pantalla Android Giratoria 360° 1 DIN con CarPlay, Android Auto, GPS y Cámara",
+        "translation": "Schermo Android girevole a 360° 1 DIN con CarPlay, Android Auto, GPS e telecamera"
+    },
+    "autoradio-android-10-1-1din-pantalla-giratoria": {
+        "source": "Autoradio Android 10.1\" 1DIN Pantalla Giratoria",
+        "translation": "Autoradio Android 10.1\" 1DIN con schermo girevole"
+    },
+    "autoradio-android-12-95-1din-atoto-x10": {
+        "source": "Autoradio Android 12.95\" 1Din ATOTO X10",
+        "translation": "Autoradio Android 12.95\" 1DIN ATOTO X10"
+    },
+    "autoradio-android-14-9-7-8gb-128gb-4g-nissan-juke-2011-2018-infiniti-esq-2014-2019-15-dto": {
+        "source": "Autoradio Android 14 9,7” 8GB+128GB 4G – Nissan Juke 2011-2018 / Infiniti ESQ 2014-2019 – 15% DTO.",
+        "translation": "Autoradio Android 14 9,7” 8GB+128GB 4G – Nissan Juke 2011-2018 / Infiniti ESQ 2014-2019 – 15% SCONTO"
+    },
+    "autoradio-android-14-9-8-core-4gb-32gb-4g-lte-para-vw-mqb-2018-2021-15-dto-stock": {
+        "source": "Autoradio Android 14 9” 8-Core 4GB+32GB 4G LTE para VW MQB 2018-2021 – 15% DTO. STOCK",
+        "translation": "Autoradio Android 14 9” 8-Core 4GB+32GB 4G LTE per VW MQB 2018-2021 – 15% SCONTO. DISPONIBILE"
+    },
+    "jbl-celebrity-100-autoradio-1din-bluetooth-con-pantalla-desmontable-y-manos-libres": {
+        "source": "JBL Celebrity 100 Autoradio 1DIN Bluetooth con Pantalla Desmontable y Manos Libres",
+        "translation": "JBL Celebrity 100 Autoradio 1DIN Bluetooth con schermo rimovibile e vivavoce"
+    },
+    "jbl-celebrity-150-autoradio-1din-bluetooth-con-pantalla-desmontable-y-manos-libres": {
+        "source": "JBL Celebrity 150 Autoradio 1DIN Bluetooth con Pantalla Desmontable y Manos Libres",
+        "translation": "JBL Celebrity 150 Autoradio 1DIN Bluetooth con schermo rimovibile e vivavoce"
+    },
+    "jbl-legend-700d-autoradio-2din-con-pantalla-7-wireless-carplay-y-android-auto": {
+        "source": "JBL Legend 700 Autoradio 2DIN con Pantalla 7” Wireless CarPlay y Android Auto",
+        "translation": "JBL Legend 700 Autoradio 2DIN con schermo 7”, Wireless CarPlay e Android Auto"
+    },
+    "marco-doble-din-universal-para-radio-android-7-7018b-7010b-instalacion-limpia-y-ajuste-perfecto": {
+        "source": "Marco Doble DIN Universal para Radio Android 7” 7018B/7010B – Instalación Limpia y Ajuste Perfecto",
+        "translation": "Mascherina doppio DIN universale per autoradio Android 7” 7018B/7010B – Installazione pulita e adattamento perfetto"
+    },
+    "pantalla-carplay-para-moto-7-ipx7-con-android-auto-gps-y-dvr": {
+        "source": "Pantalla CarPlay para Moto 7” IPX7 con Android Auto, GPS y DVR",
+        "translation": "Schermo CarPlay per moto 7” IPX7 con Android Auto, GPS e DVR"
+    },
+    "radio-android-7-retractil-1-din-con-carplay-inalambrico-android-auto-gps-y-wifi": {
+        "source": "Radio Android 7\" Retráctil 1 DIN con CarPlay Inalámbrico, Android Auto, GPS y WiFi",
+        "translation": "Autoradio Android 7\" estraibile 1 DIN con CarPlay wireless, Android Auto, GPS e WiFi"
+    },
+    "reproductor-mp3-bluetooth-2-din-7-radio-vintage": {
+        "source": "Reproductor MP3 Bluetooth Vintage 2 DIN 7\" con USB",
+        "translation": "Lettore MP3 Bluetooth vintage 2 DIN 7\" con USB"
+    },
+    "t323-11-3-car-dvr-4k-camera-wireless-carplay-android-auto-ai-screen-dash-cam-dual-len-video-recorder-gps-navigation-dashboard": {
+        "source": "DVR de Coche 11.3\" con Carplay",
+        "translation": "DVR per auto 11.3\" con CarPlay"
+    },
+    "touch-radio-hippbqcc-7-mp5-y-bluetooth": {
+        "source": "Touch Radio 7\" - MP5 y Bluetooth",
+        "translation": "Touch Radio 7\" - MP5 e Bluetooth"
     }
 }

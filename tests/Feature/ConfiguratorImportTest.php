@@ -397,6 +397,34 @@ CSV;
         ]);
     }
 
+    public function test_matrixify_import_uses_universal_model_and_reads_din_metafield(): void
+    {
+        $csv = <<<'CSV'
+Title,Image Src,Option1 Value,Handle,ID,Variant ID,Type,Variant Price,Variant SKU,Price / Italia,Price / Resto del Mondo,Price / USA-CANADA,Price / spagna,Metafield: custom.radio_type [single_line_text_field],Metafield: custom.dimensioni_schermo [single_line_text_field],Metafield: custom.altavoces [single_line_text_field],Metafield: custom.modello_auto [single_line_text_field],Metafield: custom.anno [single_line_text_field],Metafield: shopify.vehicle-coaxial-speaker-nominal-size [list.metaobject_reference]
+Radio Bluetooth senza Universal nel titolo,https://example.com/one-din.jpg,Default,radio-bluetooth-one-din,1001,2001,Radio AM/FM,99.00,ONE-DIN,99.00,99.00,99.00,89.00,,1DIN,,Universal,,
+Touch Radio senza parola chiave,https://example.com/two-din.jpg,Default,touch-radio-two-din,1002,2002,Radio AM/FM,199.00,TWO-DIN,199.00,199.00,199.00,189.00,,2 DIN,,Universal,,
+Radio senza formato DIN,https://example.com/no-din.jpg,Default,radio-without-din,1004,2004,Radio AM/FM,149.00,NO-DIN,149.00,149.00,149.00,139.00,,,,Universal,,
+Camera universale,https://example.com/camera.jpg,Default,camera-universale,1003,2003,CAM,49.00,CAMERA,49.00,49.00,49.00,39.00,,,,Universal,,
+CSV;
+
+        $stats = app(ConfiguratorCsvImporter::class)->import(
+            UploadedFile::fake()->createWithContent('matrixify-universal.csv', $csv)->getPathname(),
+        );
+
+        $this->assertSame(3, $stats['screen_products']);
+        $this->assertSame(1, $stats['camera_products']);
+        $this->assertSame('1DIN', ConfiguratorProduct::where('handle', 'radio-bluetooth-one-din')->firstOrFail()->meta['din']);
+        $this->assertSame('2DIN', ConfiguratorProduct::where('handle', 'touch-radio-two-din')->firstOrFail()->meta['din']);
+        $this->assertNull(ConfiguratorProduct::where('handle', 'radio-without-din')->firstOrFail()->meta['din']);
+
+        $this->get('/configurator')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->has('universalScreens', 2)
+            ->where('universalScreens.0.din', '1DIN')
+            ->where('universalScreens.1.din', '2DIN')
+            ->has('vehicles', 0)
+        );
+    }
+
     public function test_import_creates_speakers_with_nominal_sizes(): void
     {
         $csv = <<<'CSV'
