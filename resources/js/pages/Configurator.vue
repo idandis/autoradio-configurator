@@ -4267,7 +4267,7 @@ watch(
                         </div>
 
                         <div
-                            v-if="isUniversalMode || hasSelectedProducts"
+                            v-if="isUniversalMode || isSpecificMode"
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button type="button" :class="mainStepButtonClass('speaker')" @click="toggleStepAndCenter('speaker', 'speaker-step-controls')">
