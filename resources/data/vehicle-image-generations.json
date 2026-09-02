@@ -1,0 +1,146 @@
+{
+    "mercedes-clase-a-w168": {
+        "brand": "MERCEDES",
+        "model": "Clase A W168",
+        "aliases": ["Clase A W168", "Classe A W168", "A-Class W168"],
+        "year_from": 1997,
+        "year_to": 2004,
+        "image": "mercedes-clase-a-1998-2006.webp"
+    },
+    "mercedes-clase-a-w169": {
+        "brand": "MERCEDES",
+        "model": "Clase A W169",
+        "aliases": ["Clase A W169", "Classe A W169", "A-Class W169"],
+        "year_from": 2004,
+        "year_to": 2012,
+        "image": "mercedes-clase-a-2004-2014.png"
+    },
+    "mercedes-clase-a-w176": {
+        "brand": "MERCEDES",
+        "model": "Clase A W176",
+        "aliases": ["Clase A W176", "Classe A W176", "A-Class W176"],
+        "year_from": 2012,
+        "year_to": 2018,
+        "image": "mercedes-clase-a-2013-2015.webp"
+    },
+    "mercedes-clase-b-w245": {
+        "brand": "MERCEDES",
+        "model": "Clase B W245",
+        "aliases": ["Clase B W245", "Classe B W245", "B-Class W245"],
+        "year_from": 2005,
+        "year_to": 2011,
+        "image": "mercedes-clase-b-w245-2005-2011.webp"
+    },
+    "mercedes-clase-b-w246": {
+        "brand": "MERCEDES",
+        "model": "Clase B W246",
+        "aliases": ["Clase B W246", "Classe B W246", "B-Class W246"],
+        "year_from": 2011,
+        "year_to": 2018,
+        "image": "mercedes-clase-b-2013-2015.png"
+    },
+    "mercedes-clase-c-w203": {
+        "brand": "MERCEDES",
+        "model": "Clase C W203",
+        "aliases": ["Clase C W203", "Classe C W203", "C-Class W203"],
+        "year_from": 2000,
+        "year_to": 2007,
+        "image": "mercedes-clase-c-2000-2004.webp"
+    },
+    "mercedes-clase-c-w204": {
+        "brand": "MERCEDES",
+        "model": "Clase C W204",
+        "aliases": ["Clase C W204", "Classe C W204", "C-Class W204", "Clase C S204", "Classe C S204", "C-Class S204"],
+        "year_from": 2007,
+        "year_to": 2014,
+        "image": "mercedes-clase-c-2011-2014.png"
+    },
+    "mercedes-clase-e-w210": {
+        "brand": "MERCEDES",
+        "model": "Clase E W210",
+        "aliases": ["Clase E W210", "Classe E W210", "E-Class W210", "Clase E S210", "Classe E S210", "E-Class S210"],
+        "year_from": 1995,
+        "year_to": 2002,
+        "image": "mercedes-clase-e-1994-2003.png"
+    },
+    "mercedes-clase-e-w211": {
+        "brand": "MERCEDES",
+        "model": "Clase E W211",
+        "aliases": ["Clase E W211", "Classe E W211", "E-Class W211"],
+        "year_from": 2002,
+        "year_to": 2009,
+        "image": "mercedes-clase-e-2002-2009.png"
+    },
+    "mercedes-clase-g-w463": {
+        "brand": "MERCEDES",
+        "model": "Clase G W463",
+        "aliases": ["Clase G W463", "Classe G W463", "G-Class W463"],
+        "year_from": 1990,
+        "year_to": 2018,
+        "image": "mercedes-clase-g-w463-1990-2018.webp"
+    },
+    "mercedes-clase-m-w163": {
+        "brand": "MERCEDES",
+        "model": "Clase M",
+        "aliases": ["Clase M", "Classe M", "M-Class", "Clase M W163", "Classe M W163", "M-Class W163"],
+        "year_from": 1997,
+        "year_to": 2005,
+        "image": null
+    },
+    "mercedes-clase-m-w164": {
+        "brand": "MERCEDES",
+        "model": "Clase M W164",
+        "aliases": ["Clase M", "Classe M", "M-Class", "Clase M W164", "Classe M W164", "M-Class W164"],
+        "year_from": 2005,
+        "year_to": 2011,
+        "image": "mercedes-clase-m-2005-2012.png"
+    },
+    "mercedes-clc-w203": {
+        "brand": "MERCEDES",
+        "model": "CLC W203",
+        "aliases": ["CLC W203"],
+        "year_from": 2008,
+        "year_to": 2011,
+        "image": "mercedes-clc-2008-2011.png"
+    },
+    "mercedes-clk-w209": {
+        "brand": "MERCEDES",
+        "model": "CLK W209",
+        "aliases": ["CLK W209"],
+        "year_from": 2002,
+        "year_to": 2010,
+        "image": "mercedes-clk-w209-2002-2010.webp"
+    },
+    "mercedes-cls-w219": {
+        "brand": "MERCEDES",
+        "model": "CLS W219",
+        "aliases": ["CLS W219"],
+        "year_from": 2004,
+        "year_to": 2010,
+        "image": "mercedes-cls-w219-2004-2010.webp"
+    },
+    "mercedes-sl-r230": {
+        "brand": "MERCEDES",
+        "model": "SL R230",
+        "aliases": ["SL R230", "SL"],
+        "year_from": 2001,
+        "year_to": 2012,
+        "image": "mercedes-sl-2008-2012.webp"
+    },
+    "mercedes-vito-viano-w639": {
+        "brand": "MERCEDES",
+        "model": "Vito/Viano W639",
+        "aliases": ["Vito W639", "Viano W639", "Valente W639", "Clase V W639", "Classe V W639", "V-Class W639"],
+        "year_from": 2003,
+        "year_to": 2014,
+        "image": "mercedes-vito-2003-2020.png"
+    },
+    "mercedes-sprinter-w906": {
+        "brand": "MERCEDES",
+        "model": "Sprinter W906",
+        "aliases": ["Sprinter W906"],
+        "year_from": 2006,
+        "year_to": 2018,
+        "image": "mercedes-sprinter-w906-2006-2018.webp"
+    }
+}

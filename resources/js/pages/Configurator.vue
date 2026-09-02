@@ -115,6 +115,14 @@ type TranslationTree = {
     [key: string]: string | TranslationTree;
 };
 
+type VehicleImageMapping = {
+    brand: string;
+    model: string;
+    yearFrom: number;
+    yearTo: number;
+    image: string;
+};
+
 const props = defineProps<{
     locale: 'es' | 'it' | 'en';
     translations: TranslationTree;
@@ -126,6 +134,7 @@ const props = defineProps<{
     installationOptions: SimpleOption[];
     installationZones: InstallationZone[];
     vehicleImages: string[];
+    vehicleImageMappings: VehicleImageMapping[];
     brandImages: string[];
     sharedConfiguration: SharedConfigurationPayload | null;
 }>();
@@ -338,6 +347,21 @@ const universalDinOptions: UniversalDin[] = ['1DIN', '2DIN'];
 const selectedUniversalDin = ref<UniversalDin | null>(null);
 const isSpecificMode = computed(() => configuratorMode.value === 'specific');
 const isUniversalMode = computed(() => configuratorMode.value === 'universal');
+const displayVehicleModel = (model: string | null | undefined) => {
+    if (!model) return '';
+
+    if (props.locale === 'it') {
+        return model.replace(/\bClase\s+([A-Z])\b/giu, 'Classe $1');
+    }
+
+    if (props.locale === 'en') {
+        return model
+            .replace(/\bClase\s+([A-Z])\b/giu, '$1-Class')
+            .replace(/\bSerie\s+(\d+(?:\s*\/\s*\d+)*)\b/giu, '$1 Series');
+    }
+
+    return model;
+};
 const vehicleStepTitle = computed(() => {
     if (selectedBrand.value === null) {
         return t('steps.vehicle');
@@ -353,7 +377,7 @@ const vehicleStepTitle = computed(() => {
         })
         .join(' ');
 
-    return [normalizedBrand, selectedModel.value, selectedYear.value]
+    return [normalizedBrand, displayVehicleModel(selectedModel.value), selectedYear.value]
         .filter((value) => value !== null && value !== '')
         .join(' ');
 });
@@ -1769,90 +1793,27 @@ const slugifyVehiclePart = (value: string) =>
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '');
 
-const selectedVehicleModelSlugs = computed(() => {
-    if (selectedModel.value === null) {
-        return [];
-    }
-
-    const modelSlug = slugifyVehiclePart(selectedModel.value);
-    const familySlug = modelSlug.replace(/-\d{2,3}$/, '');
-
-    if (selectedBrand.value !== 'BMW' && familySlug !== modelSlug) {
-        const familyName = familySlug.split('-').at(-1);
-
-        return [...new Set([modelSlug, familySlug, familyName].filter((slug): slug is string => Boolean(slug)))];
-    }
-
-    if (selectedBrand.value !== 'BMW' || selectedYear.value === null) {
-        return [modelSlug];
-    }
-
-    const bmwAliases: Record<string, string[]> = {
-        m3: ['e46'],
-        'serie-3': ['e90'],
-        'serie-5': ['e60'],
-        'serie-7': ['e28'],
-    };
-
-    if (modelSlug === 'serie-1') {
-        return selectedYear.value <= 2011
-            ? [modelSlug, 'e81']
-            : [modelSlug, 'f20'];
-    }
-
-    return [modelSlug, ...(bmwAliases[modelSlug] ?? [])];
-});
-
 const selectedVehicleImageUrl = computed(() => {
     if (
         selectedBrand.value === null ||
         selectedModel.value === null ||
-        selectedYear.value === null ||
-        selectedCompatibilityEntry.value === null
+        selectedYear.value === null
     ) {
         return null;
     }
 
     const brandSlug = slugifyVehiclePart(selectedBrand.value);
-    const candidates = props.vehicleImages.flatMap((image) => {
-        const stem = slugifyVehiclePart(image.replace(/\.[^.]+$/, ''));
-        const match = stem.match(/^(.*)-(19\d{2}|20\d{2})-(19\d{2}|20\d{2})$/);
-
-        if (!match) {
-            return [];
-        }
-
-        const modelSlug = selectedVehicleModelSlugs.value.find(
-            (candidate) => match[1] === `${brandSlug}-${candidate}`,
-        );
-        const yearFrom = Number(match[2]);
-        const yearTo = Number(match[3]);
-
-        if (
-            !modelSlug ||
-            selectedYear.value! < yearFrom ||
-            selectedYear.value! > yearTo
-        ) {
-            return [];
-        }
-
-        return [{
-            image,
-            modelSlug,
-            yearFrom,
-            yearTo,
-        }];
-    });
-
-    const filename = candidates
-        .sort((a, b) => {
-            const exactModelA = a.modelSlug === slugifyVehiclePart(selectedModel.value!) ? 0 : 1;
-            const exactModelB = b.modelSlug === slugifyVehiclePart(selectedModel.value!) ? 0 : 1;
-            const exactRangeA = a.yearFrom === selectedCompatibilityEntry.value!.yearFrom && a.yearTo === selectedCompatibilityEntry.value!.yearTo ? 0 : 1;
-            const exactRangeB = b.yearFrom === selectedCompatibilityEntry.value!.yearFrom && b.yearTo === selectedCompatibilityEntry.value!.yearTo ? 0 : 1;
-
-            return exactModelA - exactModelB || exactRangeA - exactRangeB;
-        })[0]?.image;
+    const modelSlug = slugifyVehiclePart(selectedModel.value);
+    const filename = props.vehicleImageMappings
+        .filter((mapping) =>
+            slugifyVehiclePart(mapping.brand) === brandSlug &&
+            slugifyVehiclePart(mapping.model) === modelSlug &&
+            selectedYear.value! >= mapping.yearFrom &&
+            selectedYear.value! <= mapping.yearTo,
+        )
+        .sort((first, second) =>
+            (first.yearTo - first.yearFrom) - (second.yearTo - second.yearFrom),
+        )[0]?.image;
 
     return filename ? `/images/vehicles-dark/${encodeURIComponent(filename)}` : null;
 });
@@ -3131,7 +3092,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
     const clientEmail = withoutClientData ? '' : quoteClientEmail.value.trim();
     const customsTaxes = withoutClientData ? '' : quoteCustomsTaxes.value.trim();
     const vehicle = isSpecificMode.value
-        ? [selectedBrand.value, selectedModel.value, selectedYear.value].filter(Boolean).join(' ')
+        ? [selectedBrand.value, displayVehicleModel(selectedModel.value), selectedYear.value].filter(Boolean).join(' ')
         : '';
     const vehicleImage = isSpecificMode.value && selectedVehicleImageUrl.value
         ? new URL(selectedVehicleImageUrl.value, window.location.origin).href
@@ -3815,7 +3776,7 @@ watch(
                                 @error="failedBrandImage = selectedBrandImageUrl"
                             />
                             <span class="shrink-0 text-xs font-medium uppercase tracking-wider text-neutral-500">{{ selectedBrand }}</span>
-                            <span class="min-w-0 truncate text-lg font-bold text-white">{{ selectedModel }}</span>
+                            <span class="min-w-0 truncate text-lg font-bold text-white">{{ displayVehicleModel(selectedModel) }}</span>
                             <span class="shrink-0 text-sm text-neutral-400">{{ selectedYear }}</span>
                         </div>
                         <button
@@ -3823,11 +3784,11 @@ watch(
                             type="button"
                             class="flex h-52 w-full items-center justify-center p-3"
                             :aria-label="t('vehicle.zoom')"
-                            @click="openImageZoom(selectedVehicleImageUrl, `${selectedBrand} ${selectedModel} ${selectedYear}`)"
+                            @click="openImageZoom(selectedVehicleImageUrl, `${selectedBrand} ${displayVehicleModel(selectedModel)} ${selectedYear}`)"
                         >
                             <img
                                 :src="selectedVehicleImageUrl"
-                                :alt="`${selectedBrand} ${selectedModel} ${selectedYear}`"
+                                :alt="`${selectedBrand} ${displayVehicleModel(selectedModel)} ${selectedYear}`"
                                 class="h-full w-full object-contain"
                                 @error="failedVehicleImage = selectedVehicleImageUrl"
                             />
@@ -3909,7 +3870,7 @@ watch(
                                                 : 'border-amber-400 bg-[#121212] text-amber-400 active:bg-amber-400 active:text-black md:hover:bg-amber-400 md:hover:text-black'
                                         "
                                     >
-                                        {{ model }}
+                                        {{ displayVehicleModel(model) }}
                                     </button>
                                     <button
                                         type="button"
@@ -3968,8 +3929,8 @@ watch(
                                 {{ isUniversalMode
                                     ? (displayedScreenOptionCount === 1 ? t('screen.universal_available_option') : t('screen.universal_available_options', { count: displayedScreenOptionCount }))
                                     : (displayedScreenOptionCount === 1
-                                        ? t('screen.available_option', { vehicle: `${selectedBrand} ${selectedModel} ${selectedYear}` })
-                                        : t('screen.available_options', { count: displayedScreenOptionCount, vehicle: `${selectedBrand} ${selectedModel} ${selectedYear}` })) }}
+                                        ? t('screen.available_option', { vehicle: `${selectedBrand} ${displayVehicleModel(selectedModel)} ${selectedYear}` })
+                                        : t('screen.available_options', { count: displayedScreenOptionCount, vehicle: `${selectedBrand} ${displayVehicleModel(selectedModel)} ${selectedYear}` })) }}
                             </p>
                             <div v-if="hasNoSpecificScreenForBudget" id="screen-alternative-message" class="rounded-xl border border-neutral-700 bg-[#121212] p-5">
                                 <p class="text-sm leading-6 text-neutral-200">{{ t('budget.no_specific_screen') }}</p>
@@ -4807,7 +4768,7 @@ watch(
                                     </p>
                                     <div class="mt-1 flex min-w-0 items-baseline gap-2">
                                         <p v-if="selectedModel" class="min-w-0 truncate text-lg font-semibold text-white">
-                                            {{ selectedModel }}
+                                            {{ displayVehicleModel(selectedModel) }}
                                         </p>
                                         <p v-if="selectedYear" class="shrink-0 text-sm text-neutral-400">
                                             {{ selectedYear }}
@@ -4816,7 +4777,7 @@ watch(
                                 </div>
                                 <div class="flex min-w-0 max-w-full items-baseline justify-center gap-2 sm:hidden">
                                     <p class="shrink-0 truncate text-xs font-medium uppercase tracking-wider text-neutral-500">{{ selectedBrand }}</p>
-                                    <p v-if="selectedModel" class="min-w-0 truncate text-lg font-semibold text-white">{{ selectedModel }}</p>
+                                    <p v-if="selectedModel" class="min-w-0 truncate text-lg font-semibold text-white">{{ displayVehicleModel(selectedModel) }}</p>
                                     <p v-if="selectedYear" class="shrink-0 text-sm text-neutral-400">{{ selectedYear }}</p>
                                 </div>
                             </div>
@@ -4827,11 +4788,11 @@ watch(
                                     type="button"
                                     class="flex h-full w-full cursor-zoom-in items-center justify-center"
                                     :aria-label="t('vehicle.zoom')"
-                                    @click="openImageZoom(selectedVehicleImageUrl, `${selectedBrand} ${selectedModel} ${selectedYear}`)"
+                                    @click="openImageZoom(selectedVehicleImageUrl, `${selectedBrand} ${displayVehicleModel(selectedModel)} ${selectedYear}`)"
                                 >
                                     <img
                                         :src="selectedVehicleImageUrl"
-                                        :alt="`${selectedBrand} ${selectedModel} ${selectedYear}`"
+                                        :alt="`${selectedBrand} ${displayVehicleModel(selectedModel)} ${selectedYear}`"
                                         class="h-full w-full object-contain"
                                         @error="failedVehicleImage = selectedVehicleImageUrl"
                                     />
@@ -5349,11 +5310,11 @@ watch(
                     <div class="flex items-center justify-center gap-3 border-b border-neutral-800 p-4">
                         <img v-if="selectedBrandImageUrl && failedBrandImage !== selectedBrandImageUrl" :src="selectedBrandImageUrl" :alt="selectedBrand" class="h-14 w-24 object-contain" @error="failedBrandImage = selectedBrandImageUrl" />
                         <p class="text-sm uppercase tracking-wider text-neutral-500">{{ selectedBrand }}</p>
-                        <p v-if="selectedModel" class="text-xl font-bold">{{ selectedModel }}</p>
+                        <p v-if="selectedModel" class="text-xl font-bold">{{ displayVehicleModel(selectedModel) }}</p>
                         <p v-if="selectedYear" class="text-neutral-400">{{ selectedYear }}</p>
                     </div>
-                    <button v-if="selectedVehicleImageUrl && failedVehicleImage !== selectedVehicleImageUrl" type="button" class="flex h-52 w-full items-center justify-center p-3 sm:h-64" @click="openImageZoom(selectedVehicleImageUrl, `${selectedBrand} ${selectedModel} ${selectedYear}`)">
-                        <img :src="selectedVehicleImageUrl" :alt="`${selectedBrand} ${selectedModel} ${selectedYear}`" class="h-full w-full object-contain" @error="failedVehicleImage = selectedVehicleImageUrl" />
+                    <button v-if="selectedVehicleImageUrl && failedVehicleImage !== selectedVehicleImageUrl" type="button" class="flex h-52 w-full items-center justify-center p-3 sm:h-64" @click="openImageZoom(selectedVehicleImageUrl, `${selectedBrand} ${displayVehicleModel(selectedModel)} ${selectedYear}`)">
+                        <img :src="selectedVehicleImageUrl" :alt="`${selectedBrand} ${displayVehicleModel(selectedModel)} ${selectedYear}`" class="h-full w-full object-contain" @error="failedVehicleImage = selectedVehicleImageUrl" />
                     </button>
                 </div>
                 <p class="mt-7 text-sm font-semibold uppercase tracking-[0.24em] text-amber-400">{{ t('quote.title') }}</p>

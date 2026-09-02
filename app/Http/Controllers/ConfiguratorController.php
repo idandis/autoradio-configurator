@@ -6,6 +6,7 @@ use App\Models\ConfiguratorProduct;
 use App\Models\InstallationZone;
 use App\Models\MissingVehicleRequest;
 use App\Models\SharedConfiguration;
+use App\Services\VehicleImageResolver;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -59,7 +60,7 @@ class ConfiguratorController extends Controller
         return response()->json(['message' => 'ok']);
     }
 
-    public function __invoke(Request $request): Response
+    public function __invoke(Request $request, VehicleImageResolver $vehicleImageResolver): Response
     {
         $allProducts = ConfiguratorProduct::with('variants')
             ->whereIn('category', ['screen', 'camera', 'speaker'])
@@ -108,6 +109,21 @@ class ConfiguratorController extends Controller
             ->with(['postalCodes', 'services'])
             ->orderBy('name')
             ->get();
+        $vehicleOptions = $this->screenOptions($screenProducts);
+        $cameraOptions = $this->cameraOptions($cameraProducts);
+        $vehicleImageFilenames = $vehicleImageResolver->imageFilenames();
+        $vehicleImageMappings = $vehicleImageResolver->mappings([
+            ...$vehicleOptions->all(),
+            ...collect($cameraOptions)
+                ->filter(fn (array $camera) => ! $camera['isStandard'])
+                ->map(fn (array $camera) => [
+                    'brand' => $camera['brand'],
+                    'model' => $camera['model'],
+                    'yearFrom' => $camera['yearFrom'],
+                    'yearTo' => $camera['yearTo'],
+                ])
+                ->all(),
+        ], $vehicleImageFilenames);
 
         return Inertia::render('Configurator', [
             'locale' => app()->getLocale(),
@@ -154,9 +170,9 @@ class ConfiguratorController extends Controller
                     'yearTo' => $product->year_to,
                 ]);
             })->values(),
-            'vehicles' => $this->screenOptions($screenProducts),
+            'vehicles' => $vehicleOptions,
             'universalScreens' => $this->screenOptions($universalScreenProducts),
-            'cameraOptions' => $this->cameraOptions($cameraProducts),
+            'cameraOptions' => $cameraOptions,
             'speakerOptions' => $this->speakerOptions($speakerProducts),
             'installationOptions' => $installationZones->flatMap(fn (InstallationZone $zone) =>
                 $zone->services->map(fn ($service) => [
@@ -189,10 +205,8 @@ class ConfiguratorController extends Controller
                     'productPrices' => $zone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => (float) $service->price]),
                     'productTitles' => $zone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => $service->localizedName()]),
                 ])->values(),
-            'vehicleImages' => collect(glob(public_path('images/vehicles-dark/*.{png,jpg,jpeg,webp}'), GLOB_BRACE) ?: [])
-                ->map(fn (string $path) => basename($path))
-                ->sort()
-                ->values(),
+            'vehicleImages' => collect($vehicleImageFilenames)->sort()->values(),
+            'vehicleImageMappings' => $vehicleImageMappings,
             'brandImages' => collect(glob(public_path('images/brands/*.{png,jpg,jpeg,webp}'), GLOB_BRACE) ?: [])
                 ->map(fn (string $path) => basename($path))
                 ->sort()

@@ -1336,8 +1336,8 @@
         "translation": "Radio Android 13 9\" 8 Core con CarPlay wireless per Ford Focus MK1 1998-2004 e Fiesta 1995-2001"
     },
     "radio-android-14-8-8-2-din-para-mercedes-c-class-w204-2011-2014-carplay-gps-y-wifi": {
-        "source": "Radio Android 8.8” / 13.5'' para Mercedes C-Class W204 2011-2014 – CarPlay, GPS y WIFI",
-        "translation": "Autoradio Android 8.8\" / 13.5'' per Mercedes C-Class W204 2011-2014 – CarPlay, GPS e WIFI"
+        "source": "Radio Android 8.8” para Mercedes C-Class W204 2011-2014 – CarPlay, GPS y WIFI",
+        "translation": "Autoradio Android 8.8” per Mercedes Classe C W204 2011-2014 – CarPlay, GPS e WiFi"
     },
     "radio-android-15-con-pantalla-9-7-para-opel-astra-j-cascada-2009-2018-con-carplay-inalambrico-y-canbus": {
         "source": "Radio Android 15 con Pantalla 9.7” para Opel Astra J / Cascada 2009–2018 con CarPlay Inalámbrico y CANBUS",
@@ -1538,5 +1538,9 @@
     "touch-radio-hippbqcc-7-mp5-y-bluetooth": {
         "source": "Touch Radio 7\" - MP5 y Bluetooth",
         "translation": "Touch Radio 7\" - MP5 e Bluetooth"
+    },
+    "autoradio-android-12-3-qualcomm-680-para-mercedes-benz-clase-c-w204-ntg4-5-2011-2013": {
+        "source": "Autoradio Android 12,3” Qualcomm 680 para Mercedes-Benz Clase C W204 NTG4.5 2011-2013",
+        "translation": "Autoradio Android 12,3” Qualcomm 680 per Mercedes-Benz Classe C W204 NTG4.5 2011-2013"
     }
 }
