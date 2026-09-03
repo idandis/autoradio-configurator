@@ -17,8 +17,21 @@ class VehicleImageResolver
     public function vehicleEntries(?string $brandList, ?string $modelList): array
     {
         $brands = $this->fieldValues($brandList);
+        $models = $this->fieldValues($modelList);
 
-        return collect($this->fieldValues($modelList))
+        // An indexed model that points past the available brands comes from an
+        // incomplete multibrand import. Do not invent a wrong brand/model pair
+        // (for example CITROEN 208 when brand 1 was actually PEUGEOT).
+        $hasInvalidBrandIndex = collect($models)->contains(function (string $modelValue) use ($brands) {
+            return preg_match('/^\s*(\d+)\s*[:：]\s*(.+?)\s*$/u', $modelValue, $matches)
+                && ! isset($brands[(int) $matches[1] - 1]);
+        });
+
+        if ($hasInvalidBrandIndex) {
+            return [];
+        }
+
+        return collect($models)
             ->flatMap(function (string $modelValue) use ($brands) {
                 if (preg_match('/^\s*(\d+)\s*[:：]\s*(.+?)\s*$/u', $modelValue, $matches)) {
                     $brand = $brands[(int) $matches[1] - 1] ?? null;

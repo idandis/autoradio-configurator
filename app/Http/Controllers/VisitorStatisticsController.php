@@ -48,10 +48,17 @@ class VisitorStatisticsController extends Controller
                 'sources' => $this->sources($query),
             ],
             'extraEuVisitors' => ExtraEuVisitor::query()
+                ->where('is_bot', false)
                 ->latest('last_seen_at')
                 ->paginate(30, ['*'], 'extra_eu_page')
                 ->withQueryString(),
-            'extraEuTotal' => ExtraEuVisitor::query()->count(),
+            'extraEuTotal' => ExtraEuVisitor::query()->where('is_bot', false)->count(),
+            'extraEuBots' => ExtraEuVisitor::query()
+                ->where('is_bot', true)
+                ->latest('last_seen_at')
+                ->paginate(30, ['*'], 'bot_page')
+                ->withQueryString(),
+            'extraEuBotTotal' => ExtraEuVisitor::query()->where('is_bot', true)->count(),
         ]);
     }
 

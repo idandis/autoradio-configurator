@@ -80,7 +80,7 @@ class DashboardController extends Controller
 
         $lines[] = '';
         $lines[] = 'IMMAGINI AUTO';
-        $lines[] = 'Per ogni veicolo elencato genera con la skill imagegen una fotografia realistica dell’auto corretta per marca, modello principale e anni: vista anteriore a tre quarti, automobile intera e centrata, ombra naturale, sfondo uniforme #121212, nessun testo, nessuna persona. Salva in formato WEBP nel percorso indicato. Le varianti e le sigle di telaio sono escluse; non creare immagini per prodotti con più marche.';
+        $lines[] = 'Per ogni veicolo elencato genera con la skill imagegen una fotografia realistica dell’auto corretta per marca, generazione di carrozzeria e anni: vista anteriore a tre quarti, automobile intera e centrata, ombra naturale, sfondo uniforme #121212, nessun testo, nessuna persona. Salva in formato WEBP nel percorso indicato. Genera una sola immagine per la stessa generazione e riusala per facelift o differenze minime; crea una nuova immagine solo quando cambia radicalmente la carrozzeria. Le sigle di telaio servono esclusivamente a identificare la generazione; non creare immagini per prodotti con più marche.';
 
         if ($imageTasks->isEmpty()) {
             $lines[] = '- Nessuna immagine auto mancante.';

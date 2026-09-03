@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Models\ExtraEuVisitor;
 use App\Services\VisitorGeolocation;
+use App\Services\VisitorBotDetector;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -19,14 +20,22 @@ class BlockOutsideEurope
         'SI', 'SK', 'SM', 'TR', 'UA', 'VA', 'XK',
     ];
 
-    public function __construct(private readonly VisitorGeolocation $visitorGeolocation) {}
+    public function __construct(
+        private readonly VisitorGeolocation $visitorGeolocation,
+        private readonly VisitorBotDetector $visitorBotDetector,
+    ) {}
 
     public function handle(Request $request, Closure $next): Response
     {
+        $bot = $this->visitorBotDetector->analyze($request);
         $countryCode = $this->visitorGeolocation->countryCode($request);
 
         if ($countryCode !== null && ! in_array($countryCode, self::EUROPEAN_COUNTRIES, true)) {
-            $this->recordExtraEuVisitor($request, $countryCode);
+            $this->recordExtraEuVisitor($request, $countryCode, $bot);
+
+            if ($bot['should_block']) {
+                return response()->noContent();
+            }
 
             // Keep extra-EU traffic out of the regular visitor/conversion statistics.
             if ($request->routeIs('configurator.statistics.store')) {
@@ -39,10 +48,15 @@ class BlockOutsideEurope
             }
         }
 
+        if ($bot['should_block']) {
+            return response()->noContent();
+        }
+
         return $next($request);
     }
 
-    private function recordExtraEuVisitor(Request $request, string $countryCode): void
+    /** @param array{is_bot: bool, should_block: bool, reason: ?string} $bot */
+    private function recordExtraEuVisitor(Request $request, string $countryCode, array $bot): void
     {
         try {
             $geography = $this->visitorGeolocation->locate($request);
@@ -58,6 +72,9 @@ class BlockOutsideEurope
                 'referrer' => mb_substr((string) $request->header('Referer'), 0, 2000) ?: null,
                 'requested_path' => mb_substr($request->getPathInfo(), 0, 500),
                 'user_agent' => mb_substr((string) $request->userAgent(), 0, 2000) ?: null,
+                'is_bot' => $visitor->is_bot || $bot['is_bot'],
+                'bot_reason' => $bot['reason'] ?? $visitor->bot_reason,
+                'bot_blocked' => $visitor->bot_blocked || $bot['should_block'],
                 'hits' => $visitor->exists ? $visitor->hits + 1 : 1,
                 'first_seen_at' => $visitor->first_seen_at ?? now(),
                 'last_seen_at' => now(),

@@ -9,7 +9,7 @@ class ExtraEuVisitor extends Model
     protected $fillable = [
         'fingerprint', 'country_code', 'region', 'city', 'device_type',
         'browser_language', 'referrer', 'requested_path', 'user_agent',
-        'hits', 'first_seen_at', 'last_seen_at',
+        'is_bot', 'bot_reason', 'bot_blocked', 'hits', 'first_seen_at', 'last_seen_at',
     ];
 
     protected function casts(): array
@@ -17,6 +17,8 @@ class ExtraEuVisitor extends Model
         return [
             'first_seen_at' => 'datetime',
             'last_seen_at' => 'datetime',
+            'is_bot' => 'boolean',
+            'bot_blocked' => 'boolean',
         ];
     }
 }

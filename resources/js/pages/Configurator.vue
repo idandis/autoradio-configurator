@@ -4129,7 +4129,7 @@ watch(
                         </div>
 
                         <div
-                            v-if="(isUniversalMode || selectedModel) && visibleCameraOptions.length > 0"
+                            v-if="isUniversalMode || isSpecificMode"
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStepAndCenter('camera', 'camera-step-options', false, 'start')">

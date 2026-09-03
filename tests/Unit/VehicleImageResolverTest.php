@@ -72,4 +72,14 @@ class VehicleImageResolverTest extends TestCase
             ['brand' => 'CITROEN', 'model' => 'C4'],
         ], $resolver->vehicleEntries('PEUGEOT | CITROEN', '1:208 | 2:C4'));
     }
+
+    public function test_it_rejects_incomplete_indexed_multibrand_data(): void
+    {
+        $resolver = app(VehicleImageResolver::class);
+
+        $this->assertSame([], $resolver->vehicleEntries(
+            'CITROEN',
+            '1:208 | 1:308 | 2:C4 | 2:C5',
+        ));
+    }
 }

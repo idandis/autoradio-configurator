@@ -85,7 +85,7 @@
         "aliases": ["Clase M", "Classe M", "M-Class", "Clase M W163", "Classe M W163", "M-Class W163"],
         "year_from": 1997,
         "year_to": 2005,
-        "image": null
+        "image": "mercedes-clase-m-w163-1997-2005.webp"
     },
     "mercedes-clase-m-w164": {
         "brand": "MERCEDES",
@@ -142,5 +142,173 @@
         "year_from": 2006,
         "year_to": 2018,
         "image": "mercedes-sprinter-w906-2006-2018.webp"
+    },
+    "toyota-land-cruiser-prado-120": {
+        "brand": "TOYOTA",
+        "model": "Land Cruiser Prado 120",
+        "aliases": ["Land Cruiser Prado 120", "Prado 120"],
+        "year_from": 2002,
+        "year_to": 2009,
+        "image": "toyota-prado-2002-2009.png"
+    },
+    "volkswagen-jetta-a7": {
+        "brand": "VOLKSWAGEN",
+        "model": "Jetta/Sagitar",
+        "aliases": ["Jetta", "Sagitar"],
+        "year_from": 2017,
+        "year_to": 2021,
+        "image": "volkswagen-jetta-2018-2021.png"
+    },
+    "volkswagen-t5": {
+        "brand": "VOLKSWAGEN",
+        "model": "T5 Multivan",
+        "aliases": ["T5", "T5 Multivan", "Multivan T5"],
+        "year_from": 2003,
+        "year_to": 2015,
+        "image": "volkswagen-t5-2003-2015.png"
+    },
+    "volvo-p2-wagon": {
+        "brand": "VOLVO",
+        "model": "V70/XC70",
+        "aliases": ["V70", "XC70"],
+        "year_from": 2000,
+        "year_to": 2007,
+        "image": "volvo-s60-v70-xc70-2000-2004.png"
+    },
+    "seat-arona-kj7": {
+        "brand": "SEAT",
+        "model": "Arona",
+        "aliases": ["Arona", "Arona KJ7"],
+        "year_from": 2017,
+        "year_to": 2021,
+        "image": "seat-arona-2017-2020.png"
+    },
+    "mercedes-cla-c117": {
+        "brand": "MERCEDES",
+        "model": "CLA C117",
+        "aliases": ["CLA C117", "Clase CLA C117", "Classe CLA C117"],
+        "year_from": 2013,
+        "year_to": 2019,
+        "image": "mercedes-cla-c117-2013-2015.webp"
+    },
+    "mercedes-gla-x156": {
+        "brand": "MERCEDES",
+        "model": "GLA X156",
+        "aliases": ["GLA X156", "Clase GLA X156", "Classe GLA X156"],
+        "year_from": 2013,
+        "year_to": 2020,
+        "image": "mercedes-gla-x156-2013-2015.webp"
+    },
+    "mercedes-clase-gl-x164": {
+        "brand": "MERCEDES",
+        "model": "Clase GL X164",
+        "aliases": ["Clase GL X164", "Classe GL X164", "GL-Class X164", "GL X164"],
+        "year_from": 2006,
+        "year_to": 2012,
+        "image": "mercedes-clase-gl-x164-2005-2012.webp"
+    },
+    "jeep-patriot-mk74": {
+        "brand": "JEEP",
+        "model": "Patriot",
+        "aliases": ["Patriot", "Patriot MK74"],
+        "year_from": 2007,
+        "year_to": 2017,
+        "image": "jeep-patriot-2011-2017.webp"
+    },
+    "bmw-x6-e71": {
+        "brand": "BMW",
+        "model": "X6 E71",
+        "aliases": ["X6 E71", "X6 E7x"],
+        "year_from": 2008,
+        "year_to": 2014,
+        "image": "bmw-x6-e71-2008-2013.webp"
+    },
+    "volkswagen-passat-b5": {
+        "brand": "VOLKSWAGEN",
+        "model": "Passat B5",
+        "aliases": ["Passat B5", "Passat B5.5"],
+        "year_from": 1996,
+        "year_to": 2005,
+        "image": "volkswagen-passat-b5-1997-2008.webp"
+    },
+    "volkswagen-bora-1j": {
+        "brand": "VOLKSWAGEN",
+        "model": "Bora",
+        "aliases": ["Bora", "Bora 1J"],
+        "year_from": 1998,
+        "year_to": 2005,
+        "image": "volkswagen-bora-1997-2008.webp"
+    },
+    "volkswagen-lupo-6x": {
+        "brand": "VOLKSWAGEN",
+        "model": "Lupo",
+        "aliases": ["Lupo", "Lupo 6X"],
+        "year_from": 1998,
+        "year_to": 2005,
+        "image": "volkswagen-lupo-1997-2008.webp"
+    },
+    "volkswagen-transporter-t4": {
+        "brand": "VOLKSWAGEN",
+        "model": "T4",
+        "aliases": ["T4", "Transporter T4", "Multivan T4"],
+        "year_from": 1990,
+        "year_to": 2003,
+        "image": "volkswagen-t4-1997-2008.webp"
+    },
+    "volkswagen-citi-chico-mk1": {
+        "brand": "VOLKSWAGEN",
+        "model": "Citi Chico",
+        "aliases": ["Citi Chico", "Citi Golf", "Chico"],
+        "year_from": 1984,
+        "year_to": 2009,
+        "image": "volkswagen-citi-chico-1997-2008.webp"
+    },
+    "renault-fluence-l38": {
+        "brand": "RENAULT",
+        "model": "Fluence",
+        "aliases": ["Fluence", "Fluence L38"],
+        "year_from": 2009,
+        "year_to": 2016,
+        "image": "renault-fluence-2008-2014.webp"
+    },
+    "mercedes-vaneo-w414": {
+        "brand": "MERCEDES",
+        "model": "Vaneo W414",
+        "aliases": ["Vaneo", "Vaneo W414"],
+        "year_from": 2001,
+        "year_to": 2005,
+        "image": "mercedes-vaneo-w414-1998-2006.webp"
+    },
+    "hyundai-atos-prime-mx": {
+        "brand": "HYUNDAI",
+        "model": "Atos Prime",
+        "aliases": ["Atos Prime", "Atos", "Amica"],
+        "year_from": 1999,
+        "year_to": 2008,
+        "image": "hyundai-atos-prime-2003-2015.webp"
+    },
+    "volkswagen-t-cross-c1": {
+        "brand": "VOLKSWAGEN",
+        "model": "T-Cross",
+        "aliases": ["T-Cross", "T Cross"],
+        "year_from": 2018,
+        "year_to": 2023,
+        "image": "volkswagen-t-cross-2018-2021.webp"
+    },
+    "volkswagen-t-roc-a1": {
+        "brand": "VOLKSWAGEN",
+        "model": "T-Roc",
+        "aliases": ["T-Roc", "T Roc"],
+        "year_from": 2017,
+        "year_to": 2024,
+        "image": "volkswagen-t-roc-2018-2021.webp"
+    },
+    "volkswagen-tharu-first-generation": {
+        "brand": "VOLKSWAGEN",
+        "model": "Tharu",
+        "aliases": ["Tharu"],
+        "year_from": 2018,
+        "year_to": 2023,
+        "image": "volkswagen-tharu-2018-2021.webp"
     }
 }

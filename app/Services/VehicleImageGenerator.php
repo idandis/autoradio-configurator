@@ -48,6 +48,7 @@ class VehicleImageGenerator
         $generations = ConfiguratorProduct::query()
             ->where('category', 'screen')
             ->whereNotNull('brand')
+            ->where('brand', 'not like', '%|%')
             ->whereNotNull('model')
             ->whereNotNull('year_from')
             ->whereNotNull('year_to')
