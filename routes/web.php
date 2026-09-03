@@ -37,6 +37,14 @@ Route::middleware('extra-eu')->group(function () {
     Route::get('/', ConfiguratorController::class);
 
     Route::get('/configurator', ConfiguratorController::class)->name('configurator.show');
+    Route::get('/configurator/catalog/specific-screens', [ConfiguratorController::class, 'specificScreens'])
+        ->name('configurator.catalog.specific-screens');
+    Route::get('/configurator/catalog/universal-screens', [ConfiguratorController::class, 'universalScreens'])
+        ->name('configurator.catalog.universal-screens');
+    Route::get('/configurator/catalog/cameras', [ConfiguratorController::class, 'cameras'])
+        ->name('configurator.catalog.cameras');
+    Route::get('/configurator/catalog/speakers', [ConfiguratorController::class, 'speakers'])
+        ->name('configurator.catalog.speakers');
     Route::post('/configurator/missing-vehicle', [ConfiguratorController::class, 'missingVehicle'])->name('configurator.missing-vehicle');
     Route::get('/configurator/postal-code/{postalCode}', ConfiguratorPostalCodeController::class)
         ->where('postalCode', '\\d{5}')
@@ -73,6 +81,8 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         ->middleware('throttle:30,1')
         ->name('configurator.shared-configurations.store');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/configurator/catalog/custom-products', [ConfiguratorController::class, 'customProducts'])
+        ->name('configurator.catalog.custom-products');
     Route::post('/dashboard/database/migrate', DatabaseMigrationController::class)
         ->middleware('throttle:3,10')
         ->name('dashboard.database.migrate');

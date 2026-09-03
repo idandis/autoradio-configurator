@@ -128,12 +128,17 @@ const props = defineProps<{
     translations: TranslationTree;
     customProducts: CustomProduct[];
     vehicles: Vehicle[];
+    vehicleCompatibility: Array<{
+        brand: string | null;
+        model: string | null;
+        yearFrom: number | null;
+        yearTo: number | null;
+    }>;
     universalScreens: Vehicle[];
     cameraOptions: SimpleOption[];
     speakerOptions: SpeakerOption[];
     installationOptions: SimpleOption[];
     installationZones: InstallationZone[];
-    vehicleImages: string[];
     vehicleImageMappings: VehicleImageMapping[];
     brandImages: string[];
     sharedConfiguration: SharedConfigurationPayload | null;
@@ -306,7 +311,7 @@ const supportsVehicleBrand = (
 ) => selectedBrand === null || vehicleBrands(brandList).includes(selectedBrand);
 
 const compatibilityEntries = computed(() => [
-    ...props.vehicles.flatMap((vehicle) =>
+    ...props.vehicleCompatibility.flatMap((vehicle) =>
         vehicleBrandModelEntries(vehicle.brand, vehicle.model).map(({ brand, model }) => ({
             brand,
             model,
@@ -314,16 +319,6 @@ const compatibilityEntries = computed(() => [
             yearTo: vehicle.yearTo,
         })),
     ),
-    ...props.cameraOptions
-        .filter((camera) => !camera.isStandard)
-        .flatMap((camera) =>
-            vehicleBrandModelEntries(camera.brand, camera.model).map(({ brand, model }) => ({
-                brand,
-                model,
-                yearFrom: camera.yearFrom ?? null,
-                yearTo: camera.yearTo ?? null,
-            })),
-        ),
 ]);
 
 const brands = computed(() => [
@@ -340,6 +335,64 @@ const resolveAvailableBrand = (value: string | null | undefined): string | null 
 const selectedBrand = ref<string | null>(null);
 const selectedModel = ref<string | null>(null);
 const selectedYear = ref<number | null>(null);
+const specificScreens = ref<Vehicle[]>([...(props.vehicles ?? [])]);
+const specificScreenCache = new Map<string, Vehicle[]>();
+const specificScreensLoading = ref(false);
+let specificScreenRequest = 0;
+const loadSpecificScreens = async (brand: string, model: string, year: number) => {
+    const key = `${brand}|${model}|${year}`;
+    const cached = specificScreenCache.get(key);
+    if (cached) {
+        specificScreens.value = cached;
+        return;
+    }
+
+    const requestId = ++specificScreenRequest;
+    specificScreensLoading.value = true;
+    try {
+        const query = new URLSearchParams({ brand, model, year: String(year) });
+        const response = await fetch(`/configurator/catalog/specific-screens?${query}`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('Unable to load compatible screens.');
+        const payload = await response.json();
+        const products = Array.isArray(payload.products) ? payload.products : [];
+        specificScreenCache.set(key, products);
+        if (requestId === specificScreenRequest) specificScreens.value = products;
+    } catch {
+        if (requestId === specificScreenRequest) specificScreens.value = [];
+    } finally {
+        if (requestId === specificScreenRequest) specificScreensLoading.value = false;
+    }
+};
+const universalScreens = ref<Vehicle[]>([...(props.universalScreens ?? [])]);
+const universalScreenCache = new Map<UniversalDin, Vehicle[]>();
+const universalScreensLoading = ref(false);
+const loadUniversalScreens = async (din: UniversalDin) => {
+    const cached = universalScreenCache.get(din);
+    if (cached) {
+        universalScreens.value = cached;
+        return;
+    }
+
+    universalScreensLoading.value = true;
+    try {
+        const response = await fetch(`/configurator/catalog/universal-screens?din=${encodeURIComponent(din)}`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('Unable to load universal screens.');
+        const payload = await response.json();
+        const products = Array.isArray(payload.products) ? payload.products : [];
+        universalScreenCache.set(din, products);
+        universalScreens.value = products;
+    } catch {
+        universalScreens.value = [];
+    } finally {
+        universalScreensLoading.value = false;
+    }
+};
 type ConfiguratorMode = 'specific' | 'universal';
 const configuratorMode = ref<ConfiguratorMode | null>(null);
 type UniversalDin = '1DIN' | '2DIN';
@@ -347,6 +400,63 @@ const universalDinOptions: UniversalDin[] = ['1DIN', '2DIN'];
 const selectedUniversalDin = ref<UniversalDin | null>(null);
 const isSpecificMode = computed(() => configuratorMode.value === 'specific');
 const isUniversalMode = computed(() => configuratorMode.value === 'universal');
+const cameraOptions = ref<SimpleOption[]>([...(props.cameraOptions ?? [])]);
+const cameraCache = new Map<string, SimpleOption[]>();
+const camerasLoading = ref(false);
+const loadCameras = async () => {
+    const mode = configuratorMode.value ?? 'specific';
+    const key = [mode, selectedBrand.value, selectedModel.value, selectedYear.value].join('|');
+    const cached = cameraCache.get(key);
+    if (cached) {
+        cameraOptions.value = cached;
+        return;
+    }
+
+    camerasLoading.value = true;
+    try {
+        const query = new URLSearchParams({ mode });
+        if (mode === 'specific' && selectedBrand.value && selectedModel.value && selectedYear.value !== null) {
+            query.set('brand', selectedBrand.value);
+            query.set('model', selectedModel.value);
+            query.set('year', String(selectedYear.value));
+        }
+        const response = await fetch(`/configurator/catalog/cameras?${query}`, {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('Unable to load cameras.');
+        const payload = await response.json();
+        const products = Array.isArray(payload.products) ? payload.products : [];
+        cameraCache.set(key, products);
+        cameraOptions.value = products;
+    } catch {
+        cameraOptions.value = [];
+    } finally {
+        camerasLoading.value = false;
+    }
+};
+const speakerOptions = ref<SpeakerOption[]>([...(props.speakerOptions ?? [])]);
+const speakersLoading = ref(false);
+let speakersLoaded = speakerOptions.value.length > 0;
+const loadSpeakers = async () => {
+    if (speakersLoaded || speakersLoading.value) return;
+
+    speakersLoading.value = true;
+    try {
+        const response = await fetch('/configurator/catalog/speakers', {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('Unable to load speakers.');
+        const payload = await response.json();
+        speakerOptions.value = Array.isArray(payload.products) ? payload.products : [];
+        speakersLoaded = true;
+    } catch {
+        speakersLoaded = false;
+    } finally {
+        speakersLoading.value = false;
+    }
+};
 const displayVehicleModel = (model: string | null | undefined) => {
     if (!model) return '';
 
@@ -423,6 +533,10 @@ const selectVehicleModel = async (model: string) => {
     }
 
     selectedModel.value = model;
+    if (selectedBrand.value !== null && selectedYear.value !== null) {
+        await loadSpecificScreens(selectedBrand.value, model, selectedYear.value);
+    }
+    if (openSteps.value.includes('camera')) await loadCameras();
     if (!openSteps.value.includes('screen')) {
         openSteps.value = [...openSteps.value, 'screen'];
     }
@@ -448,15 +562,18 @@ const selectedInstallationKey = ref<string | null>(null);
 const showCustomQuoteModal = ref(false);
 const customProductSearch = ref('');
 const selectedCustomProductKeys = ref<string[]>([]);
+const customProducts = ref<CustomProduct[]>([...(props.customProducts ?? [])]);
+const customProductsLoaded = ref(customProducts.value.length > 0);
+const customProductsLoading = ref(false);
 const selectedCustomProducts = computed(() =>
-    (props.customProducts ?? []).filter((product) => selectedCustomProductKeys.value.includes(product.key)),
+    customProducts.value.filter((product) => selectedCustomProductKeys.value.includes(product.key)),
 );
 const filteredCustomProducts = computed(() => {
     const search = customProductSearch.value.trim().toLocaleLowerCase();
 
-    if (!search) return props.customProducts ?? [];
+    if (!search) return customProducts.value;
 
-    return (props.customProducts ?? []).filter((product) =>
+    return customProducts.value.filter((product) =>
         [product.title, product.variantTitle, product.sku, product.category]
             .filter(Boolean)
             .some((value) => String(value).toLocaleLowerCase().includes(search)),
@@ -467,7 +584,26 @@ const toggleCustomProduct = (key: string) => {
         ? selectedCustomProductKeys.value.filter((selectedKey) => selectedKey !== key)
         : [...selectedCustomProductKeys.value, key];
 };
-const startCustomQuote = () => {
+const loadCustomProducts = async () => {
+    if (customProductsLoaded.value || customProductsLoading.value) return;
+
+    customProductsLoading.value = true;
+    try {
+        const response = await fetch('/configurator/catalog/custom-products', {
+            headers: { Accept: 'application/json' },
+            credentials: 'same-origin',
+        });
+        if (!response.ok) throw new Error('Unable to load products.');
+        const payload = await response.json();
+        customProducts.value = Array.isArray(payload.products) ? payload.products : [];
+        customProductsLoaded.value = true;
+    } catch {
+        customProductsLoaded.value = false;
+    } finally {
+        customProductsLoading.value = false;
+    }
+};
+const startCustomQuote = async () => {
     selectedBrand.value = null;
     selectedModel.value = null;
     selectedYear.value = null;
@@ -477,6 +613,7 @@ const startCustomQuote = () => {
     selectedInstallationKey.value = null;
     selectedPrecheckMethod.value = null;
     showCustomQuoteModal.value = true;
+    await loadCustomProducts();
 };
 const completeCustomQuote = () => {
     showCustomQuoteModal.value = false;
@@ -502,7 +639,7 @@ const handleBrandTypeahead = (event: KeyboardEvent) => {
 const openSteps = ref<string[]>([]);
 const modeSensitiveSelectionCount = computed(() => {
     const specificCameraCount = selectedCameraKeys.value.filter((key) =>
-        !props.cameraOptions.find((option) => option.key === key)?.isStandard,
+        !cameraOptions.value.find((option) => option.key === key)?.isStandard,
     ).length;
 
     return selectedScreenVariantIds.value.length + specificCameraCount;
@@ -521,7 +658,7 @@ const setConfiguratorMode = async (mode: ConfiguratorMode) => {
     selectedScreenVariantIds.value = [];
     selectedDashboardVariants.value = {};
     selectedCameraKeys.value = selectedCameraKeys.value.filter((key) =>
-        props.cameraOptions.find((option) => option.key === key)?.isStandard,
+        cameraOptions.value.find((option) => option.key === key)?.isStandard,
     );
     selectedInstallationKey.value = null;
     selectedPrecheckMethod.value = null;
@@ -539,7 +676,7 @@ const setConfiguratorMode = async (mode: ConfiguratorMode) => {
             ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     });
 };
-const selectUniversalDin = (din: UniversalDin) => {
+const selectUniversalDin = async (din: UniversalDin) => {
     if (selectedUniversalDin.value === din) return;
 
     if (selectedScreenVariantIds.value.length > 0 && !window.confirm(t('mode.din_change_confirmation'))) {
@@ -553,6 +690,7 @@ const selectUniversalDin = (din: UniversalDin) => {
     installationRequested.value = false;
     checkoutConsentAccepted.value = false;
     selectedUniversalDin.value = din;
+    await loadUniversalScreens(din);
 };
 const toggleStep = (step: string) => {
     openSteps.value = openSteps.value.includes(step)
@@ -580,6 +718,8 @@ const goToPrecheckStep = async () => {
 const toggleStepAndCenter = async (step: string, targetId: string, focus = false, block: ScrollLogicalPosition = 'center') => {
     const isOpening = !openSteps.value.includes(step);
     toggleStep(step);
+    if (isOpening && step === 'camera') await loadCameras();
+    if (isOpening && step === 'speaker') await loadSpeakers();
     if (isOpening) await centerConfiguratorTarget(targetId, focus, block);
 };
 const stepHasSelections = (step: string) => {
@@ -854,7 +994,7 @@ const models = computed(() => {
 });
 
 const brandVehicles = computed(() =>
-    props.vehicles.filter((vehicle) =>
+    specificScreens.value.filter((vehicle) =>
         supportsVehicleBrand(vehicle.brand, selectedBrand.value),
     ),
 );
@@ -1111,7 +1251,7 @@ const affordableSpecificScreens = computed(() =>
 );
 
 const affordableUniversalScreens = computed(() =>
-    props.universalScreens.filter(screenHasAffordableVariant),
+    universalScreens.value.filter(screenHasAffordableVariant),
 );
 
 const hasSpecificScreenVariants = computed(() =>
@@ -1154,9 +1294,9 @@ const displayedScreenVehicles = computed(() =>
 
 const displayedScreenOptionCount = computed(() => displayedScreenVehicles.value.length);
 
-const allScreenVehicles = computed(() => [...props.vehicles, ...props.universalScreens]);
+const allScreenVehicles = computed(() => [...specificScreens.value, ...universalScreens.value]);
 const selectableScreenVehicles = computed(() =>
-    isUniversalMode.value ? props.universalScreens : compatibleVehicles.value,
+    isUniversalMode.value ? universalScreens.value : compatibleVehicles.value,
 );
 
 const isScreenVariantSelected = (variant: Variant) =>
@@ -1418,14 +1558,26 @@ const restoreConfiguratorState = async () => {
         customerBudget.value = typeof state.customerBudget === 'string' ? state.customerBudget : '';
         await nextTick();
         selectedModel.value = modelIsValid ? state.selectedModel : null;
+        if (selectedBrand.value && selectedModel.value && selectedYear.value !== null) {
+            await loadSpecificScreens(selectedBrand.value, selectedModel.value, selectedYear.value);
+        }
+        if (configuratorMode.value === 'universal' && selectedUniversalDin.value !== null) {
+            await loadUniversalScreens(selectedUniversalDin.value);
+        }
+        if (Array.isArray(state.selectedCameraKeys) && state.selectedCameraKeys.length > 0) {
+            await loadCameras();
+        }
+        if (Array.isArray(state.selectedSpeakerKeys) && state.selectedSpeakerKeys.length > 0) {
+            await loadSpeakers();
+        }
 
         const availableVariantIds = new Set(
             allScreenVehicles.value.flatMap((vehicle) =>
                 vehicle.variants.flatMap((variant) => screenVariantChoices(variant).map((choice) => choice.id)),
             ),
         );
-        const availableCameraKeys = new Set(props.cameraOptions.map((option) => option.key));
-        const availableSpeakerKeys = new Set(props.speakerOptions.map((option) => option.key));
+        const availableCameraKeys = new Set(cameraOptions.value.map((option) => option.key));
+        const availableSpeakerKeys = new Set(speakerOptions.value.map((option) => option.key));
         const availableInstallationKeys = new Set(props.installationOptions.map((option) => option.key));
 
         selectedScreenVariantIds.value = Array.isArray(state.selectedScreenVariantIds)
@@ -1433,7 +1585,7 @@ const restoreConfiguratorState = async () => {
             : [];
         if (configuratorMode.value === null) {
             const universalVariantIds = new Set(
-                props.universalScreens.flatMap((vehicle) =>
+                universalScreens.value.flatMap((vehicle) =>
                     vehicle.variants.flatMap((variant) => screenVariantChoices(variant).map((choice) => choice.id)),
                 ),
             );
@@ -1442,7 +1594,7 @@ const restoreConfiguratorState = async () => {
                 : brand !== null || modelIsValid ? 'specific' : null;
         }
         if (configuratorMode.value === 'universal' && selectedUniversalDin.value === null) {
-            const restoredUniversalScreen = props.universalScreens.find((screen) =>
+            const restoredUniversalScreen = universalScreens.value.find((screen) =>
                 screen.variants.some((variant) =>
                     screenVariantChoices(variant).some((choice) => selectedScreenVariantIds.value.includes(choice.id)),
                 ),
@@ -1462,7 +1614,7 @@ const restoreConfiguratorState = async () => {
                 if (
                     availableCameraKeys.has(key)
                     && typeof id === 'number'
-                    && props.cameraOptions.find((option) => option.key === key)?.variants?.some((variant) => variant.id === id)
+                    && cameraOptions.value.find((option) => option.key === key)?.variants?.some((variant) => variant.id === id)
                 ) {
                     variants[key] = id;
                 }
@@ -1536,13 +1688,13 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
             && year <= entry.yearTo
         );
     const containsUniversalScreen = configuration.screens.some((screen) =>
-        props.universalScreens.some((candidate) => candidate.handle === screen.product),
+        universalScreens.value.some((candidate) => candidate.handle === screen.product),
     );
     configuratorMode.value = configuration.mode === 'universal' || (!validVehicle && containsUniversalScreen)
         ? 'universal'
         : 'specific';
     const sharedUniversalScreen = configuration.screens
-        .map((screen) => props.universalScreens.find((candidate) => candidate.handle === screen.product))
+        .map((screen) => universalScreens.value.find((candidate) => candidate.handle === screen.product))
         .find((screen): screen is Vehicle => Boolean(screen));
     selectedUniversalDin.value = configuration.din === '1DIN' || configuration.din === '2DIN'
         ? configuration.din
@@ -1555,6 +1707,14 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
     selectedYear.value = validVehicle ? year : null;
     await nextTick();
     selectedModel.value = validVehicle ? model : null;
+    if (selectedBrand.value && selectedModel.value && selectedYear.value !== null) {
+        await loadSpecificScreens(selectedBrand.value, selectedModel.value, selectedYear.value);
+    }
+    if (configuratorMode.value === 'universal' && selectedUniversalDin.value !== null) {
+        await loadUniversalScreens(selectedUniversalDin.value);
+    }
+    if (configuration.cameras.length > 0) await loadCameras();
+    if (configuration.speakers.length > 0) await loadSpeakers();
     await nextTick();
 
     const restoredDashboardVariants: Record<number, string> = {};
@@ -1587,9 +1747,9 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
             selectedCameraVariantIds.value[match[1]] = Number(match[2]);
         }
     });
-    const speakerKeys = new Set(props.speakerOptions.map((speaker) => speaker.key));
+    const speakerKeys = new Set(speakerOptions.value.map((speaker) => speaker.key));
     selectedSpeakerKeys.value = configuration.speakers.filter((key) => speakerKeys.has(key));
-    const customKeys = new Set(props.customProducts.map((product) => product.key));
+    const customKeys = new Set(customProducts.value.map((product) => product.key));
     selectedCustomProductKeys.value = configuration.customProducts.filter((key) => customKeys.has(key));
 
     const sharedPostalCode = configuration.postalCode;
@@ -1839,7 +1999,7 @@ watch(selectedBrandImageUrl, () => {
     failedBrandImage.value = null;
 });
 
-const cameraOptionsWithSelectedVariants = computed(() => props.cameraOptions.map((option) => {
+const cameraOptionsWithSelectedVariants = computed(() => cameraOptions.value.map((option) => {
     const variants = option.variants ?? [];
     const selectedVariant = variants.find((variant) => variant.id === selectedCameraVariantIds.value[option.key])
         ?? variants[0];
@@ -1952,14 +2112,14 @@ const cameraKeysAfterToggle = (key: string) => {
     }
 
     const without360 = selectedCameraKeys.value.filter(
-        (selectedKey) => props.cameraOptions.find((option) => option.key === selectedKey)?.productHandle
+        (selectedKey) => cameraOptions.value.find((option) => option.key === selectedKey)?.productHandle
             !== 'camara-360-para-radios-de-coche-android-con-vista-de-ave',
     );
     return without360.includes(key)
         ? without360.filter((selectedKey) => selectedKey !== key)
         : [
             ...without360.filter(
-                (selectedKey) => props.cameraOptions.find((option) => option.key === selectedKey)?.productHandle
+                (selectedKey) => cameraOptions.value.find((option) => option.key === selectedKey)?.productHandle
                     !== camera?.productHandle,
             ),
             key,
@@ -1999,7 +2159,7 @@ watch(normalizedBudget, () => {
     if (normalizedBudget.value === null) return;
 
     selectedScreenVariantIds.value = selectedScreenVariantIds.value.filter((variantId) =>
-        [...props.vehicles, ...props.universalScreens]
+        [...specificScreens.value, ...universalScreens.value]
             .flatMap((vehicle) => vehicle.variants)
             .flatMap(screenVariantChoices)
             .some((choice) => choice.id === variantId && !isScreenChoiceOverBudget(choice)),
@@ -2009,7 +2169,7 @@ watch(normalizedBudget, () => {
 const speakerCategories = computed(() =>
     [
         ...new Set(
-            props.speakerOptions
+            speakerOptions.value
                 .flatMap((speaker) => speaker.categories)
                 .filter((category) => category.toLocaleLowerCase() !== 'motocicleta'),
         ),
@@ -2018,7 +2178,7 @@ const speakerCategories = computed(() =>
 );
 
 const speakerSizes = computed(() =>
-    [...new Set(props.speakerOptions
+    [...new Set(speakerOptions.value
         .filter((speaker) => speaker.categories.some((category) =>
             category === selectedSpeakerCategory.value,
         ))
@@ -2086,14 +2246,14 @@ const formatSpeakerCategory = (category: string) => {
 const visibleSpeakerOptions = computed(() =>
     selectedSpeakerCategory.value === '' || selectedSpeakerSizes.value === ''
         ? []
-        : props.speakerOptions.filter((speaker) =>
+        : speakerOptions.value.filter((speaker) =>
             speaker.categories.includes(selectedSpeakerCategory.value) &&
             speaker.sizes.includes(selectedSpeakerSizes.value),
         ),
 );
 
 const selectedSpeakers = computed(() =>
-    props.speakerOptions.filter((speaker) =>
+    speakerOptions.value.filter((speaker) =>
         selectedSpeakerKeys.value.includes(speaker.key),
     ),
 );
@@ -2479,7 +2639,7 @@ const goToSelectedProduct = async (
     }
 
     if (type === 'speaker') {
-        const speaker = props.speakerOptions.find((option) => option.key === key);
+        const speaker = speakerOptions.value.find((option) => option.key === key);
 
         if (speaker) {
             const categoryWithRememberedSize = speaker.categories.find((candidate) => {
@@ -3772,6 +3932,8 @@ watch(
                                 v-if="selectedBrandImageUrl && failedBrandImage !== selectedBrandImageUrl"
                                 :src="selectedBrandImageUrl"
                                 :alt="selectedBrand"
+                                loading="lazy"
+                                decoding="async"
                                 class="h-10 w-16 shrink-0 object-contain"
                                 @error="failedBrandImage = selectedBrandImageUrl"
                             />
@@ -3789,6 +3951,8 @@ watch(
                             <img
                                 :src="selectedVehicleImageUrl"
                                 :alt="`${selectedBrand} ${displayVehicleModel(selectedModel)} ${selectedYear}`"
+                                loading="lazy"
+                                decoding="async"
                                 class="h-full w-full object-contain"
                                 @error="failedVehicleImage = selectedVehicleImageUrl"
                             />
@@ -3932,7 +4096,8 @@ watch(
                                         ? t('screen.available_option', { vehicle: `${selectedBrand} ${displayVehicleModel(selectedModel)} ${selectedYear}` })
                                         : t('screen.available_options', { count: displayedScreenOptionCount, vehicle: `${selectedBrand} ${displayVehicleModel(selectedModel)} ${selectedYear}` })) }}
                             </p>
-                            <div v-if="hasNoSpecificScreenForBudget" id="screen-alternative-message" class="rounded-xl border border-neutral-700 bg-[#121212] p-5">
+                            <p v-if="specificScreensLoading || universalScreensLoading" class="rounded-xl border border-neutral-700 bg-[#121212] p-5 text-center text-neutral-400">…</p>
+                            <div v-else-if="hasNoSpecificScreenForBudget" id="screen-alternative-message" class="rounded-xl border border-neutral-700 bg-[#121212] p-5">
                                 <p class="text-sm leading-6 text-neutral-200">{{ t('budget.no_specific_screen') }}</p>
                                 <div v-if="lowestSpecificVariantPrice !== null" class="mt-3 flex flex-wrap items-center gap-3">
                                     <p class="text-sm font-semibold text-amber-400">
@@ -3981,7 +4146,7 @@ watch(
                                                 class="group rounded-xl border border-neutral-700 bg-neutral-950 p-3 text-center transition hover:border-amber-400 hover:bg-amber-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                                                 @click="selectDashboardVariant(vehicle, image.variant!)"
                                             >
-                                                <img :src="image.url" :alt="dashboardVariantLabel(image.variant!)" class="h-64 w-full rounded-lg object-contain" />
+                                                <img :src="image.url" :alt="dashboardVariantLabel(image.variant!)" class="h-64 w-full rounded-lg object-contain" loading="lazy" decoding="async" />
                                                 <span class="mt-3 block font-semibold text-amber-400">{{ dashboardVariantLabel(image.variant!) }}</span>
                                             </button>
                                         </div>
@@ -3998,6 +4163,8 @@ watch(
                                             <img
                                                 :src="screenImage(vehicle)!"
                                                 :alt="vehicle.title"
+                                                loading="lazy"
+                                                decoding="async"
                                                 class="max-h-72 w-full rounded-lg object-contain object-center"
                                             />
                                         </button>
@@ -4022,7 +4189,7 @@ watch(
                                                     :aria-label="dashboardReferenceLabel(vehicle)"
                                                     @click.stop="openImageZoom(image.url, dashboardReferenceLabel(vehicle))"
                                                 >
-                                                    <img :src="image.url" :alt="dashboardReferenceLabel(vehicle)" class="h-full w-full object-cover" />
+                                                    <img :src="image.url" :alt="dashboardReferenceLabel(vehicle)" class="h-full w-full object-cover" loading="lazy" decoding="async" />
                                                 </button>
                                             </div>
                                             <div class="flex w-full min-w-0 items-center gap-2">
@@ -4148,7 +4315,8 @@ watch(
                                 </svg>
                             </button>
                             <div v-if="openSteps.includes('camera')" id="camera-step-content" class="mt-6 min-w-0 max-w-full">
-                            <div id="camera-step-options" class="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-3">
+                            <p v-if="camerasLoading" class="py-8 text-center text-neutral-400">…</p>
+                            <div v-else id="camera-step-options" class="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-3">
                                 <div
                                     v-for="camera in visibleCameraOptions"
                                     :key="camera.key"
@@ -4169,6 +4337,8 @@ watch(
                                             <img
                                                 :src="camera.image"
                                                 :alt="camera.title"
+                                                loading="lazy"
+                                                decoding="async"
                                                 class="absolute inset-0 h-full w-full object-contain object-center"
                                             />
                                         </div>
@@ -4247,7 +4417,8 @@ watch(
                                 </svg>
                             </button>
                             <div v-if="openSteps.includes('speaker')" id="speaker-step-content" class="mt-6 min-w-0 max-w-full">
-                            <div id="speaker-step-controls" class="mobile-model-section mt-4 grid min-w-0 max-w-2xl grid-cols-[minmax(0,1fr)] gap-4">
+                            <p v-if="speakersLoading" class="py-8 text-center text-neutral-400">…</p>
+                            <div v-else id="speaker-step-controls" class="mobile-model-section mt-4 grid min-w-0 max-w-2xl grid-cols-[minmax(0,1fr)] gap-4">
                                 <div>
                                     <div class="mobile-model-buttons flex flex-wrap gap-2">
                                         <button
@@ -4298,6 +4469,8 @@ watch(
                                             v-if="speaker.image"
                                             :src="speaker.image"
                                             :alt="speaker.productTitle"
+                                            loading="lazy"
+                                            decoding="async"
                                             class="h-36 w-full rounded-lg p-2 object-contain object-center transition sm:h-40"
                                             :class="selectedSpeakerKeys.includes(speaker.key) ? 'bg-amber-400/10' : 'bg-[#121212]'"
                                         />
@@ -4406,6 +4579,8 @@ watch(
                                         <img
                                             src="/images/installation/gran-canaria-zones.png"
                                             :alt="t('installation.map_label')"
+                                            loading="lazy"
+                                            decoding="async"
                                             class="h-auto w-full"
                                         />
                                         <button
@@ -4457,7 +4632,7 @@ watch(
                                             :class="selectedServiceZone === 'tenerife' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
                                             @click="toggleServiceZone('tenerife')"
                                         >
-                                            <img src="/images/installation/tenerife-san-isidro-zone.png" :alt="t('installation.tenerife_map_label')" class="h-auto w-full" />
+                                            <img src="/images/installation/tenerife-san-isidro-zone.png" :alt="t('installation.tenerife_map_label')" class="h-auto w-full" loading="lazy" decoding="async" />
                                         </button>
                                         <button
                                             type="button"
@@ -4478,7 +4653,7 @@ watch(
                                             :class="selectedServiceZone === 'fuerteventura' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
                                             @click="toggleServiceZone('fuerteventura')"
                                         >
-                                            <img src="/images/installation/fuerteventura-zone.png" :alt="t('installation.fuerteventura_map_label')" class="h-auto w-full" />
+                                            <img src="/images/installation/fuerteventura-zone.png" :alt="t('installation.fuerteventura_map_label')" class="h-auto w-full" loading="lazy" decoding="async" />
                                         </button>
                                         <button
                                             type="button"
@@ -4499,7 +4674,7 @@ watch(
                                             :class="selectedServiceZone === 'lanzarote' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
                                             @click="toggleServiceZone('lanzarote')"
                                         >
-                                            <img src="/images/installation/lanzarote-zone.png" :alt="t('installation.lanzarote_map_label')" class="h-auto w-full" />
+                                            <img src="/images/installation/lanzarote-zone.png" :alt="t('installation.lanzarote_map_label')" class="h-auto w-full" loading="lazy" decoding="async" />
                                         </button>
                                         <button
                                             type="button"
@@ -4520,7 +4695,7 @@ watch(
                                             :class="selectedServiceZone === 'madrid' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
                                             @click="toggleServiceZone('madrid')"
                                         >
-                                            <img src="/images/installation/madrid-humanes-zone.png" :alt="t('installation.madrid_map_label')" class="h-auto w-full" />
+                                            <img src="/images/installation/madrid-humanes-zone.png" :alt="t('installation.madrid_map_label')" class="h-auto w-full" loading="lazy" decoding="async" />
                                         </button>
                                         <button
                                             type="button"
@@ -4541,7 +4716,7 @@ watch(
                                             :class="selectedServiceZone === 'barcelona' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
                                             @click="toggleServiceZone('barcelona')"
                                         >
-                                            <img src="/images/installation/barcelona-hospitalet-zone.png" :alt="t('installation.barcelona_map_label')" class="h-auto w-full" />
+                                            <img src="/images/installation/barcelona-hospitalet-zone.png" :alt="t('installation.barcelona_map_label')" class="h-auto w-full" loading="lazy" decoding="async" />
                                         </button>
                                         <button
                                             type="button"
@@ -4562,7 +4737,7 @@ watch(
                                             :class="selectedServiceZone === 'malaga' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
                                             @click="toggleServiceZone('malaga')"
                                         >
-                                            <img src="/images/installation/malaga-moraima-zone.png" :alt="t('installation.malaga_map_label')" class="h-auto w-full" />
+                                            <img src="/images/installation/malaga-moraima-zone.png" :alt="t('installation.malaga_map_label')" class="h-auto w-full" loading="lazy" decoding="async" />
                                         </button>
                                         <button
                                             type="button"
@@ -4583,7 +4758,7 @@ watch(
                                             :class="selectedServiceZone === 'murcia' ? 'border-amber-400 bg-amber-400/10 ring-1 ring-amber-400' : 'border-neutral-700 hover:border-amber-400'"
                                             @click="toggleServiceZone('murcia')"
                                         >
-                                            <img src="/images/installation/murcia-center-zone.png" :alt="t('installation.murcia_map_label')" class="h-auto w-full" />
+                                            <img src="/images/installation/murcia-center-zone.png" :alt="t('installation.murcia_map_label')" class="h-auto w-full" loading="lazy" decoding="async" />
                                         </button>
                                         <button
                                             type="button"
@@ -5488,7 +5663,8 @@ watch(
                             {{ selectedCustomProductKeys.includes(product.key) ? customQuoteCopy.added : customQuoteCopy.add }}
                         </button>
                     </div>
-                    <p v-if="filteredCustomProducts.length === 0" class="py-10 text-center text-sm text-neutral-500">{{ customQuoteCopy.empty }}</p>
+                    <p v-if="customProductsLoading" class="py-10 text-center text-sm text-neutral-500">…</p>
+                    <p v-else-if="filteredCustomProducts.length === 0" class="py-10 text-center text-sm text-neutral-500">{{ customQuoteCopy.empty }}</p>
                 </div>
 
                 <div class="mt-5 flex items-center justify-between border-t border-neutral-800 pt-5">

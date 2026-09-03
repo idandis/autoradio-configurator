@@ -11,6 +11,14 @@ class VehicleImageResolver
     /** @var array<string, array<string, mixed>>|null */
     private ?array $catalog = null;
 
+    /** @var array<string, array<int, array<string, mixed>>>|null */
+    private ?array $catalogAliasIndex = null;
+
+    /** @var array<string, array<int, array{filename: string, year_from: int, year_to: int, span: int, format_priority: int}>> */
+    private array $imageCandidateIndex = [];
+
+    private ?string $imageCandidateIndexSignature = null;
+
     /**
      * @return array<int, array{brand: string, model: string}>
      */
@@ -62,35 +70,70 @@ class VehicleImageResolver
         $generation = $this->generation($brand, $model, $year, $year);
         $configuredImage = $generation['image'] ?? null;
 
-        if (is_string($configuredImage) && in_array($configuredImage, $filenames, true)) {
-            return $configuredImage;
+        if (is_string($configuredImage)) {
+            $configuredWebp = preg_replace('/\.[^.]+$/', '.webp', $configuredImage);
+            if (is_string($configuredWebp) && in_array($configuredWebp, $filenames, true)) {
+                return $configuredWebp;
+            }
+            if (in_array($configuredImage, $filenames, true)) {
+                return $configuredImage;
+            }
         }
 
         $bases = $this->imageBases($brand, $model, $generation);
-        $candidates = collect($filenames)->flatMap(function (string $filename) use ($bases, $year) {
-            $stem = Str::slug(pathinfo($filename, PATHINFO_FILENAME));
+        $index = $this->imageCandidateIndex($filenames);
+        $candidate = null;
 
-            if (! preg_match('/^(.*)-(19\d{2}|20\d{2})-(19\d{2}|20\d{2})$/', $stem, $matches)) {
-                return [];
+        foreach ($bases as $basePosition => $base) {
+            foreach ($index[$base] ?? [] as $indexedCandidate) {
+                if ($year < $indexedCandidate['year_from'] || $year > $indexedCandidate['year_to']) {
+                    continue;
+                }
+
+                $rank = [$basePosition, $indexedCandidate['span'], $indexedCandidate['format_priority']];
+                if ($candidate === null || $rank < $candidate['rank']) {
+                    $candidate = ['rank' => $rank, ...$indexedCandidate];
+                }
             }
-
-            $basePosition = array_search($matches[1], $bases, true);
-            if ($basePosition === false || $year < (int) $matches[2] || $year > (int) $matches[3]) {
-                return [];
-            }
-
-            return [[
-                'filename' => $filename,
-                'base_position' => $basePosition,
-                'span' => (int) $matches[3] - (int) $matches[2],
-            ]];
-        });
-
-        $candidate = $candidates
-            ->sortBy(fn (array $candidate) => sprintf('%03d-%04d', $candidate['base_position'], $candidate['span']))
-            ->first();
+        }
 
         return is_array($candidate) ? $candidate['filename'] : null;
+    }
+
+    /**
+     * Parse the image directory once instead of once per vehicle and year.
+     *
+     * @param array<int, string> $filenames
+     * @return array<string, array<int, array{filename: string, year_from: int, year_to: int, span: int, format_priority: int}>>
+     */
+    private function imageCandidateIndex(array $filenames): array
+    {
+        $signature = hash('sha256', serialize($filenames));
+        if ($this->imageCandidateIndexSignature === $signature) {
+            return $this->imageCandidateIndex;
+        }
+
+        $index = [];
+        foreach ($filenames as $filename) {
+            $stem = Str::slug(pathinfo($filename, PATHINFO_FILENAME));
+            if (! preg_match('/^(.*)-(19\d{2}|20\d{2})-(19\d{2}|20\d{2})$/', $stem, $matches)) {
+                continue;
+            }
+
+            $yearFrom = (int) $matches[2];
+            $yearTo = (int) $matches[3];
+            $index[$matches[1]][] = [
+                'filename' => $filename,
+                'year_from' => $yearFrom,
+                'year_to' => $yearTo,
+                'span' => $yearTo - $yearFrom,
+                'format_priority' => strtolower(pathinfo($filename, PATHINFO_EXTENSION)) === 'webp' ? 0 : 1,
+            ];
+        }
+
+        $this->imageCandidateIndexSignature = $signature;
+
+        return $this->imageCandidateIndex = $index;
     }
 
     /**
@@ -100,17 +143,17 @@ class VehicleImageResolver
     {
         $brand = trim($brand);
         $model = trim((string) preg_replace('/^\s*\d+\s*[:：]\s*/u', '', $model));
-        $configuredCandidates = collect($this->catalog())->filter(function (array $entry) use ($brand, $model) {
-            if ($this->normalize((string) ($entry['brand'] ?? '')) !== $this->normalize($brand)) {
-                return false;
+        $configuredCandidates = $this->catalogAliasIndex()[
+            $this->normalize($brand).'|'.$this->normalize($model)
+        ] ?? [];
+        $configured = null;
+        foreach ($configuredCandidates as $candidate) {
+            if ($fallbackYearFrom <= (int) $candidate['year_to'] && $fallbackYearTo >= (int) $candidate['year_from']) {
+                $configured = $candidate;
+                break;
             }
-
-            return collect($entry['aliases'] ?? [])
-                ->contains(fn ($alias) => $this->normalize((string) $alias) === $this->normalize($model));
-        });
-        $configured = $configuredCandidates->first(fn (array $entry) =>
-            $fallbackYearFrom <= (int) $entry['year_to'] && $fallbackYearTo >= (int) $entry['year_from']
-        ) ?? $configuredCandidates->first();
+        }
+        $configured ??= $configuredCandidates[0] ?? null;
 
         if (is_array($configured)) {
             $key = (string) $configured['key'];
@@ -219,6 +262,24 @@ class VehicleImageResolver
                 return $entry;
             })
             ->all();
+    }
+
+    /** @return array<string, array<int, array<string, mixed>>> */
+    private function catalogAliasIndex(): array
+    {
+        if ($this->catalogAliasIndex !== null) {
+            return $this->catalogAliasIndex;
+        }
+
+        $index = [];
+        foreach ($this->catalog() as $entry) {
+            $brand = $this->normalize((string) ($entry['brand'] ?? ''));
+            foreach ($entry['aliases'] ?? [] as $alias) {
+                $index[$brand.'|'.$this->normalize((string) $alias)][] = $entry;
+            }
+        }
+
+        return $this->catalogAliasIndex = $index;
     }
 
     /** @return array<int, string> */

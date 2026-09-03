@@ -22,6 +22,19 @@ class VehicleImageResolverTest extends TestCase
         );
     }
 
+    public function test_it_prefers_webp_when_the_optimized_copy_exists(): void
+    {
+        $resolver = app(VehicleImageResolver::class);
+
+        $this->assertSame(
+            'mercedes-clase-c-2011-2014.webp',
+            $resolver->resolveFilename('MERCEDES', 'Clase C W204', 2011, [
+                'mercedes-clase-c-2011-2014.png',
+                'mercedes-clase-c-2011-2014.webp',
+            ]),
+        );
+    }
+
     public function test_it_keeps_radically_different_generations_separate(): void
     {
         $resolver = app(VehicleImageResolver::class);

@@ -28,10 +28,17 @@ class BlockOutsideEurope
     public function handle(Request $request, Closure $next): Response
     {
         $bot = $this->visitorBotDetector->analyze($request);
-        $countryCode = $this->visitorGeolocation->countryCode($request);
+        // Never make an external geolocation request while rendering a page.
+        // Cloudflare's country header is instantaneous; direct-host requests
+        // are enriched later by the post-load statistics request.
+        $countryCode = $request->isMethod('GET')
+            ? $this->visitorGeolocation->countryCodeFromHeaders($request)
+            : $this->visitorGeolocation->countryCode($request);
 
         if ($countryCode !== null && ! in_array($countryCode, self::EUROPEAN_COUNTRIES, true)) {
-            $this->recordExtraEuVisitor($request, $countryCode, $bot);
+            if (! $request->isMethod('GET')) {
+                $this->recordExtraEuVisitor($request, $countryCode, $bot);
+            }
 
             if ($bot['should_block']) {
                 return response()->noContent();

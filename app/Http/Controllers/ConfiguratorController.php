@@ -8,6 +8,8 @@ use App\Models\MissingVehicleRequest;
 use App\Models\SharedConfiguration;
 use App\Services\VehicleImageResolver;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -16,6 +18,12 @@ use Inertia\Response;
 
 class ConfiguratorController extends Controller
 {
+    private const STANDARD_CAMERA_HANDLES = [
+        'camara-trasera-estandar',
+        'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna',
+        'camara-360-para-radios-de-coche-android-con-vista-de-ave',
+    ];
+
     public function missingVehicle(Request $request)
     {
         $data = $request->validate([
@@ -62,13 +70,34 @@ class ConfiguratorController extends Controller
 
     public function __invoke(Request $request, VehicleImageResolver $vehicleImageResolver): Response
     {
-        $allProducts = ConfiguratorProduct::with('variants')
-            ->whereIn('category', ['screen', 'camera', 'speaker'])
-            ->orderBy('category')
-            ->orderBy('title')
-            ->get();
+        $sharedConfiguration = $this->sharedConfiguration($request);
+        $requiredCustomKeys = collect($sharedConfiguration['customProducts'] ?? [])
+            ->merge($request->query('summary') === '1' ? (array) $request->query('custom', []) : [])
+            ->filter(fn ($key) => is_string($key))
+            ->unique()
+            ->values();
+        $requiredCustomProductIds = $requiredCustomKeys
+            ->filter(fn (string $key) => str_starts_with($key, 'product-'))
+            ->map(fn (string $key) => (int) substr($key, 8))
+            ->filter();
+        $requiredCustomVariantIds = $requiredCustomKeys
+            ->filter(fn (string $key) => str_starts_with($key, 'variant-'))
+            ->map(fn (string $key) => (int) substr($key, 8))
+            ->filter();
+        $requiredCustomProducts = $requiredCustomKeys->isEmpty()
+            ? collect()
+            : ConfiguratorProduct::with('variants')
+                ->whereIn('category', ['screen', 'camera', 'speaker'])
+                ->where(function ($query) use ($requiredCustomProductIds, $requiredCustomVariantIds) {
+                    $query->whereIn('id', $requiredCustomProductIds)
+                        ->orWhereHas('variants', fn ($variants) => $variants->whereIn('id', $requiredCustomVariantIds));
+                })
+                ->orderBy('category')
+                ->orderBy('title')
+                ->get();
 
-        $screenProducts = ConfiguratorProduct::with('variants')
+        $screenProducts = ConfiguratorProduct::query()
+            ->select(['id', 'brand', 'model', 'year_from', 'year_to'])
             ->where('category', 'screen')
             ->whereNotNull('brand')
             ->where('brand', '!=', '')
@@ -81,55 +110,250 @@ class ConfiguratorController extends Controller
             ->orderBy('model')
             ->get();
 
-        $universalScreenProducts = ConfiguratorProduct::with('variants')
-            ->where('category', 'screen')
-            ->whereRaw('LOWER(TRIM(model)) = ?', ['universal'])
-            ->orderBy('price_min')
-            ->get()
+        $sharedScreenHandles = collect($sharedConfiguration['screens'] ?? [])
+            ->pluck('product')
+            ->merge($request->query('summary') === '1' ? (array) $request->query('product', []) : [])
+            ->filter(fn ($handle) => is_string($handle) && $handle !== '')
+            ->unique()
+            ->values();
+        $initialScreenProducts = $sharedScreenHandles->isEmpty()
+            ? collect()
+            : ConfiguratorProduct::with('variants')
+                ->where('category', 'screen')
+                ->whereIn('handle', $sharedScreenHandles)
+                ->get();
+
+        $universalScreenProducts = $initialScreenProducts
+            ->filter(fn (ConfiguratorProduct $product) => mb_strtolower(trim((string) $product->model)) === 'universal')
             ->filter(fn (ConfiguratorProduct $product) => in_array(
                 preg_replace('/\s+/u', '', mb_strtoupper((string) ($product->meta['din'] ?? ''))),
                 ['1DIN', '2DIN'],
                 true,
             ))
             ->values();
+        $initialSpecificScreenProducts = $initialScreenProducts
+            ->reject(fn (ConfiguratorProduct $product) => mb_strtolower(trim((string) $product->model)) === 'universal')
+            ->values();
 
-        $cameraProducts = ConfiguratorProduct::with('variants')
+        $cameraProducts = ConfiguratorProduct::query()
+            ->select(['id', 'handle', 'brand', 'model', 'year_from', 'year_to'])
             ->where('category', 'camera')
             ->orderBy('price_min')
             ->get()
             ->values();
-
-        $speakerProducts = ConfiguratorProduct::with('variants')
-            ->where('category', 'speaker')
-            ->orderBy('title')
-            ->get();
 
         $installationZones = InstallationZone::query()
             ->where('active', true)
             ->with(['postalCodes', 'services'])
             ->orderBy('name')
             ->get();
-        $vehicleOptions = $this->screenOptions($screenProducts);
-        $cameraOptions = $this->cameraOptions($cameraProducts);
+        $vehicleOptions = $this->screenOptions($initialSpecificScreenProducts);
+        $vehicleCompatibility = $screenProducts
+            ->merge($cameraProducts->reject(fn (ConfiguratorProduct $product) => in_array($product->handle, self::STANDARD_CAMERA_HANDLES, true)))
+            ->map(function (ConfiguratorProduct $product) {
+                $vehicleFields = $this->vehicleFields($product);
+
+                return [
+                    'brand' => $vehicleFields['brand'],
+                    'model' => $vehicleFields['model'],
+                    'yearFrom' => $product->year_from,
+                    'yearTo' => $product->year_to,
+                ];
+            })
+            ->unique(fn (array $vehicle) => implode('|', $vehicle))
+            ->values();
+        $cameraOptions = [];
         $vehicleImageFilenames = $vehicleImageResolver->imageFilenames();
-        $vehicleImageMappings = $vehicleImageResolver->mappings([
-            ...$vehicleOptions->all(),
-            ...collect($cameraOptions)
-                ->filter(fn (array $camera) => ! $camera['isStandard'])
-                ->map(fn (array $camera) => [
-                    'brand' => $camera['brand'],
-                    'model' => $camera['model'],
-                    'yearFrom' => $camera['yearFrom'],
-                    'yearTo' => $camera['yearTo'],
-                ])
-                ->all(),
-        ], $vehicleImageFilenames);
+        $vehicleImageMappingOptions = [
+            ...$vehicleCompatibility->map(fn (array $vehicle) => [
+                'brand' => $vehicle['brand'],
+                'model' => $vehicle['model'],
+                'yearFrom' => $vehicle['yearFrom'],
+                'yearTo' => $vehicle['yearTo'],
+            ])->all(),
+        ];
+        $vehicleImageMappingKey = 'configurator:vehicle-image-mappings:v2:'.hash('sha256', serialize([
+            $vehicleImageMappingOptions,
+            $vehicleImageFilenames,
+            @filemtime(resource_path('data/vehicle-image-generations.json')) ?: 0,
+        ]));
+        $vehicleImageMappings = Cache::remember(
+            $vehicleImageMappingKey,
+            now()->addDay(),
+            fn () => $vehicleImageResolver->mappings($vehicleImageMappingOptions, $vehicleImageFilenames),
+        );
 
         return Inertia::render('Configurator', [
             'locale' => app()->getLocale(),
             'translations' => trans('configurator'),
-            'sharedConfiguration' => $this->sharedConfiguration($request),
-            'customProducts' => $allProducts->flatMap(function (ConfiguratorProduct $product) {
+            'sharedConfiguration' => $sharedConfiguration,
+            'customProducts' => $this->customProductOptions($requiredCustomProducts)
+                ->filter(fn (array $product) => $requiredCustomKeys->contains($product['key']))
+                ->values(),
+            'vehicles' => $vehicleOptions,
+            'vehicleCompatibility' => $vehicleCompatibility,
+            'universalScreens' => $this->screenOptions($universalScreenProducts),
+            'cameraOptions' => $cameraOptions,
+            'speakerOptions' => [],
+            'installationOptions' => $installationZones->flatMap(fn (InstallationZone $zone) =>
+                $zone->services->map(fn ($service) => [
+                    'key' => 'zone-service-'.$service->id,
+                    'productId' => null,
+                    'variantId' => null,
+                    'title' => $service->localizedName(),
+                    'sourceTitle' => $service->name,
+                    'productTitle' => $service->localizedName(),
+                    'variantTitle' => null,
+                    'price' => (float) $service->price,
+                    'shopifyVariantId' => null,
+                    'sku' => null,
+                    'subtype' => 'zone-service',
+                    'location' => $zone->name,
+                    'installationRaw' => null,
+                ])
+            )->values(),
+            'installationZones' => $installationZones
+                ->map(fn (InstallationZone $zone) => [
+                    'id' => $zone->id,
+                    'name' => $zone->name,
+                    'installerAddress' => $zone->installer_address,
+                    'installerPhone' => $zone->installer_phone,
+                    'postalRanges' => $zone->postalCodes->map(fn ($range) => [
+                        'from' => $range->postal_code_from,
+                        'to' => $range->postal_code_to,
+                    ])->values(),
+                    'productHandles' => $zone->services->map(fn ($service) => 'zone-service-'.$service->id)->values(),
+                    'productPrices' => $zone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => (float) $service->price]),
+                    'productTitles' => $zone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => $service->localizedName()]),
+                ])->values(),
+            'vehicleImageMappings' => $vehicleImageMappings,
+            'brandImages' => collect(glob(public_path('images/brands/*.{png,jpg,jpeg,webp}'), GLOB_BRACE) ?: [])
+                ->map(fn (string $path) => basename($path))
+                ->sort()
+                ->values(),
+        ]);
+    }
+
+    public function customProducts(): JsonResponse
+    {
+        $products = ConfiguratorProduct::with('variants')
+            ->whereIn('category', ['screen', 'camera', 'speaker'])
+            ->orderBy('category')
+            ->orderBy('title')
+            ->get();
+
+        return response()->json(['products' => $this->customProductOptions($products)]);
+    }
+
+    public function specificScreens(Request $request, VehicleImageResolver $vehicleImageResolver): JsonResponse
+    {
+        $data = $request->validate([
+            'brand' => ['required', 'string', 'max:255'],
+            'model' => ['required', 'string', 'max:255'],
+            'year' => ['required', 'integer', 'between:1900,2100'],
+        ]);
+
+        $products = ConfiguratorProduct::with('variants')
+            ->where('category', 'screen')
+            ->whereRaw('LOWER(TRIM(model)) != ?', ['universal'])
+            ->where('year_from', '<=', $data['year'])
+            ->where('year_to', '>=', $data['year'])
+            ->orderBy('brand')
+            ->orderBy('model')
+            ->get()
+            ->filter(function (ConfiguratorProduct $product) use ($data, $vehicleImageResolver) {
+                $vehicle = $this->vehicleFields($product);
+
+                return collect($vehicleImageResolver->vehicleEntries($vehicle['brand'], $vehicle['model']))
+                    ->contains(fn (array $entry) =>
+                        Str::slug($entry['brand']) === Str::slug($data['brand'])
+                        && Str::slug($entry['model']) === Str::slug($data['model'])
+                    );
+            })
+            ->values();
+
+        return response()->json(['products' => $this->screenOptions($products)]);
+    }
+
+    public function universalScreens(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'din' => ['required', 'in:1DIN,2DIN'],
+        ]);
+
+        $products = ConfiguratorProduct::with('variants')
+            ->where('category', 'screen')
+            ->whereRaw('LOWER(TRIM(model)) = ?', ['universal'])
+            ->orderBy('price_min')
+            ->get()
+            ->filter(fn (ConfiguratorProduct $product) =>
+                preg_replace('/\s+/u', '', mb_strtoupper((string) ($product->meta['din'] ?? ''))) === $data['din']
+            )
+            ->values();
+
+        return response()->json(['products' => $this->screenOptions($products)]);
+    }
+
+    public function cameras(Request $request, VehicleImageResolver $vehicleImageResolver): JsonResponse
+    {
+        $data = $request->validate([
+            'mode' => ['required', 'in:specific,universal'],
+            'brand' => ['nullable', 'string', 'max:255'],
+            'model' => ['nullable', 'string', 'max:255'],
+            'year' => ['nullable', 'integer', 'between:1900,2100'],
+        ]);
+        $hasVehicle = $data['mode'] === 'specific'
+            && filled($data['brand'] ?? null)
+            && filled($data['model'] ?? null)
+            && isset($data['year']);
+
+        $products = ConfiguratorProduct::with('variants')
+            ->where('category', 'camera')
+            ->where(function ($query) use ($data, $hasVehicle) {
+                $query->whereIn('handle', self::STANDARD_CAMERA_HANDLES);
+                if ($hasVehicle) {
+                    $query->orWhere(function ($specific) use ($data) {
+                        $specific->where('year_from', '<=', $data['year'])
+                            ->where('year_to', '>=', $data['year']);
+                    });
+                }
+            })
+            ->orderBy('price_min')
+            ->get()
+            ->filter(function (ConfiguratorProduct $product) use ($data, $hasVehicle, $vehicleImageResolver) {
+                if (in_array($product->handle, self::STANDARD_CAMERA_HANDLES, true)) {
+                    return true;
+                }
+                if (! $hasVehicle) {
+                    return false;
+                }
+
+                $vehicle = $this->vehicleFields($product);
+
+                return collect($vehicleImageResolver->vehicleEntries($vehicle['brand'], $vehicle['model']))
+                    ->contains(fn (array $entry) =>
+                        Str::slug($entry['brand']) === Str::slug($data['brand'])
+                        && Str::slug($entry['model']) === Str::slug($data['model'])
+                    );
+            })
+            ->values();
+
+        return response()->json(['products' => $this->cameraOptions($products)]);
+    }
+
+    public function speakers(): JsonResponse
+    {
+        $products = ConfiguratorProduct::with('variants')
+            ->where('category', 'speaker')
+            ->orderBy('title')
+            ->get();
+
+        return response()->json(['products' => $this->speakerOptions($products)]);
+    }
+
+    private function customProductOptions($products)
+    {
+        return $products->flatMap(function (ConfiguratorProduct $product) {
                 $variants = $product->variants->filter(
                     fn ($variant) => $variant->price !== null || filled($variant->shopify_variant_id),
                 );
@@ -169,49 +393,7 @@ class ConfiguratorController extends Controller
                     'yearFrom' => $product->year_from,
                     'yearTo' => $product->year_to,
                 ]);
-            })->values(),
-            'vehicles' => $vehicleOptions,
-            'universalScreens' => $this->screenOptions($universalScreenProducts),
-            'cameraOptions' => $cameraOptions,
-            'speakerOptions' => $this->speakerOptions($speakerProducts),
-            'installationOptions' => $installationZones->flatMap(fn (InstallationZone $zone) =>
-                $zone->services->map(fn ($service) => [
-                    'key' => 'zone-service-'.$service->id,
-                    'productId' => null,
-                    'variantId' => null,
-                    'title' => $service->localizedName(),
-                    'sourceTitle' => $service->name,
-                    'productTitle' => $service->localizedName(),
-                    'variantTitle' => null,
-                    'price' => (float) $service->price,
-                    'shopifyVariantId' => null,
-                    'sku' => null,
-                    'subtype' => 'zone-service',
-                    'location' => $zone->name,
-                    'installationRaw' => null,
-                ])
-            )->values(),
-            'installationZones' => $installationZones
-                ->map(fn (InstallationZone $zone) => [
-                    'id' => $zone->id,
-                    'name' => $zone->name,
-                    'installerAddress' => $zone->installer_address,
-                    'installerPhone' => $zone->installer_phone,
-                    'postalRanges' => $zone->postalCodes->map(fn ($range) => [
-                        'from' => $range->postal_code_from,
-                        'to' => $range->postal_code_to,
-                    ])->values(),
-                    'productHandles' => $zone->services->map(fn ($service) => 'zone-service-'.$service->id)->values(),
-                    'productPrices' => $zone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => (float) $service->price]),
-                    'productTitles' => $zone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => $service->localizedName()]),
-                ])->values(),
-            'vehicleImages' => collect($vehicleImageFilenames)->sort()->values(),
-            'vehicleImageMappings' => $vehicleImageMappings,
-            'brandImages' => collect(glob(public_path('images/brands/*.{png,jpg,jpeg,webp}'), GLOB_BRACE) ?: [])
-                ->map(fn (string $path) => basename($path))
-                ->sort()
-                ->values(),
-        ]);
+            })->values();
     }
 
     private function screenOptions($products)

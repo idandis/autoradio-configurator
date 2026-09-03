@@ -11,15 +11,26 @@ class VisitorGeolocation
 {
     public function countryCode(Request $request): ?string
     {
-        $cloudflareCountry = strtoupper(trim((string) $request->header('CF-IPCountry')));
+        $cloudflareCountry = $this->countryCodeFromHeaders($request);
 
-        if (preg_match('/^[A-Z]{2}$/', $cloudflareCountry) && ! in_array($cloudflareCountry, ['XX', 'T1'], true)) {
+        if ($cloudflareCountry !== null) {
             return $cloudflareCountry;
         }
 
         $countryCode = strtoupper(trim((string) ($this->locate($request)['country_code'] ?? '')));
 
         return preg_match('/^[A-Z]{2}$/', $countryCode) ? $countryCode : null;
+    }
+
+    public function countryCodeFromHeaders(Request $request): ?string
+    {
+        $cloudflareCountry = strtoupper(trim((string) $request->header('CF-IPCountry')));
+
+        if (preg_match('/^[A-Z]{2}$/', $cloudflareCountry) && ! in_array($cloudflareCountry, ['XX', 'T1'], true)) {
+            return $cloudflareCountry;
+        }
+
+        return null;
     }
 
     public function locate(Request $request): array

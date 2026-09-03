@@ -2,7 +2,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Services\VisitorGeolocation;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
@@ -12,21 +11,23 @@ class SetLocale
 {
     private const SUPPORTED_LOCALES = ['es', 'it', 'en'];
 
-    public function __construct(private readonly VisitorGeolocation $visitorGeolocation) {}
-
     public function handle(Request $request, Closure $next): Response
     {
         $requestedLocale = $request->query('lang');
+        $publicHost = $this->publicHost($request);
 
         if (is_string($requestedLocale) && in_array($requestedLocale, self::SUPPORTED_LOCALES, true)) {
             $request->session()->put('locale', $requestedLocale);
+            $request->session()->put('locale_host', $publicHost);
         } elseif ($referrerLocale = $this->localeFromStorefrontReferrer($request->headers->get('referer'))) {
             $request->session()->put('locale', $referrerLocale);
-        } elseif (! in_array($request->session()->get('locale'), self::SUPPORTED_LOCALES, true)) {
-            $request->session()->put(
-                'locale',
-                $this->localeFromCountry($request),
-            );
+            $request->session()->put('locale_host', $publicHost);
+        } elseif (
+            $request->session()->get('locale_host') !== $publicHost
+            || ! in_array($request->session()->get('locale'), self::SUPPORTED_LOCALES, true)
+        ) {
+            $request->session()->put('locale', $this->localeFromHost($publicHost));
+            $request->session()->put('locale_host', $publicHost);
         }
 
         $locale = $request->session()->get('locale', 'es');
@@ -41,16 +42,21 @@ class SetLocale
         return $next($request);
     }
 
-    private function localeFromCountry(Request $request): string
+    private function localeFromHost(string $host): string
     {
-        $countryCode = $this->visitorGeolocation->countryCode($request);
-
-        return match ($countryCode) {
-            'IT' => 'it',
-            'ES' => 'es',
-            null => 'es',
-            default => 'en',
+        return match ($host) {
+            'autoradioitaliano.it', 'www.autoradioitaliano.it' => 'it',
+            'config.autoradiocanario.com' => 'es',
+            default => 'es',
         };
+    }
+
+    private function publicHost(Request $request): string
+    {
+        $forwardedHost = trim(explode(',', (string) $request->header('X-Forwarded-Host'))[0]);
+        $host = $forwardedHost !== '' ? $forwardedHost : (string) $request->header('Host', $request->getHost());
+
+        return mb_strtolower((string) preg_replace('/:\d+$/', '', trim($host)));
     }
 
     private function localeFromStorefrontReferrer(?string $referrer): ?string
