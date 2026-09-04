@@ -537,9 +537,10 @@ const selectVehicleModel = async (model: string) => {
         await loadSpecificScreens(selectedBrand.value, model, selectedYear.value);
     }
     if (openSteps.value.includes('camera')) await loadCameras();
-    if (!openSteps.value.includes('screen')) {
-        openSteps.value = [...openSteps.value, 'screen'];
-    }
+    openSteps.value = [
+        ...openSteps.value.filter((step) => step !== 'vehicle' && step !== 'screen'),
+        'screen',
+    ];
     await nextTick();
 
     window.requestAnimationFrame(() => {
