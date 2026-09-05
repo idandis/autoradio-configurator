@@ -362,5 +362,13 @@
     "camaras-frontal-ahd-1080p-gran-angular-con-vision-nocturna-3-variantes": {
         "source": "Cámaras Frontal AHD 1080P Gran Angular con Visión Nocturna 3 variantes",
         "translation": "Telecamere anteriori AHD 1080P grandangolari con visione notturna, 3 varianti"
+    },
+    "camara-trasera-fhd-ccd-night-vision-para-nissan-micra-k12-2002-2010": {
+        "source": "Cámara Trasera FHD CCD Night Vision para Nissan Micra K12 2002-2010",
+        "translation": "Telecamera posteriore FHD CCD con visione notturna per Nissan Micra K12 2002-2010"
+    },
+    "camara-trasera-hd-ccd-con-vision-nocturna-para-mazda-cx-5-2012-2023": {
+        "source": "Cámara Trasera HD CCD con Visión Nocturna para Mazda CX-5 2012-2023",
+        "translation": "Telecamera posteriore HD CCD con visione notturna per Mazda CX-5 2012-2023"
     }
 }

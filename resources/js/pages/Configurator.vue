@@ -1037,8 +1037,9 @@ const compatibleVehicles = computed(() => {
     }
 
     return matchingVehicles.value.filter((vehicle) => {
-            // Never treat rear-camera products accidentally imported as screens as compatible screens.
-            if (/c[aá]mara|camera|telecamera/i.test(`${vehicle.title} ${vehicle.handle}`)) {
+            // Exclude products that are actually cameras, without rejecting screens
+            // whose title or handle mentions an included rear/360° camera.
+            if (/^\s*(?:c[aá]mara|camera|telecamera)\b/i.test(vehicle.title)) {
                 return false;
             }
             if (vehicle.yearFrom === null || vehicle.yearTo === null) {
