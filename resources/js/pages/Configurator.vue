@@ -212,6 +212,7 @@ const headerCopy = computed(() => ({
         language: 'English',
     },
 })[props.locale]);
+const brandLogoUrl = computed(() => props.locale === 'it' ? '/images/logo-it.png' : '/images/logo.png');
 const headerContactUrl = computed(() => `/?form=autoradio&lang=${props.locale}`);
 const footerContact = computed(() => props.locale === 'it'
     ? {
@@ -3353,7 +3354,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         .filter((item) => item.price >= 0)
         .map((item) => `<li>${escapeHtml(item.description)}</li>`)
         .join('');
-    const checkoutLink = checkoutUrl.value
+    const checkoutLink = props.locale !== 'it' && checkoutUrl.value
         ? `<div class="checkout"><strong>${escapeHtml(t('print.purchase_link'))}:</strong><br><span>${escapeHtml(checkoutUrl.value)}</span><p class="purchase-authorization">${escapeHtml(t('print.purchase_authorization'))}</p></div>`
         : '';
 
@@ -3374,7 +3375,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         .page { width: 100%; min-height: 268mm; display: flex; flex-direction: column; }
         .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
         .brand { display: flex; align-items: center; gap: 10px; }
-        .brand img { width: 95px; height: 68px; object-fit: contain; background: #121212; }
+        .brand img { width: ${props.locale === 'it' ? '106px' : '95px'}; height: ${props.locale === 'it' ? '77px' : '68px'}; object-fit: ${props.locale === 'it' ? 'cover' : 'contain'}; background: #121212; }
         .brand-name { font-size: 22px; font-weight: 800; letter-spacing: .4px; }
         .tagline { margin-top: 5px; font-size: 7px; letter-spacing: 2px; }
         .quote-title { text-align: right; }
@@ -3427,7 +3428,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
             .screen-actions button.back { background: #334fb4; }
             .page { min-height: 0; gap: 0; background: #fff; overflow: hidden; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.12); }
             .header { flex-direction: column; gap: 12px; padding: 14px; }
-            .brand img { width: 70px; height: 52px; }
+            .brand img { width: ${props.locale === 'it' ? '78px' : '70px'}; height: ${props.locale === 'it' ? '58px' : '52px'}; }
             .brand-name { font-size: 18px; }
             .quote-title { width: 100%; text-align: left; border-top: 1px solid #ddd; padding-top: 10px; }
             .quote-title h1 { margin: 0 0 5px; font-size: 21px; }
@@ -3467,9 +3468,9 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
 <main class="page">
     <header class="header">
         <div class="brand">
-            <img src="${window.location.origin}/images/logo.png" alt="AutoRadioCanario">
+            <img src="${window.location.origin}${brandLogoUrl.value}" alt="AutoRadioCanario">
             <div>
-                <div class="brand-name">AUTORADIOCANARIO</div>
+                <div class="brand-name">${props.locale === 'it' ? 'AUTORADIOITALIANO' : 'AUTORADIOCANARIO'}</div>
                 <div class="tagline">${escapeHtml(t('print.tagline'))}</div>
             </div>
         </div>
@@ -3493,7 +3494,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         </div>
         <div class="issuer">
             <h2>${escapeHtml(t('print.issued_by'))}:</h2>
-            <p><strong>AUTORADIOCANARIO</strong></p>
+            <p><strong>${props.locale === 'it' ? 'AUTORADIOITALIANO' : 'AUTORADIOCANARIO'}</strong></p>
             <p>Avenida Mencey 49</p>
             <p>35120 Mogán (Las Palmas)</p>
             <p>${escapeHtml(footerContact.value.email)}</p>
@@ -3526,7 +3527,7 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         <div class="total-row"><div>${escapeHtml(t('quote.online_total'))}</div><div class="amount">${euroFormatter.value.format(onlineTotal.value)}</div></div>
     </section>
     <p class="shipping-notice">${escapeHtml(t('quote.home_delivery'))}</p>
-    <footer>${escapeHtml(footerContact.value.email.toLocaleUpperCase())} &nbsp;&nbsp; WWW.AUTORADIOCANARIO.COM &nbsp;&nbsp; TEL./WHATSAPP: ${escapeHtml(footerContact.value.phone)}</footer>
+    <footer>${escapeHtml(footerContact.value.email.toLocaleUpperCase())} &nbsp;&nbsp; ${props.locale === 'it' ? 'AUTORADIOITALIANO.IT' : 'WWW.AUTORADIOCANARIO.COM'} &nbsp;&nbsp; TEL./WHATSAPP: ${escapeHtml(footerContact.value.phone)}</footer>
 </main>
 ${shouldOpenPrintPreview ? '<script>window.addEventListener(\'load\', () => window.print());<\/script>' : ''}
 </body>
@@ -3766,7 +3767,11 @@ watch(
                     </button>
 
                     <a href="https://www.autoradiocanario.com/" aria-label="AutoradioCanario Home" class="col-start-2 shrink-0 justify-self-center lg:col-auto">
-                        <img src="/images/logo.png" alt="AutoradioCanario" class="h-16 w-24 object-contain" />
+                        <img
+                            :src="brandLogoUrl"
+                            alt="AutoradioCanario"
+                            :class="props.locale === 'it' ? 'h-[90px] w-36 object-cover' : 'h-16 w-24 object-contain'"
+                        />
                     </a>
 
                     <nav class="hidden flex-1 items-center gap-8 pl-4 text-sm lg:flex">
@@ -4976,17 +4981,17 @@ watch(
                                 </button>
                                 <img
                                     v-else
-                                    src="/images/logo.png"
+                                    :src="brandLogoUrl"
                                     alt=""
-                                    class="h-full w-full object-contain p-6 opacity-80"
+                                    :class="props.locale === 'it' ? 'h-full max-h-32 w-44 max-w-full object-cover opacity-80' : 'h-full w-full object-contain p-6 opacity-80'"
                                 />
                             </div>
                         </div>
                         <div v-else class="flex h-44 items-center justify-center bg-[#121212] p-1 lg:h-24 xl:h-28">
                             <img
-                                src="/images/logo.png"
+                                :src="brandLogoUrl"
                                 alt=""
-                                class="h-full w-full object-contain p-6 opacity-80"
+                                :class="props.locale === 'it' ? 'h-full max-h-32 w-44 max-w-full object-cover opacity-80' : 'h-full w-full object-contain p-6 opacity-80'"
                             />
                         </div>
                     </div>
