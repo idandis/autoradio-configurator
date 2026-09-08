@@ -132,8 +132,8 @@
         "translation": "AHD 1080P 170° Wide-Angle Rear Camera for Volvo S40 / S60 / V50 / V60 / XC60 / XC90 / C70 – Starlight Night Vision IP68"
     },
     "camara-trasera-ahd-170-para-toyota-land-cruiser-y-prado": {
-        "source": "Cámara Trasera AHD 170° para Toyota Land Cruiser y Prado",
-        "translation": "AHD 170° Rear Camera for Toyota Land Cruiser and Prado"
+        "source": "Cámara Trasera AHD 170° para Toyota Land Cruiser y Prado 1989-2019",
+        "translation": "AHD 170° Rear Camera for Toyota Land Cruiser and Prado 1989-2019"
     },
     "camara-trasera-ahd-1080p-integrada-para-alfa-romeo-giulietta-2010-2020-mito-2008-2018-brera-y-spider-2005-2010-con-vision-nocturna-y-guias-de-aparcamiento": {
         "source": "Cámara Trasera AHD 1080P Integrada para Alfa Romeo Giulietta 2010–2020, MiTo 2008–2018, Brera y Spider 2005–2010 con Visión Nocturna y Guías de Aparcamiento",
@@ -370,5 +370,9 @@
     "camara-trasera-hd-ccd-con-vision-nocturna-para-mazda-cx-5-2012-2023": {
         "source": "Cámara Trasera HD CCD con Visión Nocturna para Mazda CX-5 2012-2023",
         "translation": "HD CCD Rear Camera with Night Vision for Mazda CX-5 2012-2023"
+    },
+    "camara-trasera-hd-ccd-con-vision-nocturna-para-kia-picanto-morning-2011-2019": {
+        "source": "Cámara Trasera HD CCD con Visión Nocturna para Kia Picanto / Morning 2011-2019",
+        "translation": "HD CCD Rear Camera with Night Vision for Kia Picanto / Morning 2011-2019"
     }
 }

@@ -380,5 +380,44 @@
         "year_from": 2005,
         "year_to": 2012,
         "image": "bmw-serie-5-e6x-2005-2012.webp"
+    },
+    "alfa-romeo-gt-937": {
+        "brand": "ALFA ROMEO",
+        "model": "GT (937)",
+        "aliases": [
+            "GT (937)",
+            "GT 937",
+            "GT"
+        ],
+        "year_from": 2000,
+        "year_to": 2010,
+        "image": "alfa-romeo-gt-937-2000-2010.webp"
+    },
+    "kia-morning-3": {
+        "brand": "KIA",
+        "model": "Morning 3",
+        "aliases": [
+            "Morning 3",
+            "Morning III",
+            "Picanto 3",
+            "Picanto III",
+            "Picanto JA",
+            "Morning JA"
+        ],
+        "year_from": 2016,
+        "year_to": 2023,
+        "image": "kia-morning-3-2016-2023.webp"
+    },
+    "renault-twingo-iii": {
+        "brand": "RENAULT",
+        "model": "Twingo",
+        "aliases": [
+            "Twingo",
+            "Twingo III",
+            "Twingo 3"
+        ],
+        "year_from": 2014,
+        "year_to": 2024,
+        "image": "renault-twingo-2014-2024.webp"
     }
 }

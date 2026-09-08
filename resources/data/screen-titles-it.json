@@ -744,8 +744,8 @@
         "translation": "Autoradio Android 9\\\" Double Din per Mazda 3 2010-2013"
     },
     "autoradio-android-9-inteligente-con-gps-carplay-y-android-auto-para-nissan-qashqai-j10-2006-2013-sistema-multimedia-8gb-128gb-con-wifi-dsp-y-control-por-voz": {
-        "source": "Autoradio Android 9” Inteligente con GPS, CarPlay y Android Auto para Nissan Qashqai J10 2006-2013 – Sistema Multimedia 8GB/128GB con WiFi, DSP y Control por Voz",
-        "translation": "Autoradio Android 9” intelligente con GPS, CarPlay e Android Auto per Nissan Qashqai J10 2006-2013 – Sistema multimediale 8GB/128GB con WiFi, DSP e controllo vocale"
+        "source": "Autoradio Android 9” para Nissan Qashqai J10 2006-2013 – CarPlay, Android Auto, GPS y DSP",
+        "translation": "Autoradio Android 9” per Nissan Qashqai J10 2006-2013 – CarPlay, Android Auto, GPS e DSP"
     },
     "autoradio-android-9-para-kia-sportage-2016-2022-con-carplay-inalambrico-gps-wifi-pantalla-qled": {
         "source": "Autoradio Android 9” CarPlay 6+128GB para Kia Sportage 2016-2018",
@@ -988,8 +988,8 @@
         "translation": "Schermo Android 12,3\" CarPlay GPS per Audi A8 D3/D4 2002-2018"
     },
     "pantalla-android-13-1-qled-2k-con-soporte-camara-360-para-nissan-qashqai-j10-2006-2013-sistema-multimedia-inteligente-con-carplay-android-auto-4g-y-dsp-profesional": {
-        "source": "Pantalla Android 9” QLED 2K con Soporte Cámara 360° para Nissan Qashqai J10 2006-2013 – Sistema Multimedia Inteligente con CarPlay, Android Auto, 4G y DSP Profesional",
-        "translation": "Schermo Android 9” QLED 2K con supporto per telecamera 360° per Nissan Qashqai J10 2006-2013 – Sistema multimediale intelligente con CarPlay, Android Auto, 4G e DSP professionale"
+        "source": "Pantalla Android 9” QLED para Nissan Qashqai J10 2006-2013 – Compatible con Cámara 360° Original",
+        "translation": "Schermo Android 9” QLED per Nissan Qashqai J10 2006-2013 – Compatibile con la telecamera originale a 360°"
     },
     "pantalla-android-13-9-8gb-256gb-con-carplay-y-android-auto-inalambrico-para-peugeot-307-2002-2013": {
         "source": "Pantalla Android 13 9” 8GB + 256GB con CarPlay y Android Auto Inalámbrico para Peugeot 307 2002-2013",
@@ -1562,5 +1562,13 @@
     "pantalla-multimedia-10-25-carplay-android-auto-para-bmw-x1-e84-2009-2015": {
         "source": "Pantalla Multimedia 10,25” CarPlay Android Auto para BMW X1 E84 2009-2015",
         "translation": "Schermo multimediale 10,25” CarPlay Android Auto per BMW X1 E84 2009-2015"
+    },
+    "pantalla-android-14-9-con-carplay-y-android-auto-para-volkswagen-tiguan-2-2016-2020": {
+        "source": "Pantalla Android 14 9” con CarPlay y Android Auto para Volkswagen Tiguan 2 2016-2020",
+        "translation": "Schermo Android 14 9” con CarPlay e Android Auto per Volkswagen Tiguan 2 2016-2020"
+    },
+    "pantalla-android-9-qled-con-carplay-y-gps-para-renault-twingo-iii-2014-2024": {
+        "source": "Pantalla Android 9” QLED con CarPlay y GPS para Renault Twingo III 2014-2024",
+        "translation": "Schermo Android 9” QLED con CarPlay e GPS per Renault Twingo III 2014-2024"
     }
 }
