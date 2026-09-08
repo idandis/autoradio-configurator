@@ -310,5 +310,75 @@
         "year_from": 2018,
         "year_to": 2023,
         "image": "volkswagen-tharu-2018-2021.webp"
+    },
+    "bmw-serie-1-e8x": {
+        "brand": "BMW",
+        "model": "Serie 1 E8x",
+        "aliases": [
+            "Serie 1 E8x"
+        ],
+        "year_from": 2004,
+        "year_to": 2011,
+        "image": "bmw-serie-1-e8x-2004-2011.webp"
+    },
+    "bmw-serie-1-f2x": {
+        "brand": "BMW",
+        "model": "Serie 1 F2x",
+        "aliases": [
+            "Serie 1 F2x"
+        ],
+        "year_from": 2011,
+        "year_to": 2020,
+        "image": "bmw-serie-1-f2x-2011-2020.webp"
+    },
+    "bmw-serie-2-f2x": {
+        "brand": "BMW",
+        "model": "Serie 2 F2x",
+        "aliases": [
+            "Serie 2 F2x"
+        ],
+        "year_from": 2011,
+        "year_to": 2020,
+        "image": "bmw-serie-2-f2x-2011-2020.webp"
+    },
+    "bmw-serie-3-f3x": {
+        "brand": "BMW",
+        "model": "Serie 3 F3x",
+        "aliases": [
+            "Serie 3 F3x"
+        ],
+        "year_from": 2011,
+        "year_to": 2020,
+        "image": "bmw-serie-3-f3x-2011-2020.webp"
+    },
+    "bmw-serie-4-f3x": {
+        "brand": "BMW",
+        "model": "Serie 4 F3x",
+        "aliases": [
+            "Serie 4 F3x"
+        ],
+        "year_from": 2011,
+        "year_to": 2020,
+        "image": "bmw-serie-4-f3x-2011-2020.webp"
+    },
+    "bmw-serie-3-e9x": {
+        "brand": "BMW",
+        "model": "Serie 3 E9x",
+        "aliases": [
+            "Serie 3 E9x"
+        ],
+        "year_from": 2005,
+        "year_to": 2013,
+        "image": "bmw-serie-3-e9x-2005-2013.webp"
+    },
+    "bmw-serie-5-e6x": {
+        "brand": "BMW",
+        "model": "Serie 5 E6x",
+        "aliases": [
+            "Serie 5 E6x"
+        ],
+        "year_from": 2005,
+        "year_to": 2012,
+        "image": "bmw-serie-5-e6x-2005-2012.webp"
     }
 }
