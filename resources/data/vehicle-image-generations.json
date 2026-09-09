@@ -355,7 +355,8 @@
         "brand": "BMW",
         "model": "Serie 4 F3x",
         "aliases": [
-            "Serie 4 F3x"
+            "Serie 4 F3x",
+            "Serie 4"
         ],
         "year_from": 2011,
         "year_to": 2020,
@@ -419,5 +420,109 @@
         "year_from": 2014,
         "year_to": 2024,
         "image": "renault-twingo-2014-2024.webp"
+    },
+    "citroen-c5-x7": {
+        "brand": "CITROEN",
+        "model": "C5 X7",
+        "aliases": ["C5", "C5 X7"],
+        "year_from": 2008,
+        "year_to": 2017,
+        "image": "citroen-c5-2013-2017.webp"
+    },
+    "citroen-ds6": {
+        "brand": "CITROEN",
+        "model": "DS6",
+        "aliases": ["DS6", "DS 6"],
+        "year_from": 2014,
+        "year_to": 2020,
+        "image": "citroen-ds6-2013-2017.webp"
+    },
+    "citroen-ds5": {
+        "brand": "CITROEN",
+        "model": "DS5",
+        "aliases": ["DS5", "DS 5"],
+        "year_from": 2011,
+        "year_to": 2018,
+        "image": "citroen-ds5-2013-2017.webp"
+    },
+    "bmw-m3-f80": {
+        "brand": "BMW",
+        "model": "M3 F80",
+        "aliases": ["M3", "M3 F80"],
+        "year_from": 2014,
+        "year_to": 2018,
+        "image": "bmw-m3-f80-2007-2019.webp"
+    },
+    "bmw-m4-f8x": {
+        "brand": "BMW",
+        "model": "M4 F8x",
+        "aliases": ["M4", "M4 F8x", "M4 F82", "M4 F83"],
+        "year_from": 2014,
+        "year_to": 2020,
+        "image": "bmw-m4-f8x-2007-2019.webp"
+    },
+    "bmw-m5-f90": {
+        "brand": "BMW",
+        "model": "M5 F90",
+        "aliases": ["M5", "M5 F90"],
+        "year_from": 2017,
+        "year_to": 2023,
+        "image": "bmw-m5-f90-2007-2019.webp"
+    },
+    "bmw-i3-i01": {
+        "brand": "BMW",
+        "model": "i3 I01",
+        "aliases": ["i3", "i3 I01"],
+        "year_from": 2013,
+        "year_to": 2022,
+        "image": "bmw-i3-i01-2007-2019.webp"
+    },
+    "bmw-x2-f39": {
+        "brand": "BMW",
+        "model": "X2 F39",
+        "aliases": ["X2", "X2 F39"],
+        "year_from": 2017,
+        "year_to": 2023,
+        "image": "bmw-x2-f39-2007-2019.webp"
+    },
+    "bmw-x3-e83": {
+        "brand": "BMW",
+        "model": "X3 E83",
+        "aliases": ["X3 E83"],
+        "year_from": 2003,
+        "year_to": 2010,
+        "image": "bmw-x3-2004-2012.webp"
+    },
+    "bmw-x4-f26": {
+        "brand": "BMW",
+        "model": "X4 F26",
+        "aliases": ["X4", "X4 F26"],
+        "year_from": 2014,
+        "year_to": 2018,
+        "image": "bmw-x4-f26-2007-2019.webp"
+    },
+    "bmw-x6-f16": {
+        "brand": "BMW",
+        "model": "X6 F16",
+        "aliases": ["X6", "X6 F16"],
+        "year_from": 2014,
+        "year_to": 2019,
+        "image": "bmw-x6-f16-2007-2019.webp"
+    },
+    "mini-mini-f5x": {
+        "brand": "MINI",
+        "model": "MINI F5x",
+        "aliases": ["MINI", "MINI F5x", "Hatch F5x"],
+        "year_from": 2013,
+        "year_to": 2023,
+        "image": "mini-mini-f5x-2007-2019.webp"
+    },
+    "mini-paceman-r6x": {
+        "brand": "MINI",
+        "model": "Paceman R6x",
+        "aliases": ["Paceman", "Paceman R6x", "Paceman R61"],
+        "year_from": 2012,
+        "year_to": 2016,
+        "image": "mini-paceman-r6x-2007-2019.webp"
     }
 }

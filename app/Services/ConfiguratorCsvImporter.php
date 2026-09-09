@@ -273,6 +273,11 @@ class ConfiguratorCsvImporter
         $explicitYears = $this->parseExplicitYears(
             $this->value($primaryRow, $this->yearHeaders())
         );
+        $vehicleOverride = config('vehicle-product-overrides.'.$handle);
+        if ($category === 'screen' && is_array($vehicleOverride)) {
+            $brand = $vehicleOverride['brand'] ?? $brand;
+            $explicitModel = $vehicleOverride['model'] ?? $explicitModel;
+        }
 
         if (
             $category === 'screen' &&

@@ -48,7 +48,6 @@ class VehicleImageGenerator
         $generations = ConfiguratorProduct::query()
             ->where('category', 'screen')
             ->whereNotNull('brand')
-            ->where('brand', 'not like', '%|%')
             ->whereNotNull('model')
             ->whereNotNull('year_from')
             ->whereNotNull('year_to')
@@ -91,6 +90,27 @@ class VehicleImageGenerator
             ->map(fn (array $generation) => collect($generation)
                 ->only(['brand', 'model', 'year_from', 'year_to', 'stem'])
                 ->all())
+            ->values();
+    }
+
+    /** @return Collection<int, array{handle: string, brand: string, model: string, year_from: ?int, year_to: ?int}> */
+    public function unresolvedVehicleProducts(): Collection
+    {
+        return ConfiguratorProduct::query()
+            ->where('category', 'screen')
+            ->whereNotNull('brand')
+            ->whereNotNull('model')
+            ->whereRaw('LOWER(TRIM(model)) <> ?', ['universal'])
+            ->get(['handle', 'brand', 'model', 'year_from', 'year_to'])
+            ->filter(fn (ConfiguratorProduct $product) => $this->resolver
+                ->vehicleEntries($product->brand, $product->model) === [])
+            ->map(fn (ConfiguratorProduct $product) => [
+                'handle' => $product->handle,
+                'brand' => $product->brand,
+                'model' => $product->model,
+                'year_from' => $product->year_from !== null ? (int) $product->year_from : null,
+                'year_to' => $product->year_to !== null ? (int) $product->year_to : null,
+            ])
             ->values();
     }
 }

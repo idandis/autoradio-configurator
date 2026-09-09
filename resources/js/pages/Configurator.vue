@@ -3838,14 +3838,12 @@ watch(
                 <p class="mx-auto mt-4 max-w-2xl text-sm leading-6 text-neutral-400 sm:text-base">{{ t('mode.description') }}</p>
                 <div class="mx-auto mt-10 grid max-w-4xl gap-5 md:grid-cols-2">
                     <button type="button" class="group rounded-2xl border-2 border-neutral-700 bg-neutral-900 p-7 text-left transition hover:border-amber-400 hover:bg-amber-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:p-9" @click="setConfiguratorMode('specific')">
-                        <span class="flex h-12 w-12 items-center justify-center rounded-full bg-amber-400 text-2xl text-black">🚘</span>
-                        <span class="mt-6 block text-xl font-bold text-white sm:text-2xl">{{ t('mode.specific_title') }}</span>
+                        <span class="block text-xl font-bold text-white sm:text-2xl">{{ t('mode.specific_title') }}</span>
                         <span class="mt-3 block text-sm leading-6 text-neutral-400">{{ t('mode.specific_description') }}</span>
                         <span class="mt-6 inline-flex items-center font-semibold text-amber-400">{{ t('mode.choose') }} <span class="ml-2 transition group-hover:translate-x-1">→</span></span>
                     </button>
                     <button type="button" class="group rounded-2xl border-2 border-neutral-700 bg-neutral-900 p-7 text-left transition hover:border-amber-400 hover:bg-amber-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:p-9" @click="setConfiguratorMode('universal')">
-                        <span class="flex h-12 w-12 items-center justify-center rounded-full bg-amber-400 text-2xl text-black">📻</span>
-                        <span class="mt-6 block text-xl font-bold text-white sm:text-2xl">{{ t('mode.universal_title') }}</span>
+                        <span class="block text-xl font-bold text-white sm:text-2xl">{{ t('mode.universal_title') }}</span>
                         <span class="mt-3 block text-sm leading-6 text-neutral-400">{{ t('mode.universal_description') }}</span>
                         <span class="mt-6 inline-flex items-center font-semibold text-amber-400">{{ t('mode.choose') }} <span class="ml-2 transition group-hover:translate-x-1">→</span></span>
                     </button>

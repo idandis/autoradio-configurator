@@ -24,9 +24,10 @@ class DashboardController extends Controller
             ->orderBy('handle')
             ->get(['handle', 'category', 'title', 'title_it', 'title_en', 'brand', 'model', 'year_from', 'year_to']);
         $imageTasks = $vehicleImageGenerator->missingVehicles();
-        $prompt = $this->postImportPrompt($translationTasks, $imageTasks);
+        $vehicleDataIssues = $vehicleImageGenerator->unresolvedVehicleProducts();
+        $prompt = $this->postImportPrompt($translationTasks, $imageTasks, $vehicleDataIssues);
         $fingerprint = hash('sha256', $prompt);
-        $hasTasks = $translationTasks->isNotEmpty() || $imageTasks->isNotEmpty();
+        $hasTasks = $translationTasks->isNotEmpty() || $imageTasks->isNotEmpty() || $vehicleDataIssues->isNotEmpty();
         $isDismissed = $hasTasks && Cache::has('post-import-tasks:dismissed:'.$fingerprint);
 
         return Inertia::render('Dashboard', [
@@ -42,6 +43,7 @@ class DashboardController extends Controller
             'postImportTasks' => [
                 'translationCount' => $translationTasks->count(),
                 'imageCount' => $imageTasks->count(),
+                'vehicleDataIssueCount' => $vehicleDataIssues->count(),
                 'prompt' => $prompt,
                 'fingerprint' => $fingerprint,
                 'dismissed' => $isDismissed,
@@ -50,7 +52,7 @@ class DashboardController extends Controller
         ]);
     }
 
-    private function postImportPrompt($translationTasks, $imageTasks): string
+    private function postImportPrompt($translationTasks, $imageTasks, $vehicleDataIssues): string
     {
         $lines = [
             'Nel progetto autoradio-configurator completa queste attività post-importazione.',
@@ -80,7 +82,7 @@ class DashboardController extends Controller
 
         $lines[] = '';
         $lines[] = 'IMMAGINI AUTO';
-        $lines[] = 'Per ogni veicolo elencato genera con la skill imagegen una fotografia realistica dell’auto corretta per marca, generazione di carrozzeria e anni: vista anteriore a tre quarti, automobile intera e centrata, ombra naturale, sfondo uniforme #121212, nessun testo, nessuna persona. Salva in formato WEBP nel percorso indicato. Genera una sola immagine per la stessa generazione e riusala per facelift o differenze minime; crea una nuova immagine solo quando cambia radicalmente la carrozzeria. Le sigle di telaio servono esclusivamente a identificare la generazione; non creare immagini per prodotti con più marche.';
+        $lines[] = 'Per ogni veicolo elencato genera con la skill imagegen una fotografia realistica dell’auto corretta per marca, generazione di carrozzeria e anni: vista anteriore a tre quarti, automobile intera e centrata, ombra naturale, sfondo uniforme #121212, nessun testo, nessuna persona. Salva in formato WEBP nel percorso indicato. Genera una sola immagine per la stessa generazione e riusala per facelift o differenze minime; crea una nuova immagine solo quando cambia radicalmente la carrozzeria. Le sigle di telaio servono esclusivamente a identificare la generazione. I veicoli estratti da prodotti multimarche sono elencati singolarmente e richiedono un’immagine per ciascuna carrozzeria.';
 
         if ($imageTasks->isEmpty()) {
             $lines[] = '- Nessuna immagine auto mancante.';
@@ -93,6 +95,22 @@ class DashboardController extends Controller
                     $vehicle['year_from'],
                     $vehicle['year_to'],
                     $vehicle['stem'],
+                );
+            }
+        }
+
+        if ($vehicleDataIssues->isNotEmpty()) {
+            $lines[] = '';
+            $lines[] = 'DATI VEICOLO NON INTERPRETABILI';
+            $lines[] = 'Correggi gli abbinamenti marca/modello di questi prodotti prima di generare immagini; non inventare associazioni.';
+            foreach ($vehicleDataIssues as $product) {
+                $lines[] = sprintf(
+                    '- %s | marca: %s | modello: %s | anni: %s–%s',
+                    $product['handle'],
+                    $product['brand'],
+                    $product['model'],
+                    $product['year_from'] ?? '?',
+                    $product['year_to'] ?? '?',
                 );
             }
         }

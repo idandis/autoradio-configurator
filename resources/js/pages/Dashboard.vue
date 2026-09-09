@@ -12,6 +12,7 @@ const props = defineProps<{
     postImportTasks: {
         translationCount: number;
         imageCount: number;
+        vehicleDataIssueCount: number;
         prompt: string;
         fingerprint: string;
         dismissed: boolean;
@@ -118,7 +119,7 @@ const verifyCatalog = () => {
         </div>
 
         <section
-            v-if="(postImportTasks.translationCount > 0 || postImportTasks.imageCount > 0) && !postImportTasks.dismissed && !tasksDismissedLocally"
+            v-if="(postImportTasks.translationCount > 0 || postImportTasks.imageCount > 0 || postImportTasks.vehicleDataIssueCount > 0) && !postImportTasks.dismissed && !tasksDismissedLocally"
             class="rounded-xl border border-amber-500/40 bg-amber-500/5 p-5"
         >
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -128,7 +129,8 @@ const verifyCatalog = () => {
                     </h2>
                     <p class="mt-1 text-sm text-muted-foreground">
                         Mancano {{ postImportTasks.translationCount }} traduzioni prodotto e
-                        {{ postImportTasks.imageCount }} immagini auto. Copia le istruzioni e incollale direttamente in Codex.
+                        {{ postImportTasks.imageCount }} immagini auto e
+                        {{ postImportTasks.vehicleDataIssueCount }} prodotti con dati veicolo da correggere. Copia le istruzioni e incollale direttamente in Codex.
                     </p>
                 </div>
                 <div class="flex shrink-0 flex-wrap gap-2">
@@ -157,7 +159,7 @@ const verifyCatalog = () => {
             />
         </section>
 
-        <section v-else-if="postImportTasks.translationCount === 0 && postImportTasks.imageCount === 0" class="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-5 py-4 text-sm text-emerald-300">
+        <section v-else-if="postImportTasks.translationCount === 0 && postImportTasks.imageCount === 0 && postImportTasks.vehicleDataIssueCount === 0" class="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-5 py-4 text-sm text-emerald-300">
             <span class="font-semibold">{{ verificationCompleted ? 'Verifica completata:' : 'Tutto aggiornato:' }}</span>
             tutte le autoradio hanno l’immagine auto corrispondente e tutti i titoli sono tradotti.
         </section>

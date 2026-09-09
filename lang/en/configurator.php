@@ -259,7 +259,7 @@ return [
     'checkout_consent' => [
         'title' => 'Purchase authorization',
         'text' => 'I expressly authorize AutoRadioCanario to manage the funds paid to purchase, in my name and on my behalf, the selected product or products through suppliers previously selected by AutoRadioCanario, in accordance with the Terms of Service.',
-        'checkbox' => 'I have read and accept the Terms of Service and authorize the purchase to be managed on my behalf.',
+        'checkbox' => 'I have read and accept the Terms of Service.',
         'required' => 'Accept the Terms of Service to proceed to payment.',
         'dismiss' => 'Accept the Terms of Service',
         'confirm' => 'Accept and proceed to payment',

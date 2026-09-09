@@ -244,7 +244,7 @@ return [
     'checkout_consent' => [
         'title' => 'Autorización de compra',
         'text' => 'Autorizo expresamente a AutoRadioCanario a gestionar los fondos abonados para adquirir, en mi nombre y por mi cuenta, el producto o productos seleccionados a través de proveedores previamente seleccionados por AutoRadioCanario, de acuerdo con las Condiciones del Servicio.',
-        'checkbox' => 'He leído y acepto las Condiciones del Servicio',
+        'checkbox' => 'He leído y acepto las Condiciones del Servicio.',
         'required' => 'Acepta las Condiciones del Servicio para proceder al pago.',
         'dismiss' => 'Acepta las Condiciones del Servicio',
         'confirm' => 'Aceptar y proceder al pago',
