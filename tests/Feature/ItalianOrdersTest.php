@@ -5,8 +5,10 @@ namespace Tests\Feature;
 use App\Models\ConfiguratorProduct;
 use App\Models\ItalianOrder;
 use App\Models\User;
+use App\Mail\ItalianPurchaseConfirmation;
 use App\Services\StripeGateway;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -78,6 +80,30 @@ class ItalianOrdersTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->has('orders.data', 1)
                 ->where('orders.data.0.id', $matching->id)
                 ->where('orders.data.0.total_amount', 30990));
+    }
+
+    public function test_admin_can_send_a_preview_email_to_their_own_address(): void
+    {
+        config([
+            'italian_checkout.mail_enabled' => true,
+            'mail.default' => 'smtp',
+            'mail.mailers.smtp.transport' => 'smtp',
+            'mail.from.address' => 'shop@example.test',
+        ]);
+        Mail::fake();
+        $order = $this->order(['payment_status' => 'paid', 'paid_at' => now()]);
+        $admin = $this->admin();
+
+        $this->actingAs($admin)->post(route('italian-orders.purchase-email.test', $order))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(route('italian-orders.show', $order));
+
+        Mail::assertSent(ItalianPurchaseConfirmation::class, function ($mail) use ($admin, $order) {
+            return $mail->preview
+                && $mail->order->is($order)
+                && $mail->hasTo($admin->email)
+                && str_starts_with($mail->envelope()->subject, '[PROVA]');
+        });
     }
 
     public function test_pagination_keeps_filters_and_invalid_filter_is_rejected(): void

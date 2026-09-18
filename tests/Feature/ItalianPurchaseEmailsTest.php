@@ -52,6 +52,30 @@ class ItalianPurchaseEmailsTest extends TestCase
         $this->assertDatabaseHas('italian_order_emails', ['id' => $id, 'status' => 'sent']);
     }
 
+    public function test_purchase_template_uses_the_italian_dark_brand_style(): void
+    {
+        $order = ItalianOrder::create([
+            'customer_name' => 'Maria',
+            'email' => 'maria@example.test',
+            'shipping_address' => ['line1' => 'Via Roma 1', 'postal_code' => '00100', 'city' => 'Roma', 'country' => 'IT'],
+            'subtotal_amount' => 10000,
+            'total_amount' => 10000,
+            'payment_status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        $order->items()->create([
+            'product_handle' => 'radio-test', 'title' => 'Autoradio', 'quantity' => 1,
+            'unit_amount' => 10000, 'total_amount' => 10000,
+        ]);
+
+        $html = (new \App\Mail\ItalianPurchaseConfirmation($order->load('items'), preview: true))->render();
+
+        $this->assertStringContainsString('background:#121212', $html);
+        $this->assertStringContainsString('color:#f5c400', $html);
+        $this->assertStringContainsString('/images/logo-it.png', $html);
+        $this->assertStringContainsString('EMAIL DI PROVA', $html);
+    }
+
     public function test_transport_failure_keeps_email_pending_and_retry_succeeds(): void
     {
         $id = $this->pending();

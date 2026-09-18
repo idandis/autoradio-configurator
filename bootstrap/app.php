@@ -1,5 +1,11 @@
 <?php
 
+$stripeBootstrap = __DIR__.'/../vendor/stripe/stripe-php/init.php';
+
+if (! class_exists(\Stripe\StripeClient::class) && is_file($stripeBootstrap)) {
+    require_once $stripeBootstrap;
+}
+
 use App\Http\Middleware\BlockOutsideEurope;
 use App\Http\Middleware\EnsureUserIsAdmin;
 use App\Http\Middleware\HandleAppearance;
