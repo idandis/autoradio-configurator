@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\ItalianOrderSchema;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,7 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('italian_orders', function (Blueprint $table) {
+        ItalianOrderSchema::create('italian_orders', function (Blueprint $table) {
             $table->id();
             $table->string('number')->unique();
             $table->string('customer_name');
@@ -34,7 +35,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('italian_order_items', function (Blueprint $table) {
+        ItalianOrderSchema::create('italian_order_items', function (Blueprint $table) {
             $table->id();
             $table->foreignId('italian_order_id')->constrained()->cascadeOnDelete();
             // Deliberately no catalog foreign key: reimports must not delete order lines.
@@ -48,7 +49,7 @@ return new class extends Migration
             $table->timestamps();
         });
 
-        Schema::create('italian_order_events', function (Blueprint $table) {
+        ItalianOrderSchema::create('italian_order_events', function (Blueprint $table) {
             $table->id();
             $table->foreignId('italian_order_id')->constrained()->cascadeOnDelete();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();

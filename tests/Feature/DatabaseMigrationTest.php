@@ -59,4 +59,25 @@ class DatabaseMigrationTest extends TestCase
         $this->assertTrue($lock->get());
         $lock->release();
     }
+
+    public function test_migration_exception_is_shown_in_dashboard_and_releases_lock(): void
+    {
+        Artisan::shouldReceive('call')->once()->with('migrate', [
+            '--force' => true,
+            '--no-interaction' => true,
+        ])->andThrow(new \RuntimeException("Migrazione non riuscita.\n  Dettaglio originale."));
+
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->from(route('dashboard'))
+            ->post(route('dashboard.database.migrate'))
+            ->assertRedirect(route('dashboard'))
+            ->assertSessionHasErrors([
+                'database' => 'Impossibile aggiornare il database: Migrazione non riuscita. Dettaglio originale.',
+            ])
+            ->assertSessionMissing('status');
+
+        $lock = Cache::lock('admin:database-migration', 300);
+        $this->assertTrue($lock->get());
+        $lock->release();
+    }
 }

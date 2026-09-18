@@ -26,6 +26,8 @@ class SharedConfigurationTest extends TestCase
             'cameras' => ['camera-rav4'],
             'speakers' => [],
             'customProducts' => [],
+            'quantities' => ['custom:example' => 3],
+            'importCosts' => ['example' => 12.50],
             'installation' => 'installation-screen',
             'postalCode' => '35120',
             'serviceZone' => 'south',
@@ -48,6 +50,7 @@ class SharedConfigurationTest extends TestCase
                 ->where('sharedConfiguration', $configuration)
             );
     }
+
 
     public function test_invalid_or_unknown_uuid_does_not_restore_a_configuration(): void
     {

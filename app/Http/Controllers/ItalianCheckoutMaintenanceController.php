@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Database\QueryException;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use RuntimeException;
 use Throwable;
 
@@ -62,9 +64,12 @@ class ItalianCheckoutMaintenanceController extends Controller
                 ->with('status', 'Database del checkout Italia aggiornato. Verifica la configurazione nel riquadro dedicato.');
         } catch (Throwable $exception) {
             Log::error('Aggiornamento checkout Italia non completato.', ['exception' => $exception]);
+            $detail = $exception instanceof QueryException
+                ? ($exception->errorInfo[2] ?? 'Errore del database; dettagli nei log del server.')
+                : $exception->getMessage();
 
             return back()->withErrors([
-                'italian_checkout' => 'Aggiornamento checkout Italia non completato. Controlla che tutti i file siano stati caricati e riprova. I dettagli sono nei log del server.',
+                'italian_checkout' => 'Aggiornamento checkout Italia non completato: '.Str::limit(preg_replace('/\s+/', ' ', $detail), 350),
             ]);
         } finally {
             if ($acquired) {

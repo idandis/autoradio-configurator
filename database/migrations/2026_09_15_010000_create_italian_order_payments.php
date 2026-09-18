@@ -1,5 +1,6 @@
 <?php
 
+use App\Support\ItalianOrderSchema;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -8,7 +9,7 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('italian_order_payments', function (Blueprint $table) {
+        ItalianOrderSchema::create('italian_order_payments', function (Blueprint $table) {
             $table->id();
             $table->foreignId('italian_order_id')->constrained()->cascadeOnDelete();
             $table->uuid('idempotency_key')->unique();
@@ -19,9 +20,9 @@ return new class extends Migration
             $table->unsignedBigInteger('expires_at');
             $table->timestamps();
         });
-        Schema::table('italian_order_events', function (Blueprint $table) {
-            $table->string('kind')->default('fulfillment');
-        });
+        if (! Schema::hasColumn('italian_order_events', 'kind')) {
+            Schema::table('italian_order_events', fn (Blueprint $table) => $table->string('kind')->default('fulfillment'));
+        }
     }
 
     public function down(): void

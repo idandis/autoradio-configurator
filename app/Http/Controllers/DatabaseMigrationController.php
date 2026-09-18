@@ -7,6 +7,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
 use Throwable;
 
 class DatabaseMigrationController extends Controller
@@ -135,6 +136,6 @@ class DatabaseMigrationController extends Controller
     {
         $message = preg_replace('/\s+/', ' ', $exception->getMessage()) ?: 'errore sconosciuto';
 
-        return mb_str($message)->limit(350)->toString();
+        return Str::limit($message, 350);
     }
 }
