@@ -1,8 +1,14 @@
 <?php
 
+use App\Http\Middleware\BlockOutsideEurope;
+use App\Http\Middleware\EnsureUserIsAdmin;
+use App\Http\Middleware\HandleAppearance;
+use App\Http\Middleware\HandleInertiaRequests;
+use App\Http\Middleware\SetLocale;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use Illuminate\Http\Request;
 
 $cloudflare = require __DIR__.'/../config/cloudflare.php';
@@ -14,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) use ($cloudflare): void {
+        $middleware->preventRequestForgery(except: ['stripe/webhook']);
         $middleware->trustProxies(
             at: $cloudflare['proxies'],
             headers: Request::HEADER_X_FORWARDED_FOR
@@ -23,15 +30,15 @@ return Application::configure(basePath: dirname(__DIR__))
         );
 
         $middleware->alias([
-            'admin' => \App\Http\Middleware\EnsureUserIsAdmin::class,
-            'extra-eu' => \App\Http\Middleware\BlockOutsideEurope::class,
+            'admin' => EnsureUserIsAdmin::class,
+            'extra-eu' => BlockOutsideEurope::class,
         ]);
 
         $middleware->web(append: [
-            \App\Http\Middleware\SetLocale::class,
-            \App\Http\Middleware\HandleAppearance::class,
-            \App\Http\Middleware\HandleInertiaRequests::class,
-            \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
+            SetLocale::class,
+            HandleAppearance::class,
+            HandleInertiaRequests::class,
+            AddLinkHeadersForPreloadedAssets::class,
         ]);
 
         //

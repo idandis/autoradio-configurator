@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\ConfiguratorProduct;
+use App\Services\StripePayments;
 use App\Services\VehicleImageGenerator;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -13,6 +15,27 @@ class DashboardController extends Controller
 {
     public function __invoke(Request $request, VehicleImageGenerator $vehicleImageGenerator): Response
     {
+        if ($request->session()->pull('italian_checkout_check_requested', false)) {
+            try {
+                $exitCode = Artisan::call('italian-payments:check', [
+                    '--stripe' => StripePayments::configured(),
+                    '--no-interaction' => true,
+                ]);
+                $request->session()->put('italian_checkout_report', [
+                    'passed' => $exitCode === 0,
+                    'lines' => preg_split('/\R/', trim(Artisan::output())),
+                    'checkedAt' => now()->toIso8601String(),
+                ]);
+            } catch (\Throwable $exception) {
+                report($exception);
+                $request->session()->put('italian_checkout_report', [
+                    'passed' => false,
+                    'lines' => ['Verifica non completata. Riprova con il pulsante del checkout Italia.'],
+                    'checkedAt' => now()->toIso8601String(),
+                ]);
+            }
+        }
+
         $translationTasks = ConfiguratorProduct::query()
             ->whereIn('category', ['screen', 'camera', 'speaker'])
             ->where(fn ($query) => $query
@@ -49,6 +72,7 @@ class DashboardController extends Controller
                 'dismissed' => $isDismissed,
             ],
             'flashStatus' => session('status'),
+            'italianCheckoutReport' => $request->session()->get('italian_checkout_report'),
         ]);
     }
 

@@ -21,6 +21,7 @@
     },
     "dependencies": {
         "@lucide/vue": "^1.17.0",
+        "@stripe/stripe-js": "^9.16.0",
         "@vueuse/core": "^12.8.2",
         "axios": "^1.18.0",
         "class-variance-authority": "^0.7.1",

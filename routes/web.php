@@ -2,23 +2,27 @@
 
 use App\Http\Controllers\Auth\PasswordController;
 use App\Http\Controllers\BrandsController;
+use App\Http\Controllers\ConfigurationStatisticController;
+use App\Http\Controllers\ConfigurationStatisticsController;
 use App\Http\Controllers\ConfiguratorController;
 use App\Http\Controllers\ConfiguratorImportController;
 use App\Http\Controllers\ConfiguratorPostalCodeController;
-use App\Http\Controllers\ConfigurationStatisticController;
-use App\Http\Controllers\ConfigurationStatisticsController;
 use App\Http\Controllers\CustomersController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DatabaseMigrationController;
 use App\Http\Controllers\DismissPostImportTasksController;
 use App\Http\Controllers\ImportedProductsController;
 use App\Http\Controllers\InstallationZonesController;
-use App\Http\Controllers\ModelsController;
+use App\Http\Controllers\ItalianCheckoutController;
+use App\Http\Controllers\ItalianCheckoutMaintenanceController;
+use App\Http\Controllers\ItalianOrdersController;
 use App\Http\Controllers\MissingVehicleRequestsController;
+use App\Http\Controllers\ModelsController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuoteNumberController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\SharedConfigurationController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\VisitorStatisticsController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -32,6 +36,17 @@ use Inertia\Inertia;
         'phpVersion' => PHP_VERSION,
     ]);
 });*/
+
+Route::prefix('checkout/italiano')->name('italian-checkout.')->middleware('throttle:30,1')->group(function () {
+    Route::post('/', [ItalianCheckoutController::class, 'start'])->name('start');
+    Route::get('/{token}', [ItalianCheckoutController::class, 'show'])->whereUuid('token')->name('show');
+    Route::post('/{token}', [ItalianCheckoutController::class, 'store'])->whereUuid('token')->name('store');
+    Route::get('/{token}/conferma', [ItalianCheckoutController::class, 'confirmation'])->whereUuid('token')->name('confirmation');
+    Route::get('/{token}/pagamento', [ItalianCheckoutController::class, 'payment'])->whereUuid('token')->name('payment');
+    Route::post('/{token}/stripe-session', [ItalianCheckoutController::class, 'stripeSession'])->whereUuid('token')->name('stripe-session');
+});
+
+Route::post('/stripe/webhook', StripeWebhookController::class)->name('stripe.webhook');
 
 Route::middleware('extra-eu')->group(function () {
     Route::get('/', ConfiguratorController::class);
@@ -58,6 +73,15 @@ Route::middleware('extra-eu')->group(function () {
 });
 
 Route::middleware(['auth', 'verified', 'admin'])->group(function () {
+    Route::delete('/italian-orders/test-orders', [ItalianOrdersController::class, 'destroyTests'])->name('italian-orders.destroy-tests');
+    Route::delete('/italian-orders/{italianOrder}', [ItalianOrdersController::class, 'destroy'])->whereNumber('italianOrder')->name('italian-orders.destroy');
+    Route::get('/italian-orders', [ItalianOrdersController::class, 'index'])->name('italian-orders.index');
+    Route::get('/italian-orders/{italianOrder}', [ItalianOrdersController::class, 'show'])->whereNumber('italianOrder')->name('italian-orders.show');
+    Route::get('/italian-orders/{italianOrder}/purchase-email', [ItalianOrdersController::class, 'purchaseEmail'])->whereNumber('italianOrder')->name('italian-orders.purchase-email');
+    Route::post('/italian-orders/{italianOrder}/refund', [ItalianOrdersController::class, 'refund'])->whereNumber('italianOrder')->name('italian-orders.refund');
+    Route::post('/italian-orders/{italianOrder}/refunds/sync', [ItalianOrdersController::class, 'syncRefunds'])->whereNumber('italianOrder')->name('italian-orders.refunds-sync');
+    Route::post('/italian-orders/{italianOrder}/cancel', [ItalianOrdersController::class, 'cancel'])->whereNumber('italianOrder')->name('italian-orders.cancel');
+    Route::patch('/italian-orders/{italianOrder}', [ItalianOrdersController::class, 'update'])->whereNumber('italianOrder')->name('italian-orders.update');
     Route::get('/configuration-statistics', ConfigurationStatisticsController::class)
         ->name('configuration-statistics.index');
     Route::get('/visitor-statistics', VisitorStatisticsController::class)
@@ -86,6 +110,9 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::post('/dashboard/database/migrate', DatabaseMigrationController::class)
         ->middleware('throttle:3,10')
         ->name('dashboard.database.migrate');
+    Route::post('/dashboard/checkout-italia/update', ItalianCheckoutMaintenanceController::class)
+        ->middleware('throttle:3,10')
+        ->name('dashboard.italian-checkout.update');
     Route::post('/dashboard/import-csv', [ConfiguratorImportController::class, 'store'])->name('dashboard.import');
     Route::post('/dashboard/post-import-tasks/dismiss', DismissPostImportTasksController::class)
         ->name('dashboard.post-import-tasks.dismiss');

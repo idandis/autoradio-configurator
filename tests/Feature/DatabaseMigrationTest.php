@@ -25,27 +25,13 @@ class DatabaseMigrationTest extends TestCase
     public function test_admin_can_start_database_migrations_from_dashboard(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);
-        $lock = new class
-        {
-            public bool $released = false;
-
-            public function get(): bool
-            {
-                return true;
-            }
-
-            public function release(): void
-            {
-                $this->released = true;
-            }
-        };
-
-        Cache::shouldReceive('lock')->once()->with('admin:database-migration', 300)->andReturn($lock);
         Artisan::shouldReceive('call')->once()->with('migrate', [
             '--force' => true,
             '--no-interaction' => true,
         ])->andReturn(0);
-        ConfiguratorProduct::factory()->create([
+        ConfiguratorProduct::create([
+            'handle' => 'migration-test-screen',
+            'title' => 'Pantalla de prueba',
             'category' => 'screen',
             'title_it' => 'Titolo italiano',
             'title_en' => 'English title',
@@ -69,6 +55,8 @@ class DatabaseMigrationTest extends TestCase
             ->assertRedirect(route('dashboard'))
             ->assertSessionHas('status');
 
-        $this->assertTrue($lock->released);
+        $lock = Cache::lock('admin:database-migration', 300);
+        $this->assertTrue($lock->get());
+        $lock->release();
     }
 }

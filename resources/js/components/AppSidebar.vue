@@ -67,6 +67,7 @@ const mainNavItems: NavItem[] = [
         icon: Users,
     },
     { title: 'Moduli inviati', href: '/missing-vehicle-requests', icon: ClipboardList },
+    { title: 'Ordini italiani', href: '/italian-orders', icon: ClipboardList },
     { title: 'Statistiche', href: '/configuration-statistics', icon: Activity },
     { title: 'Visitatori', href: '/visitor-statistics', icon: UserRoundSearch },
 ];

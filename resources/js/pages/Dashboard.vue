@@ -18,6 +18,7 @@ const props = defineProps<{
         dismissed: boolean;
     };
     flashStatus?: string | null;
+    italianCheckoutReport?: { passed: boolean; lines: string[]; checkedAt: string } | null;
 }>();
 
 const form = useForm({
@@ -25,7 +26,11 @@ const form = useForm({
     mode: 'add' as 'replace' | 'add',
 });
 
-const migrationForm = useForm({});
+const migrationForm = useForm<{ database?: string }>({});
+const italianCheckoutForm = useForm<{ italian_checkout?: string }>({});
+const updateItalianCheckout = () => {
+    italianCheckoutForm.post('/dashboard/checkout-italia/update', { preserveScroll: true });
+};
 const taskCopyStatus = ref<'idle' | 'copied' | 'error'>('idle');
 const tasksDismissedLocally = ref(false);
 const verificationRunning = ref(false);
@@ -261,11 +266,38 @@ const verifyCatalog = () => {
                         <button
                             type="button"
                             class="mt-4 w-full rounded-lg bg-amber-500 px-4 py-2.5 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
-                            :disabled="migrationForm.processing"
+                            :disabled="migrationForm.processing || italianCheckoutForm.processing"
                             @click="migrateDatabase"
                         >
                             {{ migrationForm.processing ? 'Aggiornamento in corso…' : 'Aggiorna database' }}
                         </button>
+                    </div>
+                    <div class="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4">
+                        <h3 class="text-sm font-medium">Checkout Italia</h3>
+                        <p class="mt-2 text-xs leading-5 text-muted-foreground">
+                            Dopo aver caricato i file, aggiorna le tabelle di ordini, pagamenti, rimborsi ed email e verifica la configurazione.
+                        </p>
+                        <p v-if="italianCheckoutForm.errors.italian_checkout" role="alert" class="mt-3 text-xs text-destructive">
+                            {{ italianCheckoutForm.errors.italian_checkout }}
+                        </p>
+                        <button type="button"
+                            class="mt-4 w-full rounded-lg bg-emerald-500 px-4 py-2.5 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
+                            :disabled="italianCheckoutForm.processing || migrationForm.processing"
+                            @click="updateItalianCheckout"
+                        >
+                            {{ italianCheckoutForm.processing ? 'Aggiornamento e verifica…' : 'Aggiorna e verifica checkout Italia' }}
+                        </button>
+                        <div v-if="italianCheckoutReport" class="mt-4 space-y-2 text-xs" aria-live="polite">
+                            <p class="font-medium" :class="italianCheckoutReport.passed ? 'text-emerald-500' : 'text-amber-500'">
+                                {{ italianCheckoutReport.passed ? 'Configurazione verificata' : 'Configurazione da completare' }}
+                            </p>
+                            <p class="text-muted-foreground">Ultima verifica: {{ new Date(italianCheckoutReport.checkedAt).toLocaleString('it-IT') }}</p>
+                            <ul class="space-y-2 break-words">
+                                <li v-for="(line, index) in italianCheckoutReport.lines" :key="index"
+                                    :class="line.startsWith('NO') ? 'text-amber-500' : 'text-muted-foreground'"
+                                >{{ line }}</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </aside>

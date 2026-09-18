@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 
 type VariantChoice = {
     id: number;
@@ -125,6 +125,8 @@ type VehicleImageMapping = {
 
 const props = defineProps<{
     locale: 'es' | 'it' | 'en';
+    italianCheckoutEnabled?: boolean;
+    italianCheckoutIsTest?: boolean;
     translations: TranslationTree;
     customProducts: CustomProduct[];
     vehicles: Vehicle[];
@@ -2816,6 +2818,24 @@ const discountLabel = computed(() => {
 const onlineTotal = computed(() => productsSubtotal.value - discountAmount.value);
 const estimatedTotal = computed(() => onlineTotal.value + installationCost.value);
 
+const usesItalianCheckout = computed(() => props.locale === 'it' && props.italianCheckoutEnabled === true);
+const italianCheckoutBusy = ref(false);
+const italianCheckoutError = ref('');
+const italianCheckoutItems = computed(() => {
+    const items: Array<{ type: 'variant' | 'product'; id: number; quantity: number }> = [];
+    selectedScreens.value.forEach((screen) => items.push({ type: 'variant', id: screen.id, quantity: cartQuantity(`screen:${screen.id}`) }));
+    selectedCameras.value.forEach((camera) => items.push({
+        type: camera.variantId ? 'variant' : 'product', id: camera.variantId ?? camera.productId ?? 0, quantity: cartQuantity(`camera:${camera.key}`),
+    }));
+    selectedSpeakers.value.forEach((speaker) => items.push({
+        type: speaker.variantId ? 'variant' : 'product', id: speaker.variantId ?? speaker.productId ?? 0, quantity: cartQuantity(`speaker:${speaker.key}`),
+    }));
+    selectedCustomProducts.value.filter((product) => product.category !== 'installation').forEach((product) => items.push({
+        type: product.variantId ? 'variant' : 'product', id: product.variantId ?? product.productId, quantity: cartQuantity(`custom:${product.key}`),
+    }));
+    return items;
+});
+
 const checkoutLineItems = computed(() => {
     const items: Array<{ variantId: string; quantity: number }> = [];
 
@@ -2856,6 +2876,7 @@ const checkoutLineItems = computed(() => {
 });
 
 const canCheckout = computed(() => {
+    if (usesItalianCheckout.value) return italianCheckoutItems.value.length > 0 && !italianCheckoutBusy.value;
     return checkoutLineItems.value.length > 0;
 });
 
@@ -2863,6 +2884,8 @@ const checkoutUrl = computed(() => {
     if (!canCheckout.value) {
         return null;
     }
+
+    if (usesItalianCheckout.value) return '/checkout/italiano';
 
     const cartPath = checkoutLineItems.value
         .map((item) => `${item.variantId}:${item.quantity}`)
@@ -3584,6 +3607,21 @@ const goToCheckout = async () => {
         return;
     }
 
+    if (usesItalianCheckout.value) {
+        if (italianCheckoutBusy.value) return;
+        italianCheckoutError.value = '';
+        if (customDiscount.value) {
+            italianCheckoutError.value = 'Rimuovi lo sconto personalizzato per procedere. Il checkout italiano applica gli sconti automatici del carrello.';
+            return;
+        }
+        italianCheckoutBusy.value = true;
+        router.post('/checkout/italiano', { items: italianCheckoutItems.value }, {
+            onError: (errors) => { italianCheckoutError.value = Object.values(errors)[0] || 'Impossibile aprire il checkout. Riprova.'; },
+            onFinish: () => { italianCheckoutBusy.value = false; },
+        });
+        return;
+    }
+
     if (!checkoutConsentAccepted.value) {
         showCheckoutConsentWarning.value = true;
         return;
@@ -3799,7 +3837,13 @@ watch(
                             <option value="it">Italiano</option>
                         </select>
 
-                        <a
+                        <button v-if="usesItalianCheckout" type="button" :disabled="!canCheckout" aria-label="Vai al checkout" class="rounded-md p-2 transition hover:bg-white/10 hover:text-amber-400 disabled:opacity-50" @click="goToCheckout">
+                            <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                                <path d="M6.7 8.5h10.6l.75 11H5.95l.75-11Z"/>
+                                <path d="M9 9V6.5a3 3 0 0 1 6 0V9"/>
+                            </svg>
+                        </button>
+                        <a v-else
                             :href="checkoutUrl || storefrontUrl('/cart')"
                             :aria-label="t('actions.checkout')"
                             class="rounded-md p-2 transition hover:bg-white/10 hover:text-amber-400"
@@ -5206,7 +5250,9 @@ watch(
                             <p class="mt-1 text-xs leading-5 text-neutral-400">{{ t('quote.trust_details') }}</p>
                         </div>
 
-                        <label ref="checkoutConsentSection" class="flex cursor-pointer items-start gap-2 rounded-lg px-1 text-xs leading-5 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 p-3 ring-2 ring-amber-400' : ''">
+                        <p v-if="usesItalianCheckout" class="text-center text-sm text-amber-300">Spedizione gratuita in Italia{{ italianCheckoutIsTest ? ' · Checkout di prova' : '' }}</p>
+                        <p v-if="italianCheckoutError" role="alert" class="text-center text-sm text-red-400">{{ italianCheckoutError }}</p>
+                        <label v-if="!usesItalianCheckout" ref="checkoutConsentSection" class="flex cursor-pointer items-start gap-2 rounded-lg px-1 text-xs leading-5 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 p-3 ring-2 ring-amber-400' : ''">
                             <input
                                 v-model="checkoutConsentAccepted"
                                 type="checkbox"
@@ -5245,11 +5291,11 @@ watch(
                             @click="goToCheckout"
                             class="order-2 flex h-12 w-full items-center justify-center rounded-xl bg-red-600 text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                             :disabled="!canCheckout"
-                            :aria-label="t('actions.add_to_cart')"
-                            :title="t('actions.add_to_cart')"
+                            :aria-label="usesItalianCheckout ? 'Vai al checkout' : t('actions.add_to_cart')"
+                            :title="usesItalianCheckout ? 'Vai al checkout' : t('actions.add_to_cart')"
                         >
                             <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h4" /></svg>
-                        </button>
+                        <span v-if="usesItalianCheckout" class="ml-2 font-semibold">Vai al checkout</span></button>
 
                         <button
                             type="button"
@@ -5537,7 +5583,9 @@ watch(
                     </div>
                     <div class="rounded-xl border border-neutral-700 bg-[#121212] px-4 py-4 text-center"><p class="font-semibold text-amber-400">{{ t('quote.trust_title') }}</p><p class="mt-2 text-sm leading-6 text-neutral-400">{{ t('quote.trust_details') }}</p></div>
 
-                    <label ref="cartCheckoutConsentSection" class="flex cursor-pointer items-start gap-3 rounded-xl text-sm leading-6 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 p-4 ring-2 ring-amber-400' : ''">
+                    <p v-if="usesItalianCheckout" class="text-center text-sm text-amber-300">Spedizione gratuita in Italia{{ italianCheckoutIsTest ? ' · Checkout di prova' : '' }}</p>
+                        <p v-if="italianCheckoutError" role="alert" class="text-center text-sm text-red-400">{{ italianCheckoutError }}</p>
+                        <label v-if="!usesItalianCheckout" ref="cartCheckoutConsentSection" class="flex cursor-pointer items-start gap-3 rounded-xl text-sm leading-6 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 p-4 ring-2 ring-amber-400' : ''">
                         <input v-model="checkoutConsentAccepted" type="checkbox" class="mt-1 h-4 w-4 shrink-0 accent-amber-400" />
                         <span>{{ t('checkout_consent.checkbox') }} <a href="https://www.autoradiocanario.com/policies/terms-of-service" target="_blank" rel="noopener noreferrer" class="block text-neutral-300 underline">{{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}</a></span>
                     </label>
@@ -5545,7 +5593,7 @@ watch(
 
                     <div class="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2 border-t-2 border-amber-400 bg-[#0b0b0b]/95 px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-15px_35px_rgba(0,0,0,0.55)] backdrop-blur sm:-mx-8 sm:px-8">
                         <div class="order-0 flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2"><span class="text-sm font-bold text-white">{{ t('quote.online_total') }}</span><span class="shrink-0 whitespace-nowrap text-xl font-bold text-amber-400">{{ onlineTotal.toFixed(2) }} €</span></div>
-                        <button type="button" class="order-4 flex h-11 w-full items-center justify-center rounded-lg bg-red-600 text-white transition hover:bg-red-500 disabled:opacity-50" :disabled="!canCheckout" :aria-label="t('actions.add_to_cart')" :title="t('actions.add_to_cart')" @click="goToCheckout"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h4" /></svg></button>
+                        <button type="button" class="order-4 flex h-11 w-full items-center justify-center rounded-lg bg-red-600 text-white transition hover:bg-red-500 disabled:opacity-50" :disabled="!canCheckout" :aria-label="usesItalianCheckout ? 'Vai al checkout' : t('actions.add_to_cart')" :title="usesItalianCheckout ? 'Vai al checkout' : t('actions.add_to_cart')" @click="goToCheckout"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h4" /></svg><span v-if="usesItalianCheckout" class="ml-2 font-semibold">Vai al checkout</span></button>
                         <button type="button" class="order-2 flex h-11 w-full items-center justify-center rounded-lg border border-amber-400 text-amber-400 transition hover:bg-amber-400 hover:text-black" :aria-label="t('actions.download_quote')" :title="t('actions.download_quote')" @click="downloadQuote"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" /></svg></button>
                         <button type="button" class="order-1 flex h-11 w-full items-center justify-center rounded-lg bg-[#334fb4] text-white transition hover:bg-[#405dc7]" :aria-label="funnelCopy.back" :title="funnelCopy.back" @click="returnToConfigurator"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6" /></svg></button>
                     </div>

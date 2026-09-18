@@ -6,9 +6,10 @@ use App\Models\ConfiguratorProduct;
 use App\Models\InstallationZone;
 use App\Models\MissingVehicleRequest;
 use App\Models\SharedConfiguration;
+use App\Services\ItalianCheckout;
 use App\Services\VehicleImageResolver;
-use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -62,6 +63,7 @@ class ConfiguratorController extends Controller
             });
         } catch (\Throwable $exception) {
             report($exception);
+
             return response()->json(['message' => 'Errore SMTP: '.$exception->getMessage()], 500);
         }
 
@@ -184,6 +186,8 @@ class ConfiguratorController extends Controller
         );
 
         return Inertia::render('Configurator', [
+            'italianCheckoutEnabled' => ItalianCheckout::availableForRequest($request),
+            'italianCheckoutIsTest' => ! \App\Services\StripePayments::live(),
             'locale' => app()->getLocale(),
             'translations' => trans('configurator'),
             'sharedConfiguration' => $sharedConfiguration,
@@ -195,22 +199,21 @@ class ConfiguratorController extends Controller
             'universalScreens' => $this->screenOptions($universalScreenProducts),
             'cameraOptions' => $cameraOptions,
             'speakerOptions' => [],
-            'installationOptions' => $installationZones->flatMap(fn (InstallationZone $zone) =>
-                $zone->services->map(fn ($service) => [
-                    'key' => 'zone-service-'.$service->id,
-                    'productId' => null,
-                    'variantId' => null,
-                    'title' => $service->localizedName(),
-                    'sourceTitle' => $service->name,
-                    'productTitle' => $service->localizedName(),
-                    'variantTitle' => null,
-                    'price' => (float) $service->price,
-                    'shopifyVariantId' => null,
-                    'sku' => null,
-                    'subtype' => 'zone-service',
-                    'location' => $zone->name,
-                    'installationRaw' => null,
-                ])
+            'installationOptions' => $installationZones->flatMap(fn (InstallationZone $zone) => $zone->services->map(fn ($service) => [
+                'key' => 'zone-service-'.$service->id,
+                'productId' => null,
+                'variantId' => null,
+                'title' => $service->localizedName(),
+                'sourceTitle' => $service->name,
+                'productTitle' => $service->localizedName(),
+                'variantTitle' => null,
+                'price' => (float) $service->price,
+                'shopifyVariantId' => null,
+                'sku' => null,
+                'subtype' => 'zone-service',
+                'location' => $zone->name,
+                'installationRaw' => null,
+            ])
             )->values(),
             'installationZones' => $installationZones
                 ->map(fn (InstallationZone $zone) => [
@@ -265,8 +268,7 @@ class ConfiguratorController extends Controller
                 $vehicle = $this->vehicleFields($product);
 
                 return collect($vehicleImageResolver->vehicleEntries($vehicle['brand'], $vehicle['model']))
-                    ->contains(fn (array $entry) =>
-                        Str::slug($entry['brand']) === Str::slug($data['brand'])
+                    ->contains(fn (array $entry) => Str::slug($entry['brand']) === Str::slug($data['brand'])
                         && Str::slug($entry['model']) === Str::slug($data['model'])
                     );
             })
@@ -286,8 +288,7 @@ class ConfiguratorController extends Controller
             ->whereRaw('LOWER(TRIM(model)) = ?', ['universal'])
             ->orderBy('price_min')
             ->get()
-            ->filter(fn (ConfiguratorProduct $product) =>
-                preg_replace('/\s+/u', '', mb_strtoupper((string) ($product->meta['din'] ?? ''))) === $data['din']
+            ->filter(fn (ConfiguratorProduct $product) => preg_replace('/\s+/u', '', mb_strtoupper((string) ($product->meta['din'] ?? ''))) === $data['din']
             )
             ->values();
 
@@ -331,8 +332,7 @@ class ConfiguratorController extends Controller
                 $vehicle = $this->vehicleFields($product);
 
                 return collect($vehicleImageResolver->vehicleEntries($vehicle['brand'], $vehicle['model']))
-                    ->contains(fn (array $entry) =>
-                        Str::slug($entry['brand']) === Str::slug($data['brand'])
+                    ->contains(fn (array $entry) => Str::slug($entry['brand']) === Str::slug($data['brand'])
                         && Str::slug($entry['model']) === Str::slug($data['model'])
                     );
             })
@@ -354,54 +354,54 @@ class ConfiguratorController extends Controller
     private function customProductOptions($products)
     {
         return $products->flatMap(function (ConfiguratorProduct $product) {
-                $variants = $product->variants->filter(
-                    fn ($variant) => $variant->price !== null || filled($variant->shopify_variant_id),
-                );
+            $variants = $product->variants->filter(
+                fn ($variant) => $variant->price !== null || filled($variant->shopify_variant_id),
+            );
 
-                if ($variants->isEmpty()) {
-                    return [[
-                        'key' => 'product-'.$product->id,
-                        'productId' => $product->id,
-                        'variantId' => null,
-                        'title' => $product->localizedTitle(),
-                        'variantTitle' => null,
-                        'category' => $product->category,
-                        'sku' => null,
-                        'shopifyVariantId' => null,
-                        'price' => (float) ($product->price_min ?? 0),
-                        'image' => $product->image_url,
-                        'brand' => $product->brand,
-                        'model' => $product->model,
-                        'yearFrom' => $product->year_from,
-                        'yearTo' => $product->year_to,
-                    ]];
-                }
-
-                return $variants->map(fn ($variant) => [
-                    'key' => 'variant-'.$variant->id,
+            if ($variants->isEmpty()) {
+                return [[
+                    'key' => 'product-'.$product->id,
                     'productId' => $product->id,
-                    'variantId' => $variant->id,
+                    'variantId' => null,
                     'title' => $product->localizedTitle(),
-                    'variantTitle' => $variant->option_value ?: $variant->title,
+                    'variantTitle' => null,
                     'category' => $product->category,
-                    'sku' => $variant->sku,
-                    'shopifyVariantId' => $variant->shopify_variant_id,
-                    'price' => (float) ($variant->price ?? $product->price_min ?? 0),
-                    'image' => $variant->image_url ?: $product->image_url,
+                    'sku' => null,
+                    'shopifyVariantId' => null,
+                    'price' => (float) ($product->price_min ?? 0),
+                    'image' => $product->image_url,
                     'brand' => $product->brand,
                     'model' => $product->model,
                     'yearFrom' => $product->year_from,
                     'yearTo' => $product->year_to,
-                ]);
-            })->values();
+                ]];
+            }
+
+            return $variants->map(fn ($variant) => [
+                'key' => 'variant-'.$variant->id,
+                'productId' => $product->id,
+                'variantId' => $variant->id,
+                'title' => $product->localizedTitle(),
+                'variantTitle' => $variant->option_value ?: $variant->title,
+                'category' => $product->category,
+                'sku' => $variant->sku,
+                'shopifyVariantId' => $variant->shopify_variant_id,
+                'price' => (float) ($variant->price ?? $product->price_min ?? 0),
+                'image' => $variant->image_url ?: $product->image_url,
+                'brand' => $product->brand,
+                'model' => $product->model,
+                'yearFrom' => $product->year_from,
+                'yearTo' => $product->year_to,
+            ]);
+        })->values();
     }
 
     private function screenOptions($products)
     {
         return $products->map(function (ConfiguratorProduct $product) {
-                $vehicleFields = $this->vehicleFields($product);
+            $vehicleFields = $this->vehicleFields($product);
 
-                return [
+            return [
                 'id' => $product->id,
                 'handle' => $product->handle,
                 'title' => $product->localizedTitle(),
@@ -439,8 +439,8 @@ class ConfiguratorController extends Controller
                     })
                     ->sortBy('price')
                     ->values(),
-                ];
-            })->values();
+            ];
+        })->values();
     }
 
     private function variantSuffix(?string $title): ?string
@@ -517,36 +517,36 @@ class ConfiguratorController extends Controller
             ])->values();
 
             $options[] = [
-                    'key' => $product->handle,
-                    'productHandle' => $product->handle,
-                    'productId' => $product->id,
-                    'variantId' => $defaultVariant?->id,
-                    'title' => $product->handle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave'
-                        ? trans('configurator.camera.standard_360')
-                        : $product->localizedTitle(),
-                    'productTitle' => $product->localizedTitle(),
-                    'variantTitle' => $defaultVariant?->option_value ?: $defaultVariant?->title,
-                    'price' => (float) ($defaultVariant?->price ?? $product->price_min),
-                    'image' => $product->image_url,
-                    'shopifyVariantId' => $defaultVariant?->shopify_variant_id,
-                    'sku' => $defaultVariant?->sku,
-                    'variants' => $variantOptions,
-                    'isStandard' => in_array($product->handle, [
-                        'camara-trasera-estandar',
-                        'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna',
-                        'camara-360-para-radios-de-coche-android-con-vista-de-ave',
-                    ], true),
-                    'isStandardFront' => $product->handle === 'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna',
-                    'isFront' => $product->handle === 'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna' || $product->subtype === 'front',
-                    'isRear' => $product->handle !== 'camara-360-para-radios-de-coche-android-con-vista-de-ave' &&
-                        ($product->handle === 'camara-trasera-estandar'
-                        || $product->subtype === 'rear'
-                        || ($product->subtype === 'ahd' && preg_match('/traser|rear/', mb_strtolower($product->title)) === 1)),
-                    'brand' => $product->brand,
-                    'model' => $product->model,
-                    'yearFrom' => $product->year_from,
-                    'yearTo' => $product->year_to,
-                ];
+                'key' => $product->handle,
+                'productHandle' => $product->handle,
+                'productId' => $product->id,
+                'variantId' => $defaultVariant?->id,
+                'title' => $product->handle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave'
+                    ? trans('configurator.camera.standard_360')
+                    : $product->localizedTitle(),
+                'productTitle' => $product->localizedTitle(),
+                'variantTitle' => $defaultVariant?->option_value ?: $defaultVariant?->title,
+                'price' => (float) ($defaultVariant?->price ?? $product->price_min),
+                'image' => $product->image_url,
+                'shopifyVariantId' => $defaultVariant?->shopify_variant_id,
+                'sku' => $defaultVariant?->sku,
+                'variants' => $variantOptions,
+                'isStandard' => in_array($product->handle, [
+                    'camara-trasera-estandar',
+                    'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna',
+                    'camara-360-para-radios-de-coche-android-con-vista-de-ave',
+                ], true),
+                'isStandardFront' => $product->handle === 'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna',
+                'isFront' => $product->handle === 'camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna' || $product->subtype === 'front',
+                'isRear' => $product->handle !== 'camara-360-para-radios-de-coche-android-con-vista-de-ave' &&
+                    ($product->handle === 'camara-trasera-estandar'
+                    || $product->subtype === 'rear'
+                    || ($product->subtype === 'ahd' && preg_match('/traser|rear/', mb_strtolower($product->title)) === 1)),
+                'brand' => $product->brand,
+                'model' => $product->model,
+                'yearFrom' => $product->year_from,
+                'yearTo' => $product->year_to,
+            ];
         }
 
         return $options;
