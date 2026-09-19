@@ -7,6 +7,7 @@ use App\Models\ItalianOrder;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Symfony\Component\Mime\Address;
 use Symfony\Component\Mime\Email;
 
 class ItalianPurchaseEmails
@@ -63,9 +64,10 @@ class ItalianPurchaseEmails
                 }
                 // The row lock serializes webhook/return/scheduler delivery attempts.
                 // A failed transport leaves the durable row pending for the next run.
-                $sent = Mail::html($row->html, function ($message) use ($row) {
+                $fromName = $order->checkout_locale === 'es' ? 'Autoradio Canario' : config('italian_checkout.mail_from_name');
+                $sent = Mail::html($row->html, function ($message) use ($row, $fromName) {
                     $message->to($row->recipient)->subject($row->subject)
-                        ->from(config('mail.from.address'), config('italian_checkout.mail_from_name'));
+                        ->from(config('mail.from.address'), $fromName);
                     $message->getSymfonyMessage()->getHeaders()->addIdHeader('Message-ID',
                         'italian-purchase-'.$row->id.'@'.parse_url(config('italian_checkout.origin'), PHP_URL_HOST));
                 });
@@ -81,8 +83,9 @@ class ItalianPurchaseEmails
             if (! app()->environment('local', 'testing')) {
                 return;
             }
-            $message = (new Email)->from('anteprima@autoradioitaliano.it')->to($row->recipient)
-                ->subject('[PROVA] '.$row->subject)->html($row->html)
+            $spanish = $order->checkout_locale === 'es';
+            $message = (new Email)->from(new Address('anteprima@autoradioitaliano.it', $spanish ? 'Autoradio Canario' : 'Autoradio Italiano'))->to($row->recipient)
+                ->subject(($spanish ? '[PRUEBA] ' : '[PROVA] ').$row->subject)->html($row->html)
                 ->text(html_entity_decode(strip_tags(str_replace(['<br>', '</p>', '</tr>'], "\n", $row->html)), ENT_QUOTES, 'UTF-8'));
             if (! Storage::disk('local')->put('italian-order-emails/'.$id.'.eml', $message->toString())) {
                 throw new \RuntimeException('Cannot save purchase email preview.');

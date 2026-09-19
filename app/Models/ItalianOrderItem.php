@@ -12,7 +12,9 @@ class ItalianOrderItem extends Model
     protected $casts = [
         'quantity' => 'integer',
         'unit_amount' => 'integer',
+        'import_unit_amount' => 'integer',
         'total_amount' => 'integer',
+        'import_total_amount' => 'integer',
     ];
 
     public function order(): BelongsTo

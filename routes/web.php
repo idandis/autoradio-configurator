@@ -39,6 +39,7 @@ use Inertia\Inertia;
 
 Route::prefix('checkout/italiano')->name('italian-checkout.')->middleware('throttle:30,1')->group(function () {
     Route::post('/', [ItalianCheckoutController::class, 'start'])->name('start');
+    Route::get('/preventivo/{uuid}', [ItalianCheckoutController::class, 'shared'])->whereUuid('uuid')->name('shared');
     Route::get('/{token}', [ItalianCheckoutController::class, 'show'])->whereUuid('token')->name('show');
     Route::post('/{token}', [ItalianCheckoutController::class, 'store'])->whereUuid('token')->name('store');
     Route::get('/{token}/conferma', [ItalianCheckoutController::class, 'confirmation'])->whereUuid('token')->name('confirmation');

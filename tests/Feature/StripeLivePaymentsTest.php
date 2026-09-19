@@ -143,7 +143,7 @@ class StripeLivePaymentsTest extends TestCase
         $this->app->instance('env', 'production');
         $this->assertTrue(ItalianCheckout::enabled());
         $this->assertTrue(ItalianCheckout::availableForRequest(Request::create('https://www.autoradioitaliano.it')));
-        $this->assertFalse(ItalianCheckout::availableForRequest(Request::create('https://config.autoradiocanario.com')));
+        $this->assertTrue(ItalianCheckout::availableForRequest(Request::create('https://config.autoradiocanario.com')));
         config(['stripe.mode' => 'test']);
         $this->assertFalse(ItalianCheckout::enabled());
         config(['stripe.mode' => 'live', 'stripe.secret' => 'sk_test_wrong']);
@@ -180,6 +180,7 @@ class StripeLivePaymentsTest extends TestCase
     {
         $this->app->instance('env', 'production');
         config(['app.debug' => false, 'app.url' => 'https://www.autoradioitaliano.it',
+            'italian_checkout.origin' => 'https://www.autoradioitaliano.it',
             'session.secure' => true, 'mail.default' => 'smtp', 'mail.from.address' => 'shop@example.test']);
         $this->artisan('italian-payments:check')->assertExitCode(1);
         config(['italian_checkout.mail_enabled' => true]);

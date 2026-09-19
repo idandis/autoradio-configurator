@@ -16,10 +16,10 @@ class ItalianPurchaseEmailsTest extends TestCase
 {
     use RefreshDatabase;
 
-    private function pending(bool $test = false): int
+    private function pending(bool $test = false, string $locale = 'it'): int
     {
         $order = ItalianOrder::create(['customer_name' => 'Maria', 'email' => 'maria@example.test',
-            'is_test' => $test, 'shipping_address' => ['country' => 'IT'], 'total_amount' => 10000,
+            'is_test' => $test, 'checkout_locale' => $locale, 'shipping_address' => ['country' => $locale === 'es' ? 'ES' : 'IT'], 'total_amount' => 10000,
             'subtotal_amount' => 10000, 'payment_status' => 'paid', 'paid_at' => now()]);
 
         return DB::table('italian_order_emails')->insertGetId(['italian_order_id' => $order->id,
@@ -74,6 +74,51 @@ class ItalianPurchaseEmailsTest extends TestCase
         $this->assertStringContainsString('color:#f5c400', $html);
         $this->assertStringContainsString('/images/logo-it.png', $html);
         $this->assertStringContainsString('EMAIL DI PROVA', $html);
+    }
+
+    public function test_spanish_purchase_email_includes_import_costs_and_canario_branding(): void
+    {
+        $order = ItalianOrder::create([
+            'checkout_locale' => 'es',
+            'customer_name' => 'María',
+            'email' => 'maria@example.test',
+            'shipping_address' => ['line1' => 'Calle Mayor 1', 'postal_code' => '35001', 'city' => 'Las Palmas', 'province' => 'Las Palmas', 'country' => 'ES'],
+            'subtotal_amount' => 10000,
+            'import_amount' => 3000,
+            'total_amount' => 13000,
+            'payment_status' => 'paid',
+            'paid_at' => now(),
+        ]);
+        $order->items()->create([
+            'product_handle' => 'radio-test', 'title' => 'Autorradio', 'quantity' => 2,
+            'unit_amount' => 5000, 'total_amount' => 10000,
+            'import_unit_amount' => 1500, 'import_total_amount' => 3000,
+        ]);
+        $mail = new \App\Mail\ItalianPurchaseConfirmation($order->load('items'), preview: true);
+        $html = $mail->render();
+
+        $this->assertStringStartsWith('[PRUEBA] Confirmación de compra ES-', $mail->envelope()->subject);
+        $this->assertStringContainsString('Autoradio Canario', $mail->envelope()->subject);
+        $this->assertStringContainsString('/images/logo.png', $html);
+        $this->assertStringContainsString('Costes de importación', $html);
+        $this->assertStringContainsString('15,00 € × 2', $html);
+        $this->assertStringContainsString('130,00 €', $html);
+    }
+
+    public function test_spanish_live_email_uses_the_canario_sender_name(): void
+    {
+        $id = $this->pending(locale: 'es');
+        Mail::shouldReceive('html')->once()->andReturnUsing(function ($html, $callback) {
+            $message = new Message(new Email);
+            $callback($message);
+            $this->assertSame('Autoradio Canario', $message->getSymfonyMessage()->getFrom()[0]->getName());
+
+            return new \stdClass;
+        });
+
+        app(ItalianPurchaseEmails::class)->prepare($id);
+
+        $this->assertDatabaseHas('italian_order_emails', ['id' => $id, 'status' => 'sent']);
     }
 
     public function test_transport_failure_keeps_email_pending_and_retry_succeeds(): void

@@ -46,7 +46,7 @@ class SetLocale
     {
         return match ($host) {
             'autoradioitaliano.it', 'www.autoradioitaliano.it' => 'it',
-            'config.autoradiocanario.com' => 'es',
+            'autoradiocanario.com', 'www.autoradiocanario.com', 'config.autoradiocanario.com' => 'es',
             default => 'es',
         };
     }

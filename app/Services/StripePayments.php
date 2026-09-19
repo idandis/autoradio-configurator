@@ -78,11 +78,12 @@ class StripePayments
                 'expires_at' => now()->addHour()->timestamp,
                 'request_payload' => [],
             ]);
+            $locale = $locked->checkout_locale === 'es' ? 'es' : 'it';
             $metadata = ['italian_order_id' => (string) $locked->id, 'italian_payment_id' => (string) $payment->id];
             $payment->update(['request_payload' => [
                 'mode' => 'payment',
                 'ui_mode' => 'embedded_page',
-                'locale' => 'it',
+                'locale' => $locale,
                 'payment_method_types' => ['card'],
                 'customer_email' => $locked->email,
                 'client_reference_id' => (string) $locked->id,
@@ -97,7 +98,12 @@ class StripePayments
                     'price_data' => [
                         'currency' => 'eur',
                         'unit_amount' => $locked->total_amount,
-                        'product_data' => ['name' => 'Ordine '.$locked->number, 'description' => 'Prodotti autoradio · spedizione gratuita in Italia'],
+                        'product_data' => [
+                            'name' => ($locale === 'es' ? 'Pedido ' : 'Ordine ').$locked->number,
+                            'description' => $locale === 'es'
+                                ? 'Productos y costes de importación del presupuesto'
+                                : 'Prodotti e costi di importazione del preventivo',
+                        ],
                     ],
                 ]],
             ]]);

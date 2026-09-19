@@ -3,13 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\SharedConfiguration;
+use App\Services\ItalianCheckout;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class SharedConfigurationController extends Controller
 {
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, ItalianCheckout $checkout): JsonResponse
     {
         $validated = $request->validate([
             'configuration' => ['required', 'array'],
@@ -35,15 +36,40 @@ class SharedConfigurationController extends Controller
             'configuration.postalCode' => ['nullable', 'string', 'max:5'],
             'configuration.serviceZone' => ['nullable', 'string', 'max:50'],
             'configuration.precheck' => ['nullable', 'string', 'max:50'],
+            'checkout' => ['nullable', 'array:items,custom_discount,locale'],
+            'checkout.items' => ['required_with:checkout', 'array', 'min:1', 'max:50'],
+            'checkout.custom_discount' => ['nullable', 'array'],
+            'checkout.locale' => ['required_with:checkout', 'in:it,es'],
         ]);
 
-        $sharedConfiguration = SharedConfiguration::create([
+        $storedCheckout = null;
+        $fingerprint = null;
+        if (isset($validated['checkout'])) {
+            $locale = $validated['checkout']['locale'];
+            $items = $checkout->normalizeItems($validated['checkout'], true, $locale);
+            $discount = $checkout->normalizeDiscount($validated['checkout'], true, $locale);
+            $quote = $checkout->quote($items, locale: $locale, customDiscount: $discount);
+            $storedCheckout = compact('items', 'discount', 'locale', 'quote');
+            $fingerprint = hash('sha256', json_encode([
+                'configuration' => $validated['configuration'],
+                'checkout' => $storedCheckout,
+            ], JSON_THROW_ON_ERROR));
+        }
+
+        $attributes = [
             'uuid' => (string) Str::uuid(),
             'configuration' => $validated['configuration'],
-        ]);
+            'checkout' => $storedCheckout,
+        ];
+        $sharedConfiguration = $fingerprint
+            ? SharedConfiguration::firstOrCreate(['fingerprint' => $fingerprint], $attributes)
+            : SharedConfiguration::create($attributes);
 
         return response()->json([
             'uuid' => $sharedConfiguration->uuid,
+            'checkout_url' => $storedCheckout
+                ? route('italian-checkout.shared', $sharedConfiguration->uuid, false)
+                : null,
         ], 201);
     }
 }

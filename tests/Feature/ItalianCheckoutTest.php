@@ -152,6 +152,100 @@ class ItalianCheckoutTest extends TestCase
         ]])->assertSessionHasErrors('items');
     }
 
+    public function test_custom_quote_import_costs_and_discount_are_paid_and_persisted(): void
+    {
+        $variant = $this->variant('100.00');
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $response = $this->post(route('italian-checkout.start'), [
+            'items' => [[
+                'type' => 'variant', 'id' => $variant->id, 'quantity' => 2,
+                'import_unit_amount' => 1250,
+            ]],
+            'custom_discount' => ['code' => 'CLIENTE10', 'type' => 'percentage', 'value' => 1000],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $token = basename($response->headers->get('Location'));
+
+        $this->get(route('italian-checkout.show', $token))->assertInertia(fn (Assert $page) => $page
+            ->where('checkoutLocale', 'it')
+            ->where('quote.subtotal_amount', 20000)
+            ->where('quote.import_amount', 2500)
+            ->where('quote.discount_amount', 2000)
+            ->where('quote.total_amount', 20500)
+            ->where('quote.items.0.import_unit_amount', 1250)
+            ->where('quote.items.0.import_total_amount', 2500));
+
+        $this->post(route('italian-checkout.store', $token), $this->customer(
+            session("italian_checkout_drafts.$token.quote_hash")
+        ))->assertSessionHasNoErrors();
+
+        $order = ItalianOrder::sole();
+        $this->assertSame(2500, $order->import_amount);
+        $this->assertSame(20500, $order->total_amount);
+        $this->assertSame(1250, $order->items->sole()->import_unit_amount);
+        $this->assertSame(2500, $order->items->sole()->import_total_amount);
+    }
+
+    public function test_public_requests_cannot_inject_import_costs_or_custom_discounts(): void
+    {
+        $variant = $this->variant('100.00');
+        $item = ['type' => 'variant', 'id' => $variant->id, 'quantity' => 1];
+
+        $this->post(route('italian-checkout.start'), ['items' => [[...$item, 'import_unit_amount' => 1000]]])
+            ->assertSessionHasErrors('items');
+        $this->post(route('italian-checkout.start'), [
+            'items' => [$item],
+            'custom_discount' => ['code' => 'FAKE', 'type' => 'fixed', 'value' => 9999],
+        ])->assertSessionHasErrors('custom_discount');
+        $this->assertDatabaseCount('italian_orders', 0);
+    }
+
+    public function test_spanish_checkout_uses_canario_host_language_and_address(): void
+    {
+        $variant = $this->variant('100.00');
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $response = $this->post('https://config.autoradiocanario.com/checkout/italiano', [
+            'items' => [[
+                'type' => 'variant', 'id' => $variant->id, 'quantity' => 1,
+                'import_unit_amount' => 1500,
+            ]],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $token = basename($response->headers->get('Location'));
+
+        $this->get('https://config.autoradiocanario.com/checkout/italiano/'.$token)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('checkoutLocale', 'es')
+                ->where('quote.items.0.title', 'Radio para coche')
+                ->where('quote.import_amount', 1500)
+                ->where('quote.total_amount', 11500));
+
+        $this->post('https://config.autoradiocanario.com/checkout/italiano/'.$token, [
+            'first_name' => 'María', 'last_name' => 'García', 'email' => 'maria@example.test',
+            'phone' => '+34 600 123 123', 'line1' => 'Avenida Mencey 49', 'line2' => null,
+            'postal_code' => '35120', 'city' => 'Mogán', 'province' => 'Las Palmas', 'country' => 'ES',
+            'reviewed' => true, 'quote_hash' => session("italian_checkout_drafts.$token.quote_hash"),
+        ])->assertSessionHasNoErrors();
+
+        $order = ItalianOrder::sole();
+        $this->assertSame('es', $order->checkout_locale);
+        $this->assertSame('ES', $order->shipping_address['country']);
+        $this->assertStringStartsWith('ES-', $order->number);
+        $this->assertSame('https://config.autoradiocanario.com', $order->checkout_origin);
+    }
+
+    public function test_local_checkout_uses_the_language_selected_in_the_configurator(): void
+    {
+        $variant = $this->variant('100.00');
+        $response = $this->post(route('italian-checkout.start'), [
+            'locale' => 'es',
+            'items' => [['type' => 'variant', 'id' => $variant->id, 'quantity' => 1]],
+        ])->assertSessionHasNoErrors()->assertRedirect();
+        $token = basename($response->headers->get('Location'));
+
+        $this->get(route('italian-checkout.show', $token))->assertInertia(fn (Assert $page) => $page
+            ->where('checkoutLocale', 'es')
+            ->where('quote.items.0.title', 'Radio para coche'));
+    }
+
     public function test_missing_or_zero_prices_and_ambiguous_product_selection_are_rejected(): void
     {
         $variant = $this->variant('0.00');

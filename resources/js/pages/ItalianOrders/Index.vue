@@ -32,11 +32,11 @@ const search = () => filters.get('/italian-orders', { preserveState: true, repla
 </script>
 
 <template>
-    <Head title="Ordini italiani" />
+    <Head title="Ordini Stripe" />
     <div class="flex flex-col gap-6 p-4">
         <header>
             <p class="text-sm text-muted-foreground">autoradioitaliano.it</p>
-            <h1 class="mt-1 text-2xl font-semibold">Ordini italiani</h1>
+            <h1 class="mt-1 text-2xl font-semibold">Ordini Stripe</h1>
             <p class="mt-2 text-sm text-muted-foreground">Consulta gli acquisti e gestisci la preparazione e la spedizione dei prodotti.</p>
         </header>
 
@@ -69,8 +69,8 @@ const search = () => filters.get('/italian-orders', { preserveState: true, repla
         <section class="overflow-hidden rounded-xl border bg-card" aria-label="Elenco ordini">
             <div class="border-b px-5 py-4 text-sm text-muted-foreground">{{ orders.total }} ordini trovati</div>
             <div v-if="orders.data.length === 0" class="p-10 text-center">
-                <h2 class="font-semibold">{{ filters.search || filters.payment_status || filters.fulfillment_status ? 'Nessun ordine corrisponde ai filtri' : 'Nessun ordine italiano ricevuto' }}</h2>
-                <p class="mt-2 text-sm text-muted-foreground">{{ filters.search || filters.payment_status || filters.fulfillment_status ? 'Modifica i filtri per ampliare la ricerca.' : 'Qui compariranno gli acquisti effettuati quando il checkout italiano sarà attivo.' }}</p>
+                <h2 class="font-semibold">{{ filters.search || filters.payment_status || filters.fulfillment_status ? 'Nessun ordine corrisponde ai filtri' : 'Nessun ordine Stripe ricevuto' }}</h2>
+                <p class="mt-2 text-sm text-muted-foreground">{{ filters.search || filters.payment_status || filters.fulfillment_status ? 'Modifica i filtri per ampliare la ricerca.' : 'Qui compariranno gli acquisti effettuati tramite il checkout Stripe.' }}</p>
             </div>
             <div v-else class="overflow-x-auto">
                 <table class="w-full text-left text-sm">

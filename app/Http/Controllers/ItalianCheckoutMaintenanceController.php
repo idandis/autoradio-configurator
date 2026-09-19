@@ -20,6 +20,8 @@ class ItalianCheckoutMaintenanceController extends Controller
         'database/migrations/2026_09_15_110000_add_deleted_at_to_italian_orders.php',
         'database/migrations/2026_09_15_120000_create_italian_order_refunds.php',
         'database/migrations/2026_09_15_130000_create_italian_order_emails.php',
+        'database/migrations/2026_09_19_010000_add_custom_quote_fields_to_italian_orders.php',
+        'database/migrations/2026_09_19_020000_add_checkout_to_shared_configurations.php',
     ];
 
     public function __invoke(): RedirectResponse

@@ -274,7 +274,7 @@ return [
         'unit_price' => 'Prezzo unitario',
         'amount' => 'Importo',
         'includes' => 'Include',
-        'purchase_link' => 'Link di acquisto',
+        'purchase_link' => 'Link di pagamento',
         'purchase_authorization' => 'Utilizzando questo link di acquisto, il cliente autorizza espressamente AutoRadioCanario a gestire i fondi versati per acquistare il prodotto in suo nome e per suo conto, in conformità alle Condizioni del Servizio.',
         'screen' => 'Schermo autoradio',
         'variant' => 'Variante: :variant',

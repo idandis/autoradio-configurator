@@ -274,7 +274,7 @@ return [
         'unit_price' => 'Precio unitario',
         'amount' => 'Importe',
         'includes' => 'Incluye',
-        'purchase_link' => 'Enlace de compra',
+        'purchase_link' => 'Enlace de pago',
         'purchase_authorization' => 'Al utilizar este enlace de compra, el cliente autoriza expresamente a AutoRadioCanario a gestionar los fondos abonados para adquirir el producto en su nombre y por su cuenta, conforme a las Condiciones del Servicio.',
         'screen' => 'Pantalla de autorradio',
         'variant' => 'Variante: :variant',

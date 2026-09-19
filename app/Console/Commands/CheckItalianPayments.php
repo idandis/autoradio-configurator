@@ -37,6 +37,10 @@ class CheckItalianPayments extends Command
         foreach (['italian_orders', 'italian_order_items', 'italian_order_events', 'italian_order_payments', 'italian_order_refunds', 'italian_order_emails'] as $table) {
             $checks['Tabella '.$table] = Schema::hasTable($table);
         }
+        $checks['Campi preventivo custom negli ordini'] = Schema::hasColumns('italian_orders', ['import_amount', 'checkout_locale', 'checkout_origin']);
+        $checks['Campi importazione nelle righe ordine'] = Schema::hasColumns('italian_order_items', ['import_unit_amount', 'import_total_amount']);
+        $checks['Link pagamento persistenti'] = Schema::hasTable('shared_configurations')
+            && Schema::hasColumns('shared_configurations', ['fingerprint', 'checkout']);
         if ($this->option('stripe') && StripePayments::configured()) {
             $previousHttpClient = ApiRequestor::httpClient();
             try {

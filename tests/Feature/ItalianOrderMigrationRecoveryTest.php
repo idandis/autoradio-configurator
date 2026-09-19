@@ -46,7 +46,7 @@ class ItalianOrderMigrationRecoveryTest extends TestCase
         $this->resume();
         $this->resume();
         $this->assertSame($before, $order->fresh()->getAttributes());
-        $this->assertSame(6, DB::table('migrations')->whereIn('migration', array_map(
+        $this->assertSame(count(ItalianCheckoutMaintenanceController::MIGRATIONS), DB::table('migrations')->whereIn('migration', array_map(
             fn ($path) => basename($path, '.php'), ItalianCheckoutMaintenanceController::MIGRATIONS,
         ))->count());
     }

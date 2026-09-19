@@ -67,7 +67,7 @@ const changeLabels: Record<string, string> = { carrier: 'Corriere', tracking_num
     <Head :title="`Ordine ${order.number}`" />
     <div class="flex flex-col gap-6 p-4">
         <header>
-            <Link href="/italian-orders" class="text-sm underline">← Ordini italiani</Link>
+            <Link href="/italian-orders" class="text-sm underline">← Ordini Stripe</Link>
             <h1 class="mt-3 break-all text-xl font-semibold">{{ order.number }}</h1>
             <p v-if="order.is_test" class="mt-2 text-sm font-medium text-amber-600">Ordine di prova · nessun addebito reale</p>
             <p class="mt-1 text-sm text-muted-foreground">Ricevuto il {{ orderDate(order.created_at) }}</p>
@@ -82,13 +82,14 @@ const changeLabels: Record<string, string> = { carrier: 'Corriere', tracking_num
                         <table class="w-full text-left text-sm">
                             <thead class="text-muted-foreground"><tr><th class="p-4">Prodotto</th><th class="p-4 text-right">Prezzo</th><th class="p-4 text-right">Quantità</th><th class="p-4 text-right">Importo</th></tr></thead>
                             <tbody><tr v-for="item in order.items" :key="item.id" class="border-t">
-                                <td class="p-4"><p class="font-medium">{{ item.title }}</p><p v-if="item.variant_title" class="mt-1 text-muted-foreground">{{ item.variant_title }}</p><p v-if="item.sku" class="mt-1 text-xs text-muted-foreground">SKU: {{ item.sku }}</p></td>
-                                <td class="whitespace-nowrap p-4 text-right">{{ money(item.unit_amount) }}</td><td class="p-4 text-right">{{ item.quantity }}</td><td class="whitespace-nowrap p-4 text-right">{{ money(item.total_amount) }}</td>
+                                <td class="p-4"><p class="font-medium">{{ item.title }}</p><p v-if="item.variant_title" class="mt-1 text-muted-foreground">{{ item.variant_title }}</p><p v-if="item.sku" class="mt-1 text-xs text-muted-foreground">SKU: {{ item.sku }}</p><p v-if="item.import_unit_amount" class="mt-1 text-xs text-amber-500">Importazione per unità: {{ money(item.import_unit_amount) }}</p></td>
+                                <td class="whitespace-nowrap p-4 text-right">{{ money(item.unit_amount + item.import_unit_amount) }}</td><td class="p-4 text-right">{{ item.quantity }}</td><td class="whitespace-nowrap p-4 text-right">{{ money(item.total_amount + item.import_total_amount) }}</td>
                             </tr></tbody>
                         </table>
                     </div>
                     <dl class="space-y-3 border-t p-5 text-sm">
                         <div class="flex justify-between gap-4"><dt>Prodotti</dt><dd>{{ money(order.subtotal_amount) }}</dd></div>
+                        <div v-if="order.import_amount" class="flex justify-between gap-4"><dt>Costi di importazione</dt><dd>{{ money(order.import_amount) }}</dd></div>
                         <div class="flex justify-between gap-4"><dt>Spedizione</dt><dd>{{ money(order.shipping_amount) }}</dd></div>
                         <div v-if="order.discount_amount" class="flex justify-between gap-4"><dt>Sconto</dt><dd>−{{ money(order.discount_amount) }}</dd></div>
                         <div class="flex justify-between gap-4 border-t pt-3 text-base font-semibold"><dt>Totale ordine</dt><dd>{{ money(order.total_amount) }}</dd></div>

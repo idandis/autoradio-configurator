@@ -34,6 +34,7 @@ class ItalianOrder extends Model
         'shipping_address' => 'array',
         'billing_address' => 'array',
         'subtotal_amount' => 'integer',
+        'import_amount' => 'integer',
         'shipping_amount' => 'integer',
         'discount_amount' => 'integer',
         'total_amount' => 'integer',
@@ -46,7 +47,7 @@ class ItalianOrder extends Model
     protected static function booted(): void
     {
         static::creating(function (self $order) {
-            $order->number ??= 'IT-'.Str::ulid();
+            $order->number ??= ($order->checkout_locale === 'es' ? 'ES-' : 'IT-').Str::ulid();
         });
     }
 

@@ -289,7 +289,7 @@ return [
         'unit_price' => 'Unit price',
         'amount' => 'Amount',
         'includes' => 'Includes',
-        'purchase_link' => 'Purchase link',
+        'purchase_link' => 'Payment link',
         'purchase_authorization' => 'By using this purchase link, the customer expressly authorizes AutoRadioCanario to manage the funds paid to purchase the product in the customer’s name and on the customer’s behalf, in accordance with the Terms of Service.',
         'screen' => 'Car stereo screen',
         'variant' => 'Variant: :variant',

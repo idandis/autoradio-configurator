@@ -230,9 +230,9 @@ const footerContact = computed(() => props.locale === 'it'
         whatsappUrl: 'https://wa.me/34694259117',
     });
 const customQuoteCopy = computed(() => ({
-    es: { importUnit: 'Importación por unidad (€)', importTotal: 'Costes de importación', button: 'Presupuesto personalizado', title: 'Presupuesto personalizado', help: 'Añade todos los productos que quieras y crea el presupuesto al terminar.', search: 'Buscar por producto, variante o SKU…', selected: 'Productos añadidos', empty: 'Ningún producto encontrado', add: 'Añadir', added: 'Añadido', remove: 'Quitar', cancel: 'Cancelar', create: 'Crear presupuesto' },
-    it: { importUnit: 'Importazione per unità (€)', importTotal: 'Costi di importazione', button: 'Preventivo custom', title: 'Preventivo custom', help: 'Aggiungi tutti i prodotti che vuoi e crea il preventivo quando hai finito.', search: 'Cerca prodotto, variante o SKU…', selected: 'Prodotti aggiunti', empty: 'Nessun prodotto trovato', add: 'Aggiungi', added: 'Aggiunto', remove: 'Rimuovi', cancel: 'Annulla', create: 'Crea preventivo' },
-    en: { importUnit: 'Import cost per unit (€)', importTotal: 'Import costs', button: 'Custom quote', title: 'Custom quote', help: 'Add all the products you need, then create the quote when finished.', search: 'Search by product, variant or SKU…', selected: 'Added products', empty: 'No products found', add: 'Add', added: 'Added', remove: 'Remove', cancel: 'Cancel', create: 'Create quote' },
+    es: { importUnit: 'Importación por unidad (€)', importTotal: 'Costes de importación', button: 'Presupuesto personalizado', title: 'Presupuesto personalizado', help: 'Añade todos los productos que quieras y crea el presupuesto al terminar.', search: 'Buscar por producto, variante o SKU…', selected: 'Productos añadidos', section: 'Añadido desde el presupuesto personalizado', empty: 'Ningún producto encontrado', add: 'Añadir', added: 'Añadido', remove: 'Quitar', cancel: 'Cancelar', create: 'Crear presupuesto' },
+    it: { importUnit: 'Importazione per unità (€)', importTotal: 'Costi di importazione', button: 'Preventivo custom', title: 'Preventivo custom', help: 'Aggiungi tutti i prodotti che vuoi e crea il preventivo quando hai finito.', search: 'Cerca prodotto, variante o SKU…', selected: 'Prodotti aggiunti', section: 'Aggiunto dal preventivo personalizzato', empty: 'Nessun prodotto trovato', add: 'Aggiungi', added: 'Aggiunto', remove: 'Rimuovi', cancel: 'Annulla', create: 'Crea preventivo' },
+    en: { importUnit: 'Import cost per unit (€)', importTotal: 'Import costs', button: 'Custom quote', title: 'Custom quote', help: 'Add all the products you need, then create the quote when finished.', search: 'Search by product, variant or SKU…', selected: 'Added products', section: 'Added from the custom quote', empty: 'No products found', add: 'Add', added: 'Added', remove: 'Remove', cancel: 'Cancel', create: 'Create quote' },
 })[props.locale]);
 const adminDiscountCopy = computed(() => ({
     es: { title: 'Descuento personalizado', help: 'El código debe existir en Shopify. El valor solo se usa para calcular este presupuesto.', code: 'Código Shopify', codePlaceholder: 'Ej. CLIENTE10', type: 'Tipo de descuento', percentage: 'Porcentaje', fixed: 'Importe fijo', value: 'Valor', special: 'Descuento especial' },
@@ -567,6 +567,9 @@ const selectedSpeakerKeys = ref<string[]>([]);
 const selectedInstallationKey = ref<string | null>(null);
 const showCustomQuoteModal = ref(false);
 const customProductSearch = ref('');
+const quoteDiscountCode = ref('');
+const quoteDiscountType = ref<'percentage' | 'fixed'>('percentage');
+const quoteDiscountValue = ref('');
 const customImportCosts = ref<Record<string, number>>({});
 const customImportCost = (key: string) => customImportCosts.value[key] ?? 0;
 const setCustomImportCost = (key: string, event: Event) => {
@@ -585,6 +588,9 @@ const customProductsLoading = ref(false);
 const selectedCustomProducts = computed(() =>
     customProducts.value.filter((product) => selectedCustomProductKeys.value.includes(product.key)),
 );
+const customScreenProducts = computed(() => selectedCustomProducts.value.filter((product) => product.category === 'screen'));
+const customCameraProducts = computed(() => selectedCustomProducts.value.filter((product) => product.category === 'camera'));
+const customSpeakerProducts = computed(() => selectedCustomProducts.value.filter((product) => product.category === 'speaker'));
 const filteredCustomProducts = computed(() => {
     const search = customProductSearch.value.trim().toLocaleLowerCase();
 
@@ -597,9 +603,16 @@ const filteredCustomProducts = computed(() => {
     );
 });
 const toggleCustomProduct = (key: string) => {
-    selectedCustomProductKeys.value = selectedCustomProductKeys.value.includes(key)
-        ? selectedCustomProductKeys.value.filter((selectedKey) => selectedKey !== key)
-        : [...selectedCustomProductKeys.value, key];
+    if (selectedCustomProductKeys.value.includes(key)) {
+        selectedCustomProductKeys.value = selectedCustomProductKeys.value.filter((selectedKey) => selectedKey !== key);
+        const { [key]: removedImportCost, ...remainingImportCosts } = customImportCosts.value;
+        const { [`custom:${key}`]: removedQuantity, ...remainingQuantities } = cartQuantities.value;
+        customImportCosts.value = remainingImportCosts;
+        cartQuantities.value = remainingQuantities;
+        return;
+    }
+
+    selectedCustomProductKeys.value = [...selectedCustomProductKeys.value, key];
 };
 const loadCustomProducts = async () => {
     if (customProductsLoaded.value || customProductsLoading.value) return;
@@ -635,6 +648,12 @@ const startCustomQuote = async () => {
 const completeCustomQuote = () => {
     showCustomQuoteModal.value = false;
     if (selectedCustomProductKeys.value.length > 0) {
+        const customSteps = [
+            customScreenProducts.value.length ? 'screen' : null,
+            customCameraProducts.value.length ? 'camera' : null,
+            customSpeakerProducts.value.length ? 'speaker' : null,
+        ].filter((step): step is string => step !== null);
+        openSteps.value = [...new Set([...openSteps.value, ...customSteps])];
         quoteGenerationError.value = null;
         showQuoteModal.value = true;
     }
@@ -735,8 +754,8 @@ const goToPrecheckStep = async () => {
 const toggleStepAndCenter = async (step: string, targetId: string, focus = false, block: ScrollLogicalPosition = 'center') => {
     const isOpening = !openSteps.value.includes(step);
     toggleStep(step);
-    if (isOpening && step === 'camera') await loadCameras();
-    if (isOpening && step === 'speaker') await loadSpeakers();
+    if (isOpening && step === 'camera' && (isUniversalMode.value || isSpecificMode.value)) await loadCameras();
+    if (isOpening && step === 'speaker' && (isUniversalMode.value || isSpecificMode.value)) await loadSpeakers();
     if (isOpening) await centerConfiguratorTarget(targetId, focus, block);
 };
 const stepHasSelections = (step: string) => {
@@ -746,11 +765,11 @@ const stepHasSelections = (step: string) => {
                 || selectedYear.value !== null
                 || selectedModel.value !== null;
         case 'screen':
-            return selectedScreenVariantIds.value.length > 0;
+            return selectedScreenVariantIds.value.length > 0 || customScreenProducts.value.length > 0;
         case 'camera':
-            return selectedCameraKeys.value.length > 0;
+            return selectedCameraKeys.value.length > 0 || customCameraProducts.value.length > 0;
         case 'speaker':
-            return selectedSpeakerKeys.value.length > 0;
+            return selectedSpeakerKeys.value.length > 0 || customSpeakerProducts.value.length > 0;
         case 'installation':
             return selectedInstallationKey.value !== null;
         default:
@@ -1126,9 +1145,12 @@ const selectedScreens = computed(() =>
 );
 const selectedScreenVariantTitles = computed(() => [
     ...new Set(
-        selectedScreens.value.map((screen) =>
-            [displayVariantTitle(screen.title), screen.color].filter(Boolean).join(' / '),
-        ),
+        [
+            ...selectedScreens.value.map((screen) =>
+                [displayVariantTitle(screen.title), screen.color].filter(Boolean).join(' / '),
+            ),
+            ...customScreenProducts.value.map((product) => truncateStepTitle(product.title)),
+        ],
     ),
 ]);
 
@@ -1588,6 +1610,12 @@ const restoreConfiguratorState = async () => {
         if (Array.isArray(state.selectedSpeakerKeys) && state.selectedSpeakerKeys.length > 0) {
             await loadSpeakers();
         }
+        const storedCustomKeys = Array.isArray(state.selectedCustomProductKeys)
+            ? state.selectedCustomProductKeys.filter((key: unknown): key is string => typeof key === 'string')
+            : [];
+        if (storedCustomKeys.length > 0) {
+            await loadCustomProducts();
+        }
 
         const availableVariantIds = new Set(
             allScreenVehicles.value.flatMap((vehicle) =>
@@ -1649,6 +1677,26 @@ const restoreConfiguratorState = async () => {
         selectedSpeakerKeys.value = Array.isArray(state.selectedSpeakerKeys)
             ? state.selectedSpeakerKeys.filter((key: unknown) => typeof key === 'string' && availableSpeakerKeys.has(key))
             : [];
+        const availableCustomKeys = new Set(customProducts.value.map((product) => product.key));
+        selectedCustomProductKeys.value = storedCustomKeys.filter((key) => availableCustomKeys.has(key));
+        const selectedCustomKeySet = new Set(selectedCustomProductKeys.value);
+        customImportCosts.value = state.customImportCosts && typeof state.customImportCosts === 'object'
+            ? Object.entries(state.customImportCosts).reduce<Record<string, number>>((costs, [key, value]) => {
+                const amount = Number(value);
+                if (selectedCustomKeySet.has(key) && Number.isFinite(amount) && amount >= 0) costs[key] = amount;
+                return costs;
+            }, {})
+            : {};
+        cartQuantities.value = state.cartQuantities && typeof state.cartQuantities === 'object'
+            ? Object.entries(state.cartQuantities).reduce<Record<string, number>>((quantities, [key, value]) => {
+                const quantity = Number(value);
+                if (Number.isFinite(quantity) && quantity >= 1) quantities[key] = Math.trunc(quantity);
+                return quantities;
+            }, {})
+            : {};
+        quoteDiscountCode.value = typeof state.quoteDiscountCode === 'string' ? state.quoteDiscountCode : '';
+        quoteDiscountType.value = state.quoteDiscountType === 'fixed' ? 'fixed' : 'percentage';
+        quoteDiscountValue.value = typeof state.quoteDiscountValue === 'string' ? state.quoteDiscountValue : '';
         selectedSpeakerCategory.value = typeof state.selectedSpeakerCategory === 'string'
             ? state.selectedSpeakerCategory
             : '';
@@ -1857,6 +1905,12 @@ const persistConfiguratorState = () => {
                 selectedSpeakerCategory: selectedSpeakerCategory.value,
                 selectedSpeakerSizeByCategory: selectedSpeakerSizeByCategory.value,
                 selectedSpeakerKeys: selectedSpeakerKeys.value,
+                selectedCustomProductKeys: selectedCustomProductKeys.value,
+                customImportCosts: customImportCosts.value,
+                cartQuantities: cartQuantities.value,
+                quoteDiscountCode: quoteDiscountCode.value,
+                quoteDiscountType: quoteDiscountType.value,
+                quoteDiscountValue: quoteDiscountValue.value,
                 selectedInstallationKey: selectedInstallationKey.value,
                 installationRequested: installationRequested.value,
                 selectedPrecheckMethod: selectedPrecheckMethod.value,
@@ -1886,6 +1940,12 @@ watch(
         selectedSpeakerCategory,
         selectedSpeakerSizeByCategory,
         selectedSpeakerKeys,
+        selectedCustomProductKeys,
+        customImportCosts,
+        cartQuantities,
+        quoteDiscountCode,
+        quoteDiscountType,
+        quoteDiscountValue,
         selectedInstallationKey,
         installationRequested,
         selectedPrecheckMethod,
@@ -2113,7 +2173,10 @@ const selectedCameras = computed(() =>
     ),
 );
 const cameraStepTitles = computed(() =>
-    selectedCameras.value.map((camera) => truncateStepTitle(camera.title)),
+    [
+        ...selectedCameras.value.map((camera) => truncateStepTitle(camera.title)),
+        ...customCameraProducts.value.map((product) => truncateStepTitle(product.title)),
+    ],
 );
 
 const pendingCameraSelection = ref<{
@@ -2280,7 +2343,10 @@ const selectedSpeakers = computed(() =>
     ),
 );
 const speakerStepTitles = computed(() =>
-    selectedSpeakers.value.map((speaker) => truncateStepTitle(speaker.productTitle)),
+    [
+        ...selectedSpeakers.value.map((speaker) => truncateStepTitle(speaker.productTitle)),
+        ...customSpeakerProducts.value.map((product) => truncateStepTitle(product.title)),
+    ],
 );
 
 const toggleSpeaker = (key: string) => {
@@ -2751,9 +2817,6 @@ const activeDiscount = computed(
 const nextDiscount = computed(() => {
     return [...discountTiers].reverse().find((tier) => productsSubtotal.value < tier.threshold) ?? null;
 });
-const quoteDiscountCode = ref('');
-const quoteDiscountType = ref<'percentage' | 'fixed'>('percentage');
-const quoteDiscountValue = ref('');
 const customDiscount = computed(() => {
     const code = quoteDiscountCode.value.trim();
     const value = Number.parseFloat(String(quoteDiscountValue.value).replace(',', '.'));
@@ -2832,14 +2895,23 @@ const discountLabel = computed(() => {
 
     return activeDiscount.value ? automaticDiscountLabel(activeDiscount.value) : '';
 });
-const onlineTotal = computed(() => productsSubtotal.value - discountAmount.value);
-const estimatedTotal = computed(() => onlineTotal.value + installationCost.value + customImportTotal.value);
+const onlineTotal = computed(() => productsSubtotal.value + customImportTotal.value - discountAmount.value);
+const estimatedTotal = computed(() => onlineTotal.value + installationCost.value);
 
-const usesItalianCheckout = computed(() => props.locale === 'it' && props.italianCheckoutEnabled === true);
+const usesItalianCheckout = computed(() => ['it', 'es'].includes(props.locale) && props.italianCheckoutEnabled === true);
+const localCheckoutCopy = computed(() => props.locale === 'es' ? {
+    action: 'Ir al pago',
+    shipping: 'Entrega incluida en el presupuesto',
+    error: 'No se puede abrir el pago. Inténtalo de nuevo.',
+} : {
+    action: 'Vai al pagamento',
+    shipping: 'Spedizione inclusa nel preventivo',
+    error: 'Impossibile aprire il pagamento. Riprova.',
+});
 const italianCheckoutBusy = ref(false);
 const italianCheckoutError = ref('');
 const italianCheckoutItems = computed(() => {
-    const items: Array<{ type: 'variant' | 'product'; id: number; quantity: number }> = [];
+    const items: Array<{ type: 'variant' | 'product'; id: number; quantity: number; import_unit_amount?: number }> = [];
     selectedScreens.value.forEach((screen) => items.push({ type: 'variant', id: screen.id, quantity: cartQuantity(`screen:${screen.id}`) }));
     selectedCameras.value.forEach((camera) => items.push({
         type: camera.variantId ? 'variant' : 'product', id: camera.variantId ?? camera.productId ?? 0, quantity: cartQuantity(`camera:${camera.key}`),
@@ -2848,10 +2920,18 @@ const italianCheckoutItems = computed(() => {
         type: speaker.variantId ? 'variant' : 'product', id: speaker.variantId ?? speaker.productId ?? 0, quantity: cartQuantity(`speaker:${speaker.key}`),
     }));
     selectedCustomProducts.value.filter((product) => product.category !== 'installation').forEach((product) => items.push({
-        type: product.variantId ? 'variant' : 'product', id: product.variantId ?? product.productId, quantity: cartQuantity(`custom:${product.key}`),
+        type: product.variantId ? 'variant' : 'product',
+        id: product.variantId ?? product.productId,
+        quantity: cartQuantity(`custom:${product.key}`),
+        import_unit_amount: Math.round(customImportCost(product.key) * 100),
     }));
     return items;
 });
+const italianCheckoutDiscount = computed(() => customDiscount.value ? {
+    code: customDiscount.value.code,
+    type: customDiscount.value.type,
+    value: Math.round(customDiscount.value.value * 100),
+} : null);
 
 const checkoutLineItems = computed(() => {
     const items: Array<{ variantId: string; quantity: number }> = [];
@@ -3164,34 +3244,50 @@ const sharedConfigurationPayload = computed<SharedConfigurationPayload | null>((
 
 const copySharedConfigurationStatus = ref<'idle' | 'copied' | 'error'>('idle');
 
-const copySharedConfigurationUrl = async () => {
+const createSharedConfigurationUrl = async (): Promise<string> => {
     if (!sharedConfigurationPayload.value) {
-        return;
+        throw new Error('No configuration to share.');
     }
 
+    const csrfToken = document
+        .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
+        ?.content;
+    const response = await fetch('/configurator/shared-configurations', {
+        method: 'POST',
+        headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+            ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+            configuration: sharedConfigurationPayload.value,
+            checkout: usesItalianCheckout.value ? {
+                items: italianCheckoutItems.value,
+                custom_discount: italianCheckoutDiscount.value,
+                locale: props.locale,
+            } : null,
+        }),
+    });
+
+    if (!response.ok) throw new Error('Unable to share configuration.');
+
+    const result = await response.json();
+    if (typeof result.uuid !== 'string') throw new Error('Invalid shared configuration UUID.');
+
+    if (usesItalianCheckout.value) {
+        if (typeof result.checkout_url !== 'string') throw new Error('Invalid checkout URL.');
+        return new URL(result.checkout_url, window.location.origin).toString();
+    }
+
+    const url = new URL(window.location.origin + window.location.pathname);
+    url.searchParams.set('c', result.uuid);
+    return url.toString();
+};
+
+const copySharedConfigurationUrl = async () => {
     try {
-        const csrfToken = document
-            .querySelector<HTMLMetaElement>('meta[name="csrf-token"]')
-            ?.content;
-        const response = await fetch('/configurator/shared-configurations', {
-            method: 'POST',
-            headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-                ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
-            },
-            credentials: 'same-origin',
-            body: JSON.stringify({ configuration: sharedConfigurationPayload.value }),
-        });
-
-        if (!response.ok) throw new Error('Unable to share configuration.');
-
-        const result = await response.json();
-        if (typeof result.uuid !== 'string') throw new Error('Invalid shared configuration UUID.');
-
-        const url = new URL(window.location.origin + window.location.pathname);
-        url.searchParams.set('c', result.uuid);
-        const sharedUrl = url.toString();
+        const sharedUrl = await createSharedConfigurationUrl();
 
         if (navigator.clipboard?.writeText) {
             await navigator.clipboard.writeText(sharedUrl);
@@ -3279,6 +3375,18 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
     if (!printWindow) {
         quoteGenerationError.value = t('errors.popup_blocked');
         return;
+    }
+
+    let paymentLink = checkoutUrl.value;
+
+    if (usesItalianCheckout.value) {
+        try {
+            paymentLink = await createSharedConfigurationUrl();
+        } catch {
+            printWindow.close();
+            quoteGenerationError.value = localCheckoutCopy.value.error;
+            return;
+        }
     }
 
     let quoteNumber: string;
@@ -3404,8 +3512,8 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
         .filter((item) => item.price >= 0)
         .map((item) => `<li>${escapeHtml(item.description)}</li>`)
         .join('');
-    const checkoutLink = props.locale !== 'it' && checkoutUrl.value
-        ? `<div class="checkout"><strong>${escapeHtml(t('print.purchase_link'))}:</strong><br><span>${escapeHtml(checkoutUrl.value)}</span><p class="purchase-authorization">${escapeHtml(t('print.purchase_authorization'))}</p></div>`
+    const checkoutLink = paymentLink
+        ? `<div class="checkout"><strong>${escapeHtml(t('print.purchase_link'))}:</strong><br><a href="${escapeHtml(paymentLink)}">${escapeHtml(paymentLink)}</a><p class="purchase-authorization">${escapeHtml(t('print.purchase_authorization'))}</p></div>`
         : '';
 
     printWindow.document.write(`<!doctype html>
@@ -3638,13 +3746,14 @@ const goToCheckout = async () => {
     if (usesItalianCheckout.value) {
         if (italianCheckoutBusy.value) return;
         italianCheckoutError.value = '';
-        if (customDiscount.value) {
-            italianCheckoutError.value = 'Rimuovi lo sconto personalizzato per procedere. Il checkout italiano applica gli sconti automatici del carrello.';
-            return;
-        }
+        persistConfiguratorState();
         italianCheckoutBusy.value = true;
-        router.post('/checkout/italiano', { items: italianCheckoutItems.value }, {
-            onError: (errors) => { italianCheckoutError.value = Object.values(errors)[0] || 'Impossibile aprire il checkout. Riprova.'; },
+        router.post('/checkout/italiano', {
+            items: italianCheckoutItems.value,
+            custom_discount: italianCheckoutDiscount.value,
+            locale: props.locale,
+        }, {
+            onError: (errors) => { italianCheckoutError.value = Object.values(errors)[0] || localCheckoutCopy.value.error; },
             onFinish: () => { italianCheckoutBusy.value = false; },
         });
         return;
@@ -3865,7 +3974,7 @@ watch(
                             <option value="it">Italiano</option>
                         </select>
 
-                        <button v-if="usesItalianCheckout" type="button" :disabled="!canCheckout" aria-label="Vai al checkout" class="rounded-md p-2 transition hover:bg-white/10 hover:text-amber-400 disabled:opacity-50" @click="goToCheckout">
+                        <button v-if="usesItalianCheckout" type="button" :disabled="!canCheckout" :aria-label="localCheckoutCopy.action" class="rounded-md p-2 transition hover:bg-white/10 hover:text-amber-400 disabled:opacity-50" @click="goToCheckout">
                             <svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
                                 <path d="M6.7 8.5h10.6l.75 11H5.95l.75-11Z"/>
                                 <path d="M9 9V6.5a3 3 0 0 1 6 0V9"/>
@@ -4126,7 +4235,7 @@ watch(
 
                         </div>
                         <div
-                            v-if="isUniversalMode || selectedModel"
+                            v-if="isUniversalMode || selectedModel || customScreenProducts.length"
                             class="border-t border-neutral-800 pt-6"
                         >
                             <button ref="screenStepButton" type="button" :class="mainStepButtonClass('screen')" @click="toggleScreenStep">
@@ -4145,6 +4254,24 @@ watch(
                                 </svg>
                             </button>
                             <div v-if="openSteps.includes('screen')" id="screen-step-content" class="mt-6 min-w-0 max-w-full">
+                            <div v-if="customScreenProducts.length" id="custom-screen-products" class="mb-6 grid gap-4 sm:grid-cols-2">
+                                <article v-for="product in customScreenProducts" :key="`custom-screen-${product.key}`" class="grid gap-4 rounded-xl border-2 border-amber-400 bg-amber-400/10 p-4 sm:grid-cols-[7rem_minmax(0,1fr)]">
+                                    <img v-if="product.image" :src="product.image" :alt="product.title" loading="lazy" decoding="async" class="h-28 w-full rounded-lg bg-[#121212] object-contain" />
+                                    <div class="min-w-0" :class="product.image ? '' : 'sm:col-span-2'">
+                                        <p class="text-xs font-semibold uppercase tracking-wide text-amber-400">{{ customQuoteCopy.section }}</p>
+                                        <h3 class="mt-1 truncate font-semibold text-white">{{ product.title }}</h3>
+                                        <p v-if="product.variantTitle" class="truncate text-sm text-neutral-400">{{ displayVariantTitle(product.variantTitle) }}</p>
+                                        <p class="mt-2 font-bold text-amber-400">{{ euroFormatter.format((product.price + customImportCost(product.key)) * cartQuantity(`custom:${product.key}`)) }}</p>
+                                        <p v-if="customImportCost(product.key)" class="text-xs text-neutral-400">{{ customQuoteCopy.importUnit }}: {{ euroFormatter.format(customImportCost(product.key)) }}</p>
+                                        <div class="mt-3 flex flex-wrap items-center gap-2">
+                                            <button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button>
+                                            <b class="w-7 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b>
+                                            <button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) + 1)">+</button>
+                                            <button type="button" class="ml-auto rounded-lg border border-red-500 px-3 py-2 text-sm text-red-300" @click="toggleCustomProduct(product.key)">{{ customQuoteCopy.remove }}</button>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
                             <div v-if="isUniversalMode" class="mb-6 rounded-xl border border-neutral-700 bg-[#121212] p-5">
                                 <p class="text-center text-lg font-semibold text-white">{{ t('mode.din_question') }}</p>
                                 <div class="mx-auto mt-4 grid max-w-lg grid-cols-2 gap-3">
@@ -4373,10 +4500,10 @@ watch(
                         </div>
 
                         <div
-                            v-if="isUniversalMode || isSpecificMode"
+                            v-if="isUniversalMode || isSpecificMode || customCameraProducts.length"
                             class="border-t border-neutral-800 pt-6"
                         >
-                            <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStepAndCenter('camera', 'camera-step-options', false, 'start')">
+                            <button type="button" :class="mainStepButtonClass('camera')" @click="toggleStepAndCenter('camera', 'camera-step-content', false, 'start')">
                                 <span class="step-context-label">{{ stepContextLabel('camera') }}</span>
                                 <span v-if="cameraStepTitles.length === 0" class="block max-w-full truncate whitespace-nowrap uppercase">{{ t('steps.camera') }}</span>
                                 <span
@@ -4392,8 +4519,24 @@ watch(
                                 </svg>
                             </button>
                             <div v-if="openSteps.includes('camera')" id="camera-step-content" class="mt-6 min-w-0 max-w-full">
-                            <p v-if="camerasLoading" class="py-8 text-center text-neutral-400">…</p>
-                            <div v-else id="camera-step-options" class="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-3">
+                            <div v-if="customCameraProducts.length" class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                                <article v-for="product in customCameraProducts" :key="`custom-camera-${product.key}`" class="overflow-hidden rounded-xl border-2 border-amber-400 bg-amber-400/10 p-4">
+                                    <img v-if="product.image" :src="product.image" :alt="product.title" loading="lazy" decoding="async" class="h-36 w-full rounded-lg bg-[#121212] object-contain" />
+                                    <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-amber-400">{{ customQuoteCopy.section }}</p>
+                                    <h3 class="mt-1 truncate font-semibold text-white">{{ product.title }}</h3>
+                                    <p v-if="product.variantTitle" class="truncate text-sm text-neutral-400">{{ displayVariantTitle(product.variantTitle) }}</p>
+                                    <p class="mt-2 font-bold text-amber-400">{{ euroFormatter.format((product.price + customImportCost(product.key)) * cartQuantity(`custom:${product.key}`)) }}</p>
+                                    <p v-if="customImportCost(product.key)" class="text-xs text-neutral-400">{{ customQuoteCopy.importUnit }}: {{ euroFormatter.format(customImportCost(product.key)) }}</p>
+                                    <div class="mt-3 flex items-center gap-2">
+                                        <button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button>
+                                        <b class="w-7 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b>
+                                        <button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) + 1)">+</button>
+                                        <button type="button" class="ml-auto rounded-lg border border-red-500 px-3 py-2 text-sm text-red-300" @click="toggleCustomProduct(product.key)">{{ customQuoteCopy.remove }}</button>
+                                    </div>
+                                </article>
+                            </div>
+                            <p v-if="(isUniversalMode || isSpecificMode) && camerasLoading" class="py-8 text-center text-neutral-400">…</p>
+                            <div v-else-if="isUniversalMode || isSpecificMode" id="camera-step-options" class="mt-4 grid min-w-0 grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-3">
                                 <div
                                     v-for="camera in visibleCameraOptions"
                                     :key="camera.key"
@@ -4475,10 +4618,10 @@ watch(
                         </div>
 
                         <div
-                            v-if="isUniversalMode || isSpecificMode"
+                            v-if="isUniversalMode || isSpecificMode || customSpeakerProducts.length"
                             class="border-t border-neutral-800 pt-6"
                         >
-                            <button type="button" :class="mainStepButtonClass('speaker')" @click="toggleStepAndCenter('speaker', 'speaker-step-controls')">
+                            <button type="button" :class="mainStepButtonClass('speaker')" @click="toggleStepAndCenter('speaker', 'speaker-step-content')">
                                 <span class="step-context-label">{{ stepContextLabel('speaker') }}</span>
                                 <span v-if="speakerStepTitles.length === 0" class="block max-w-full truncate whitespace-nowrap uppercase">{{ t('steps.speaker') }}</span>
                                 <span
@@ -4494,8 +4637,24 @@ watch(
                                 </svg>
                             </button>
                             <div v-if="openSteps.includes('speaker')" id="speaker-step-content" class="mt-6 min-w-0 max-w-full">
-                            <p v-if="speakersLoading" class="py-8 text-center text-neutral-400">…</p>
-                            <div v-else id="speaker-step-controls" class="mobile-model-section mt-4 grid min-w-0 max-w-2xl grid-cols-[minmax(0,1fr)] gap-4">
+                            <div v-if="customSpeakerProducts.length" class="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                                <article v-for="product in customSpeakerProducts" :key="`custom-speaker-${product.key}`" class="overflow-hidden rounded-xl border-2 border-amber-400 bg-amber-400/10 p-4">
+                                    <img v-if="product.image" :src="product.image" :alt="product.title" loading="lazy" decoding="async" class="h-36 w-full rounded-lg bg-[#121212] object-contain" />
+                                    <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-amber-400">{{ customQuoteCopy.section }}</p>
+                                    <h3 class="mt-1 truncate font-semibold text-white">{{ product.title }}</h3>
+                                    <p v-if="product.variantTitle" class="truncate text-sm text-neutral-400">{{ displayVariantTitle(product.variantTitle) }}</p>
+                                    <p class="mt-2 font-bold text-amber-400">{{ euroFormatter.format((product.price + customImportCost(product.key)) * cartQuantity(`custom:${product.key}`)) }}</p>
+                                    <p v-if="customImportCost(product.key)" class="text-xs text-neutral-400">{{ customQuoteCopy.importUnit }}: {{ euroFormatter.format(customImportCost(product.key)) }}</p>
+                                    <div class="mt-3 flex items-center gap-2">
+                                        <button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button>
+                                        <b class="w-7 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b>
+                                        <button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) + 1)">+</button>
+                                        <button type="button" class="ml-auto rounded-lg border border-red-500 px-3 py-2 text-sm text-red-300" @click="toggleCustomProduct(product.key)">{{ customQuoteCopy.remove }}</button>
+                                    </div>
+                                </article>
+                            </div>
+                            <p v-if="(isUniversalMode || isSpecificMode) && speakersLoading" class="py-8 text-center text-neutral-400">…</p>
+                            <div v-else-if="isUniversalMode || isSpecificMode" id="speaker-step-controls" class="mobile-model-section mt-4 grid min-w-0 max-w-2xl grid-cols-[minmax(0,1fr)] gap-4">
                                 <div>
                                     <div class="mobile-model-buttons flex flex-wrap gap-2">
                                         <button
@@ -5280,7 +5439,7 @@ watch(
                             <p class="mt-1 text-xs leading-5 text-neutral-400">{{ t('quote.trust_details') }}</p>
                         </div>
 
-                        <p v-if="usesItalianCheckout" class="text-center text-sm text-amber-300">Spedizione gratuita in Italia{{ italianCheckoutIsTest ? ' · Checkout di prova' : '' }}</p>
+                        <p v-if="usesItalianCheckout" class="text-center text-sm text-amber-300">{{ localCheckoutCopy.shipping }}{{ italianCheckoutIsTest ? (props.locale === 'es' ? ' · Pago de prueba' : ' · Pagamento di prova') : '' }}</p>
                         <p v-if="italianCheckoutError" role="alert" class="text-center text-sm text-red-400">{{ italianCheckoutError }}</p>
                         <label v-if="!usesItalianCheckout" ref="checkoutConsentSection" class="flex cursor-pointer items-start gap-2 rounded-lg px-1 text-xs leading-5 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 p-3 ring-2 ring-amber-400' : ''">
                             <input
@@ -5321,11 +5480,11 @@ watch(
                             @click="goToCheckout"
                             class="order-2 flex h-12 w-full items-center justify-center rounded-xl bg-red-600 text-white transition hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
                             :disabled="!canCheckout"
-                            :aria-label="usesItalianCheckout ? 'Vai al checkout' : t('actions.add_to_cart')"
-                            :title="usesItalianCheckout ? 'Vai al checkout' : t('actions.add_to_cart')"
+                            :aria-label="usesItalianCheckout ? localCheckoutCopy.action : t('actions.add_to_cart')"
+                            :title="usesItalianCheckout ? localCheckoutCopy.action : t('actions.add_to_cart')"
                         >
                             <svg class="h-7 w-7" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h4" /></svg>
-                        <span v-if="usesItalianCheckout" class="ml-2 font-semibold">Vai al checkout</span></button>
+                        <span v-if="usesItalianCheckout" class="ml-2 font-semibold">{{ localCheckoutCopy.action }}</span></button>
 
                         <button
                             type="button"
@@ -5589,7 +5748,7 @@ watch(
                     </div>
                     <div v-for="camera in selectedCameras" :key="`cart-camera-${camera.key}`" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg border border-neutral-700 bg-black"><img v-if="camera.image" :src="camera.image" alt="" class="h-full w-full object-contain" /></div><div class="min-w-0"><p class="line-clamp-2 font-semibold">{{ camera.title }}</p><p class="mt-1 text-amber-400">{{ (camera.price * cartQuantity(`camera:${camera.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white hover:text-red-400" @click="toggleCamera(camera.key)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`camera:${camera.key}`, cartQuantity(`camera:${camera.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`camera:${camera.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`camera:${camera.key}`, cartQuantity(`camera:${camera.key}`) + 1)">+</button></div></div>
                     <div v-for="speaker in selectedSpeakers" :key="`cart-speaker-${speaker.key}`" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg border border-neutral-700 bg-black"><img v-if="speaker.image" :src="speaker.image" alt="" class="h-full w-full object-contain" /></div><div class="min-w-0"><p class="line-clamp-2 font-semibold">{{ speaker.productTitle }}</p><p v-if="speaker.title !== speaker.productTitle" class="truncate text-sm text-neutral-400">{{ speaker.title }}</p><p class="mt-1 text-amber-400">{{ (speaker.price * cartQuantity(`speaker:${speaker.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white hover:text-red-400" @click="toggleSpeaker(speaker.key)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`speaker:${speaker.key}`, cartQuantity(`speaker:${speaker.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`speaker:${speaker.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`speaker:${speaker.key}`, cartQuantity(`speaker:${speaker.key}`) + 1)">+</button></div></div>
-                    <div v-for="product in selectedCustomProducts" :key="`cart-custom-${product.key}`" class="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"><button type="button" @click="toggleCustomProduct(product.key)">🗑</button><div class="min-w-0"><p class="truncate font-semibold">{{ product.title }}</p><p class="text-amber-400">{{ (product.price * cartQuantity(`custom:${product.key}`)).toFixed(2) }} €</p></div><div class="col-span-2 flex items-center justify-end gap-2 sm:col-span-1"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) + 1)">+</button></div></div>
+                    <div v-for="product in selectedCustomProducts" :key="`cart-custom-${product.key}`" class="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"><button type="button" @click="toggleCustomProduct(product.key)">🗑</button><div class="min-w-0"><p class="truncate font-semibold">{{ product.title }}</p><p class="text-amber-400">{{ ((product.price + customImportCost(product.key)) * cartQuantity(`custom:${product.key}`)).toFixed(2) }} €</p><p v-if="customImportCost(product.key)" class="text-xs text-neutral-400">{{ customQuoteCopy.importUnit }}: {{ euroFormatter.format(customImportCost(product.key)) }}</p></div><div class="col-span-2 flex items-center justify-end gap-2 sm:col-span-1"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) + 1)">+</button></div></div>
                     <div v-if="selectedInstallation" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="relative flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg bg-amber-400"><img  :src="selectedInstallation.image || '/images/icons/installation-tools.png'" :alt="stepContextLabel('installation')" class="h-full w-full object-cover" /></div><div class="min-w-0"><p class="line-clamp-2 font-semibold">{{ selectedInstallation.title }}</p><p class="mt-1 text-amber-400">{{ (selectedInstallation.price * cartQuantity(`installation:${selectedInstallation.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white transition hover:border-red-400 hover:text-red-400" :aria-label="t('actions.remove_product')" @click="selectedInstallationKey = null"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`installation:${selectedInstallation.key}`, cartQuantity(`installation:${selectedInstallation.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`installation:${selectedInstallation.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`installation:${selectedInstallation.key}`, cartQuantity(`installation:${selectedInstallation.key}`) + 1)">+</button></div></div>
                     <div v-if="selectedPrecheckMethod === 'installer'" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3">
                         <div class="flex h-[76px] w-[76px] items-center justify-center rounded-lg bg-amber-400 text-black">
@@ -5614,7 +5773,7 @@ watch(
                     </div>
                     <div class="rounded-xl border border-neutral-700 bg-[#121212] px-4 py-4 text-center"><p class="font-semibold text-amber-400">{{ t('quote.trust_title') }}</p><p class="mt-2 text-sm leading-6 text-neutral-400">{{ t('quote.trust_details') }}</p></div>
 
-                    <p v-if="usesItalianCheckout" class="text-center text-sm text-amber-300">Spedizione gratuita in Italia{{ italianCheckoutIsTest ? ' · Checkout di prova' : '' }}</p>
+                    <p v-if="usesItalianCheckout" class="text-center text-sm text-amber-300">{{ localCheckoutCopy.shipping }}{{ italianCheckoutIsTest ? (props.locale === 'es' ? ' · Pago de prueba' : ' · Pagamento di prova') : '' }}</p>
                         <p v-if="italianCheckoutError" role="alert" class="text-center text-sm text-red-400">{{ italianCheckoutError }}</p>
                         <label v-if="!usesItalianCheckout" ref="cartCheckoutConsentSection" class="flex cursor-pointer items-start gap-3 rounded-xl text-sm leading-6 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 p-4 ring-2 ring-amber-400' : ''">
                         <input v-model="checkoutConsentAccepted" type="checkbox" class="mt-1 h-4 w-4 shrink-0 accent-amber-400" />
@@ -5624,7 +5783,7 @@ watch(
 
                     <div class="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2 border-t-2 border-amber-400 bg-[#0b0b0b]/95 px-4 py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-[0_-15px_35px_rgba(0,0,0,0.55)] backdrop-blur sm:-mx-8 sm:px-8">
                         <div class="order-0 flex items-center justify-between rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2"><span class="text-sm font-bold text-white">{{ t('quote.online_total') }}</span><span class="shrink-0 whitespace-nowrap text-xl font-bold text-amber-400">{{ onlineTotal.toFixed(2) }} €</span></div>
-                        <button type="button" class="order-4 flex h-11 w-full items-center justify-center rounded-lg bg-red-600 text-white transition hover:bg-red-500 disabled:opacity-50" :disabled="!canCheckout" :aria-label="usesItalianCheckout ? 'Vai al checkout' : t('actions.add_to_cart')" :title="usesItalianCheckout ? 'Vai al checkout' : t('actions.add_to_cart')" @click="goToCheckout"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h4" /></svg><span v-if="usesItalianCheckout" class="ml-2 font-semibold">Vai al checkout</span></button>
+                        <button type="button" class="order-4 flex h-11 w-full items-center justify-center rounded-lg bg-red-600 text-white transition hover:bg-red-500 disabled:opacity-50" :disabled="!canCheckout" :aria-label="usesItalianCheckout ? localCheckoutCopy.action : t('actions.add_to_cart')" :title="usesItalianCheckout ? localCheckoutCopy.action : t('actions.add_to_cart')" @click="goToCheckout"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M3 10h18M7 15h4" /></svg><span v-if="usesItalianCheckout" class="ml-2 font-semibold">{{ localCheckoutCopy.action }}</span></button>
                         <button type="button" class="order-2 flex h-11 w-full items-center justify-center rounded-lg border border-amber-400 text-amber-400 transition hover:bg-amber-400 hover:text-black" :aria-label="t('actions.download_quote')" :title="t('actions.download_quote')" @click="downloadQuote"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" /></svg></button>
                         <button type="button" class="order-1 flex h-11 w-full items-center justify-center rounded-lg bg-[#334fb4] text-white transition hover:bg-[#405dc7]" :aria-label="funnelCopy.back" :title="funnelCopy.back" @click="returnToConfigurator"><svg class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6" /></svg></button>
                     </div>

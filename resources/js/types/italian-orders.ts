@@ -27,6 +27,7 @@ export type ItalianOrderDetail = ItalianOrderSummary & {
     shipping_address: OrderAddress;
     billing_address: OrderAddress | null;
     subtotal_amount: number;
+    import_amount: number;
     shipping_amount: number;
     discount_amount: number;
     carrier: string | null;
@@ -44,7 +45,9 @@ export type ItalianOrderDetail = ItalianOrderSummary & {
         variant_title: string | null;
         quantity: number;
         unit_amount: number;
+        import_unit_amount: number;
         total_amount: number;
+        import_total_amount: number;
     }>;
     events: Array<{
         id: number;

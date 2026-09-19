@@ -92,6 +92,26 @@ class StripeTestPaymentsTest extends TestCase
         $this->assertSame('pending', $order->fresh()->payment_status);
     }
 
+    public function test_stripe_charges_the_total_with_import_costs_in_the_order_language(): void
+    {
+        $order = $this->order();
+        $order->update([
+            'checkout_locale' => 'es',
+            'import_amount' => 1000,
+            'discount_amount' => 500,
+            'total_amount' => 10500,
+        ]);
+        $this->gateway->shouldReceive('createSession')->once()->andReturnUsing(function ($payload) {
+            $this->assertSame(10500, $payload['line_items'][0]['price_data']['unit_amount']);
+            $this->assertSame('es', $payload['locale']);
+            $this->assertStringContainsString('importación', $payload['line_items'][0]['price_data']['product_data']['description']);
+
+            return $this->sessionData($payload);
+        });
+
+        app(StripePayments::class)->session($order->fresh(), 'http://localhost/return');
+    }
+
     public function test_network_retry_reuses_identical_payload_and_idempotency_key(): void
     {
         $order = $this->order();

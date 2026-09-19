@@ -1,1 +1,0 @@
-var e=(e,t=`EUR`)=>new Intl.NumberFormat(`it-IT`,{style:`currency`,currency:t}).format(e/100),t=e=>e?new Intl.DateTimeFormat(`it-IT`,{dateStyle:`short`,timeStyle:`short`,timeZone:`Europe/Rome`}).format(new Date(e)):`—`;export{e as n,t};

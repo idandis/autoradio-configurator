@@ -14,6 +14,7 @@ class PruneSharedConfigurations extends Command
     public function handle(): int
     {
         $deleted = SharedConfiguration::query()
+            ->whereNull('checkout')
             ->where('created_at', '<', now()->subDays(30))
             ->delete();
 
