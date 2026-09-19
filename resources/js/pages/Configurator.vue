@@ -3244,7 +3244,7 @@ const sharedConfigurationPayload = computed<SharedConfigurationPayload | null>((
 
 const copySharedConfigurationStatus = ref<'idle' | 'copied' | 'error'>('idle');
 
-const createSharedConfigurationUrl = async (): Promise<string> => {
+const createSharedConfiguration = async (reserveQuoteNumber = false): Promise<{ url: string; quoteNumber: string | null }> => {
     if (!sharedConfigurationPayload.value) {
         throw new Error('No configuration to share.');
     }
@@ -3267,6 +3267,7 @@ const createSharedConfigurationUrl = async (): Promise<string> => {
                 custom_discount: italianCheckoutDiscount.value,
                 locale: props.locale,
             } : null,
+            reserve_quote_number: reserveQuoteNumber,
         }),
     });
 
@@ -3277,17 +3278,21 @@ const createSharedConfigurationUrl = async (): Promise<string> => {
 
     if (usesItalianCheckout.value) {
         if (typeof result.checkout_url !== 'string') throw new Error('Invalid checkout URL.');
-        return new URL(result.checkout_url, window.location.origin).toString();
+        if (reserveQuoteNumber && typeof result.quote_number !== 'string') throw new Error('Invalid quote number.');
+        return {
+            url: new URL(result.checkout_url, window.location.origin).toString(),
+            quoteNumber: typeof result.quote_number === 'string' ? result.quote_number : null,
+        };
     }
 
     const url = new URL(window.location.origin + window.location.pathname);
     url.searchParams.set('c', result.uuid);
-    return url.toString();
+    return { url: url.toString(), quoteNumber: null };
 };
 
 const copySharedConfigurationUrl = async () => {
     try {
-        const sharedUrl = await createSharedConfigurationUrl();
+        const { url: sharedUrl } = await createSharedConfiguration();
 
         if (navigator.clipboard?.writeText) {
             await navigator.clipboard.writeText(sharedUrl);
@@ -3378,25 +3383,26 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
     }
 
     let paymentLink = checkoutUrl.value;
+    let quoteNumber: string;
 
     if (usesItalianCheckout.value) {
         try {
-            paymentLink = await createSharedConfigurationUrl();
+            const shared = await createSharedConfiguration(true);
+            paymentLink = shared.url;
+            quoteNumber = shared.quoteNumber!;
         } catch {
             printWindow.close();
-            quoteGenerationError.value = localCheckoutCopy.value.error;
+            quoteGenerationError.value = t('errors.quote_number');
             return;
         }
-    }
-
-    let quoteNumber: string;
-
-    try {
-        quoteNumber = await nextQuoteNumber();
-    } catch {
-        printWindow.close();
-        quoteGenerationError.value = t('errors.quote_number');
-        return;
+    } else {
+        try {
+            quoteNumber = await nextQuoteNumber();
+        } catch {
+            printWindow.close();
+            quoteGenerationError.value = t('errors.quote_number');
+            return;
+        }
     }
 
     const quoteDate = new Intl.DateTimeFormat(localeTag.value).format(new Date());

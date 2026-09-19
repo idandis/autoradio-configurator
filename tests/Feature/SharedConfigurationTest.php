@@ -132,6 +132,41 @@ class SharedConfigurationTest extends TestCase
         $this->assertSame('es', $order->checkout_locale);
     }
 
+    public function test_quote_number_is_reserved_with_the_payment_link_after_language_change(): void
+    {
+        config(['italian_checkout.enabled' => true]);
+        $product = ConfiguratorProduct::create([
+            'handle' => 'language-change-screen', 'category' => 'screen',
+            'title' => 'Pantalla', 'title_it' => 'Schermo',
+        ]);
+        $variant = $product->variants()->create(['title' => 'Base', 'price' => '150.00']);
+        $configuration = [
+            'mode' => 'universal', 'din' => '2DIN', 'brand' => null, 'model' => null, 'year' => null,
+            'screens' => [], 'cameras' => [], 'speakers' => [], 'customProducts' => ['language-change-screen'],
+            'quantities' => [], 'importCosts' => [], 'installation' => null,
+            'postalCode' => null, 'serviceZone' => null, 'precheck' => null,
+        ];
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        $numbers = [];
+        foreach (['it', 'es'] as $locale) {
+            $response = $this->actingAs($admin)->postJson('/configurator/shared-configurations', [
+                'configuration' => $configuration,
+                'checkout' => [
+                    'items' => [['type' => 'variant', 'id' => $variant->id, 'quantity' => 1]],
+                    'custom_discount' => null,
+                    'locale' => $locale,
+                ],
+                'reserve_quote_number' => true,
+            ])->assertCreated()->assertJsonStructure(['checkout_url', 'quote_number']);
+            $numbers[] = $response->json('quote_number');
+        }
+
+        $this->assertMatchesRegularExpression('/^ARC-\d{8}-001$/', $numbers[0]);
+        $this->assertMatchesRegularExpression('/^ARC-\d{8}-002$/', $numbers[1]);
+        $this->assertDatabaseCount('shared_configurations', 2);
+    }
+
     public function test_prune_command_deletes_only_shared_configurations_older_than_30_days(): void
     {
         Carbon::setTestNow('2026-08-02 12:00:00');

@@ -4,13 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Models\SharedConfiguration;
 use App\Services\ItalianCheckout;
+use App\Services\QuoteNumbers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 
 class SharedConfigurationController extends Controller
 {
-    public function store(Request $request, ItalianCheckout $checkout): JsonResponse
+    public function store(Request $request, ItalianCheckout $checkout, QuoteNumbers $quoteNumbers): JsonResponse
     {
         $validated = $request->validate([
             'configuration' => ['required', 'array'],
@@ -40,6 +41,7 @@ class SharedConfigurationController extends Controller
             'checkout.items' => ['required_with:checkout', 'array', 'min:1', 'max:50'],
             'checkout.custom_discount' => ['nullable', 'array'],
             'checkout.locale' => ['required_with:checkout', 'in:it,es'],
+            'reserve_quote_number' => ['sometimes', 'boolean'],
         ]);
 
         $storedCheckout = null;
@@ -69,6 +71,9 @@ class SharedConfigurationController extends Controller
             'uuid' => $sharedConfiguration->uuid,
             'checkout_url' => $storedCheckout
                 ? route('italian-checkout.shared', $sharedConfiguration->uuid, false)
+                : null,
+            'quote_number' => ($validated['reserve_quote_number'] ?? false)
+                ? $quoteNumbers->next()
                 : null,
         ], 201);
     }
