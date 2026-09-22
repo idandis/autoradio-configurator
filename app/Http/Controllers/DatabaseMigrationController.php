@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\ConfiguratorProduct;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -41,6 +43,8 @@ class DatabaseMigrationController extends Controller
                     'database' => 'Aggiornamento non completato. Controlla i log del server o contatta il provider.',
                 ]);
             }
+
+            $this->ensureConfiguratorBodyHtmlColumn();
 
             if (function_exists('set_time_limit')) {
                 @set_time_limit(0);
@@ -130,6 +134,17 @@ class DatabaseMigrationController extends Controller
                 ]);
             }
         }
+    }
+
+    private function ensureConfiguratorBodyHtmlColumn(): void
+    {
+        if (Schema::hasColumn('configurator_products', 'body_html')) {
+            return;
+        }
+
+        Schema::table('configurator_products', function (Blueprint $table): void {
+            $table->longText('body_html')->nullable()->after('title_en');
+        });
     }
 
     private function safeErrorMessage(Throwable $exception): string

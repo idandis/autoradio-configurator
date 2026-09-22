@@ -113,7 +113,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/configurator/catalog/custom-products', [ConfiguratorController::class, 'customProducts'])
         ->name('configurator.catalog.custom-products');
     Route::post('/dashboard/database/migrate', DatabaseMigrationController::class)
-        ->middleware('throttle:3,10')
+        ->middleware('throttle:30,1')
         ->name('dashboard.database.migrate');
     Route::post('/dashboard/checkout-italia/update', ItalianCheckoutMaintenanceController::class)
         ->middleware('throttle:3,10')

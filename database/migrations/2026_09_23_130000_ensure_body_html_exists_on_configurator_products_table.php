@@ -19,12 +19,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        if (! Schema::hasColumn('configurator_products', 'body_html')) {
-            return;
-        }
-
-        Schema::table('configurator_products', function (Blueprint $table) {
-            $table->dropColumn('body_html');
-        });
+        // Repair migration: the original migration owns removal of the column.
     }
 };
