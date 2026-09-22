@@ -31,14 +31,16 @@ class SharedConfigurationController extends Controller
             'configuration.customProducts.*' => ['string', 'max:255'],
             'configuration.quantities' => ['sometimes', 'array'],
             'configuration.quantities.*' => ['integer', 'min:1'],
+            'configuration.importTotal' => ['sometimes', 'numeric', 'min:0', 'max:999999.99'],
             'configuration.importCosts' => ['sometimes', 'array'],
             'configuration.importCosts.*' => ['numeric', 'min:0'],
             'configuration.installation' => ['nullable', 'string', 'max:255'],
             'configuration.postalCode' => ['nullable', 'string', 'max:5'],
             'configuration.serviceZone' => ['nullable', 'string', 'max:50'],
             'configuration.precheck' => ['nullable', 'string', 'max:50'],
-            'checkout' => ['nullable', 'array:items,custom_discount,locale'],
+            'checkout' => ['nullable', 'array:items,custom_discount,locale,import_amount'],
             'checkout.items' => ['required_with:checkout', 'array', 'min:1', 'max:50'],
+            'checkout.import_amount' => ['sometimes', 'integer', 'min:0', 'max:99999999'],
             'checkout.custom_discount' => ['nullable', 'array'],
             'checkout.locale' => ['required_with:checkout', 'in:it,es'],
             'reserve_quote_number' => ['sometimes', 'boolean'],
@@ -50,7 +52,8 @@ class SharedConfigurationController extends Controller
             $locale = $validated['checkout']['locale'];
             $items = $checkout->normalizeItems($validated['checkout'], true, $locale);
             $discount = $checkout->normalizeDiscount($validated['checkout'], true, $locale);
-            $quote = $checkout->quote($items, locale: $locale, customDiscount: $discount);
+            $importAmount = $checkout->normalizeImportAmount($validated['checkout'], true);
+            $quote = $checkout->quote($items, locale: $locale, customDiscount: $discount, importAmount: $importAmount);
             $storedCheckout = compact('items', 'discount', 'locale', 'quote');
             $fingerprint = hash('sha256', json_encode([
                 'configuration' => $validated['configuration'],

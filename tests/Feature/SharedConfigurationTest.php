@@ -81,14 +81,15 @@ class SharedConfigurationTest extends TestCase
             'mode' => 'universal', 'din' => '2DIN', 'brand' => null, 'model' => null, 'year' => null,
             'screens' => [], 'cameras' => [], 'speakers' => [], 'customProducts' => ['pantalla-presupuesto'],
             'quantities' => ['custom:pantalla-presupuesto' => 2],
-            'importCosts' => ['pantalla-presupuesto' => 20],
+            'importTotal' => 40,
             'installation' => null, 'postalCode' => null, 'serviceZone' => null, 'precheck' => null,
         ];
         $checkout = [
             'items' => [[
-                'type' => 'variant', 'id' => $variant->id, 'quantity' => 2, 'import_unit_amount' => 2000,
+                'type' => 'variant', 'id' => $variant->id, 'quantity' => 2,
             ]],
             'custom_discount' => null,
+            'import_amount' => 4000,
             'locale' => 'es',
         ];
         $admin = User::factory()->create(['is_admin' => true]);
@@ -115,7 +116,8 @@ class SharedConfigurationTest extends TestCase
                 ->where('checkoutLocale', 'es')
                 ->where('changed', false)
                 ->where('quote.items.0.unit_amount', 10000)
-                ->where('quote.items.0.import_unit_amount', 2000)
+                ->where('quote.items.0.import_unit_amount', 0)
+                ->where('quote.import_amount', 4000)
                 ->where('quote.total_amount', 24000));
 
         $hash = session("italian_checkout_drafts.$uuid.quote_hash");

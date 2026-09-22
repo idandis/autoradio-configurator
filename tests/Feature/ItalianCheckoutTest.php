@@ -185,6 +185,44 @@ class ItalianCheckoutTest extends TestCase
         $this->assertSame(2500, $order->items->sole()->import_total_amount);
     }
 
+    public function test_flat_import_cost_is_added_once_and_persisted_without_quantity_multiplier(): void
+    {
+        $variant = $this->variant('100.00');
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $payload = [
+            'items' => [['type' => 'variant', 'id' => $variant->id, 'quantity' => 3]],
+            'import_amount' => 2501,
+            'custom_discount' => ['code' => 'TEN', 'type' => 'percentage', 'value' => 1000],
+        ];
+        $response = $this->post(route('italian-checkout.start'), $payload)->assertSessionHasNoErrors();
+        $token = basename($response->headers->get('Location'));
+        $this->get(route('italian-checkout.show', $token))->assertInertia(fn (Assert $page) => $page
+            ->where('quote.import_amount', 2501)
+            ->where('quote.items.0.import_unit_amount', 0)
+            ->where('quote.total_amount', 29501));
+        $other = $this->post(route('italian-checkout.start'), [...$payload, 'import_amount' => 3000]);
+        $this->assertNotSame($response->headers->get('Location'), $other->headers->get('Location'));
+        $this->post(route('italian-checkout.store', $token), $this->customer(
+            session("italian_checkout_drafts.$token.quote_hash")
+        ))->assertSessionHasNoErrors();
+        $order = ItalianOrder::sole();
+        $this->assertSame(2501, $order->import_amount);
+        $this->assertSame(29501, $order->total_amount);
+    }
+
+    public function test_flat_import_cost_rejects_public_or_invalid_amounts(): void
+    {
+        $variant = $this->variant();
+        $payload = ['items' => [['type' => 'variant', 'id' => $variant->id, 'quantity' => 1]]];
+        $this->post(route('italian-checkout.start'), [...$payload, 'import_amount' => 100])
+            ->assertSessionHasErrors('import_amount');
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        foreach ([-1, 1.5, 100000000, 'invalid'] as $amount) {
+            $this->post(route('italian-checkout.start'), [...$payload, 'import_amount' => $amount])
+                ->assertSessionHasErrors('import_amount');
+        }
+    }
+
     public function test_public_requests_cannot_inject_import_costs_or_custom_discounts(): void
     {
         $variant = $this->variant('100.00');

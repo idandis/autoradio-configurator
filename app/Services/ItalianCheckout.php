@@ -91,7 +91,20 @@ class ItalianCheckout
         return $discount;
     }
 
-    public function quote(array $items, bool $lock = false, string $locale = 'it', ?array $customDiscount = null): array
+    public function normalizeImportAmount(array $input, bool $allowCustomAmounts = false): int
+    {
+        $data = Validator::make($input, [
+            'import_amount' => ['sometimes', 'integer', 'min:0', 'max:99999999'],
+        ])->validate();
+        $amount = (int) ($data['import_amount'] ?? 0);
+        if ($amount > 0 && ! $allowCustomAmounts) {
+            throw ValidationException::withMessages(['import_amount' => 'Solo un amministratore può impostare i costi di importazione.']);
+        }
+
+        return $amount;
+    }
+
+    public function quote(array $items, bool $lock = false, string $locale = 'it', ?array $customDiscount = null, int $importAmount = 0): array
     {
         $locale = in_array($locale, ['it', 'es'], true) ? $locale : 'it';
         $lines = [];
@@ -134,7 +147,7 @@ class ItalianCheckout
         }
 
         $subtotal = array_sum(array_column($lines, 'total_amount'));
-        $importAmount = array_sum(array_column($lines, 'import_total_amount'));
+        $importAmount += array_sum(array_column($lines, 'import_total_amount'));
         // Same automatic tiers already shown by the configurator, calculated in cents.
         if ($customDiscount) {
             $discount = $customDiscount['type'] === 'percentage'

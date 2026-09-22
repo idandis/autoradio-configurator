@@ -107,6 +107,7 @@ type SharedConfigurationPayload = {
     customProducts: string[];
     quantities?: Record<string, number>;
     importCosts?: Record<string, number>;
+    importTotal?: number;
     installation: string | null;
     postalCode: string | null;
     serviceZone: string | null;
@@ -570,17 +571,24 @@ const customProductSearch = ref('');
 const quoteDiscountCode = ref('');
 const quoteDiscountType = ref<'percentage' | 'fixed'>('percentage');
 const quoteDiscountValue = ref('');
-const customImportCosts = ref<Record<string, number>>({});
-const customImportCost = (key: string) => customImportCosts.value[key] ?? 0;
-const setCustomImportCost = (key: string, event: Event) => {
-    const input = event.target as HTMLInputElement;
-    const amount = Number(input.value.replace(',', '.'));
-    customImportCosts.value[key] = Number.isFinite(amount) ? Math.round(Math.max(0, amount) * 100) / 100 : 0;
-    input.value = String(customImportCost(key));
+const customImportCosts = ref<Record<string, number>>({}); // Legacy saved quotes only.
+const customImportAmount = ref(0);
+const normalizeImportAmount = (value: unknown) => {
+    const amount = Number(String(value ?? 0).replace(',', '.'));
+    return Number.isFinite(amount) ? Math.round(Math.min(999999.99, Math.max(0, amount)) * 100) / 100 : 0;
 };
-const customImportTotal = computed(() => selectedCustomProducts.value.reduce(
-    (sum, product) => sum + customImportCost(product.key) * cartQuantity(`custom:${product.key}`), 0,
-));
+const setCustomImportAmount = (event: Event) => {
+    const input = event.target as HTMLInputElement;
+    customImportAmount.value = normalizeImportAmount(input.value);
+    input.value = String(customImportAmount.value);
+};
+const restoreImportAmount = (value: unknown) => {
+    customImportAmount.value = normalizeImportAmount(value ?? selectedCustomProductKeys.value.reduce(
+        (sum, key) => sum + (customImportCosts.value[key] ?? 0) * cartQuantity(`custom:${key}`), 0,
+    ));
+    customImportCosts.value = {};
+};
+const customImportTotal = computed(() => selectedCustomProductKeys.value.length ? customImportAmount.value : 0);
 const selectedCustomProductKeys = ref<string[]>([]);
 const customQuoteActive = computed(() => showCustomQuoteModal.value || selectedCustomProductKeys.value.length > 0);
 const customProducts = ref<CustomProduct[]>([...(props.customProducts ?? [])]);
@@ -610,6 +618,7 @@ const toggleCustomProduct = (key: string) => {
         const { [`custom:${key}`]: removedQuantity, ...remainingQuantities } = cartQuantities.value;
         customImportCosts.value = remainingImportCosts;
         cartQuantities.value = remainingQuantities;
+        if (!selectedCustomProductKeys.value.length) customImportAmount.value = 0;
         return;
     }
 
@@ -1701,6 +1710,7 @@ const restoreConfiguratorState = async () => {
                 return quantities;
             }, {})
             : {};
+        restoreImportAmount(state.customImportAmount);
         quoteDiscountCode.value = typeof state.quoteDiscountCode === 'string' ? state.quoteDiscountCode : '';
         quoteDiscountType.value = state.quoteDiscountType === 'fixed' ? 'fixed' : 'percentage';
         quoteDiscountValue.value = typeof state.quoteDiscountValue === 'string' ? state.quoteDiscountValue : '';
@@ -1828,6 +1838,7 @@ const applySharedConfiguration = async (configuration: SharedConfigurationPayloa
     customImportCosts.value = Object.fromEntries(Object.entries(configuration.importCosts ?? {}).map(([key, value]) => [key, Number(value)]));
     const customKeys = new Set(customProducts.value.map((product) => product.key));
     selectedCustomProductKeys.value = configuration.customProducts.filter((key) => customKeys.has(key));
+    restoreImportAmount(configuration.importTotal);
 
     const sharedPostalCode = configuration.postalCode;
     if (sharedPostalCode && /^\d{5}$/.test(sharedPostalCode)) {
@@ -1913,7 +1924,7 @@ const persistConfiguratorState = () => {
                 selectedSpeakerSizeByCategory: selectedSpeakerSizeByCategory.value,
                 selectedSpeakerKeys: selectedSpeakerKeys.value,
                 selectedCustomProductKeys: selectedCustomProductKeys.value,
-                customImportCosts: customImportCosts.value,
+                customImportAmount: customImportAmount.value,
                 cartQuantities: cartQuantities.value,
                 quoteDiscountCode: quoteDiscountCode.value,
                 quoteDiscountType: quoteDiscountType.value,
@@ -1948,7 +1959,7 @@ watch(
         selectedSpeakerSizeByCategory,
         selectedSpeakerKeys,
         selectedCustomProductKeys,
-        customImportCosts,
+        customImportAmount,
         cartQuantities,
         quoteDiscountCode,
         quoteDiscountType,
@@ -2905,7 +2916,8 @@ const discountLabel = computed(() => {
 const onlineTotal = computed(() => productsSubtotal.value + customImportTotal.value - discountAmount.value);
 const estimatedTotal = computed(() => onlineTotal.value + installationCost.value);
 
-const usesItalianCheckout = computed(() => ['it', 'es'].includes(props.locale) && props.italianCheckoutEnabled === true);
+const usesItalianCheckout = computed(() => customQuoteActive.value);
+const italianCheckoutLocale = computed(() => props.locale === 'es' ? 'es' : 'it');
 const localCheckoutCopy = computed(() => props.locale === 'es' ? {
     action: 'Ir al pago',
     shipping: 'Entrega incluida en el presupuesto',
@@ -2930,7 +2942,7 @@ const italianCheckoutItems = computed(() => {
         type: product.variantId ? 'variant' : 'product',
         id: product.variantId ?? product.productId,
         quantity: cartQuantity(`custom:${product.key}`),
-        import_unit_amount: Math.round(customImportCost(product.key) * 100),
+
     }));
     return items;
 });
@@ -2980,7 +2992,7 @@ const checkoutLineItems = computed(() => {
 });
 
 const canCheckout = computed(() => {
-    if (usesItalianCheckout.value) return italianCheckoutItems.value.length > 0 && !italianCheckoutBusy.value;
+    if (usesItalianCheckout.value) return props.italianCheckoutEnabled === true && italianCheckoutItems.value.length > 0 && !italianCheckoutBusy.value;
     return checkoutLineItems.value.length > 0;
 });
 
@@ -3241,7 +3253,7 @@ const sharedConfigurationPayload = computed<SharedConfigurationPayload | null>((
         speakers: [...selectedSpeakerKeys.value],
         customProducts: [...selectedCustomProductKeys.value],
         quantities: { ...cartQuantities.value },
-        importCosts: { ...customImportCosts.value },
+        importTotal: customImportTotal.value,
         installation: selectedInstallationKey.value,
         postalCode: postalCode.value || null,
         serviceZone: selectedServiceZone.value,
@@ -3272,7 +3284,8 @@ const createSharedConfiguration = async (reserveQuoteNumber = false): Promise<{ 
             checkout: usesItalianCheckout.value ? {
                 items: italianCheckoutItems.value,
                 custom_discount: italianCheckoutDiscount.value,
-                locale: props.locale,
+                import_amount: Math.round(customImportTotal.value * 100),
+                locale: italianCheckoutLocale.value,
             } : null,
             reserve_quote_number: reserveQuoteNumber,
         }),
@@ -3475,15 +3488,11 @@ const generateQuote = async (withoutClientData = false, providedPrintWindow?: Wi
             quantity: cartQuantity(`custom:${product.key}`),
             price: product.price,
         });
-        if (customImportCost(product.key) > 0) {
-            items.push({
-                code: product.sku || product.key,
-                description: `${customQuoteCopy.value.importTotal} — ${product.title}`,
-                quantity: cartQuantity(`custom:${product.key}`),
-                price: customImportCost(product.key),
-            });
-        }
     });
+
+    if (customImportTotal.value > 0) {
+        items.push({ code: '', description: customQuoteCopy.value.importTotal, quantity: 1, price: customImportTotal.value });
+    }
 
     if (selectedInstallation.value) {
         items.push({
@@ -3764,7 +3773,8 @@ const goToCheckout = async () => {
         router.post('/checkout/italiano', {
             items: italianCheckoutItems.value,
             custom_discount: italianCheckoutDiscount.value,
-            locale: props.locale,
+            import_amount: Math.round(customImportTotal.value * 100),
+            locale: italianCheckoutLocale.value,
         }, {
             onError: (errors) => { italianCheckoutError.value = Object.values(errors)[0] || localCheckoutCopy.value.error; },
             onFinish: () => { italianCheckoutBusy.value = false; },
@@ -4274,8 +4284,8 @@ watch(
                                         <p class="text-xs font-semibold uppercase tracking-wide text-amber-400">{{ customQuoteCopy.section }}</p>
                                         <h3 class="mt-1 truncate font-semibold text-white">{{ product.title }}</h3>
                                         <p v-if="product.variantTitle" class="truncate text-sm text-neutral-400">{{ displayVariantTitle(product.variantTitle) }}</p>
-                                        <p class="mt-2 font-bold text-amber-400">{{ euroFormatter.format((product.price + customImportCost(product.key)) * cartQuantity(`custom:${product.key}`)) }}</p>
-                                        <p v-if="customImportCost(product.key)" class="text-xs text-neutral-400">{{ customQuoteCopy.importUnit }}: {{ euroFormatter.format(customImportCost(product.key)) }}</p>
+                                        <p class="mt-2 font-bold text-amber-400">{{ euroFormatter.format(product.price * cartQuantity(`custom:${product.key}`)) }}</p>
+
                                         <div class="mt-3 flex flex-wrap items-center gap-2">
                                             <button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button>
                                             <b class="w-7 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b>
@@ -4538,8 +4548,8 @@ watch(
                                     <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-amber-400">{{ customQuoteCopy.section }}</p>
                                     <h3 class="mt-1 truncate font-semibold text-white">{{ product.title }}</h3>
                                     <p v-if="product.variantTitle" class="truncate text-sm text-neutral-400">{{ displayVariantTitle(product.variantTitle) }}</p>
-                                    <p class="mt-2 font-bold text-amber-400">{{ euroFormatter.format((product.price + customImportCost(product.key)) * cartQuantity(`custom:${product.key}`)) }}</p>
-                                    <p v-if="customImportCost(product.key)" class="text-xs text-neutral-400">{{ customQuoteCopy.importUnit }}: {{ euroFormatter.format(customImportCost(product.key)) }}</p>
+                                    <p class="mt-2 font-bold text-amber-400">{{ euroFormatter.format(product.price * cartQuantity(`custom:${product.key}`)) }}</p>
+
                                     <div class="mt-3 flex items-center gap-2">
                                         <button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button>
                                         <b class="w-7 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b>
@@ -4656,8 +4666,8 @@ watch(
                                     <p class="mt-3 text-xs font-semibold uppercase tracking-wide text-amber-400">{{ customQuoteCopy.section }}</p>
                                     <h3 class="mt-1 truncate font-semibold text-white">{{ product.title }}</h3>
                                     <p v-if="product.variantTitle" class="truncate text-sm text-neutral-400">{{ displayVariantTitle(product.variantTitle) }}</p>
-                                    <p class="mt-2 font-bold text-amber-400">{{ euroFormatter.format((product.price + customImportCost(product.key)) * cartQuantity(`custom:${product.key}`)) }}</p>
-                                    <p v-if="customImportCost(product.key)" class="text-xs text-neutral-400">{{ customQuoteCopy.importUnit }}: {{ euroFormatter.format(customImportCost(product.key)) }}</p>
+                                    <p class="mt-2 font-bold text-amber-400">{{ euroFormatter.format(product.price * cartQuantity(`custom:${product.key}`)) }}</p>
+
                                     <div class="mt-3 flex items-center gap-2">
                                         <button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button>
                                         <b class="w-7 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b>
@@ -5353,7 +5363,7 @@ watch(
                                         {{ product.title }}<span v-if="product.variantTitle"> — {{ displayVariantTitle(product.variantTitle) }}</span>
                                     </p>
                                     <p class="text-sm text-neutral-500">{{ product.sku || product.category }} · {{ funnelCopy.quantity }}: {{ cartQuantity(`custom:${product.key}`) }}</p>
-                                    <p v-if="customImportCost(product.key)" class="text-xs text-neutral-400">{{ customQuoteCopy.importTotal }}: {{ euroFormatter.format(customImportCost(product.key) * cartQuantity(`custom:${product.key}`)) }}</p>
+
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">{{ (product.price * cartQuantity(`custom:${product.key}`)).toFixed(2) }} €</p>
                             </div>
@@ -5761,7 +5771,7 @@ watch(
                     </div>
                     <div v-for="camera in selectedCameras" :key="`cart-camera-${camera.key}`" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg border border-neutral-700 bg-black"><img v-if="camera.image" :src="camera.image" alt="" class="h-full w-full object-contain" /></div><div class="min-w-0"><p class="line-clamp-2 font-semibold">{{ camera.title }}</p><p class="mt-1 text-amber-400">{{ (camera.price * cartQuantity(`camera:${camera.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white hover:text-red-400" @click="toggleCamera(camera.key)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`camera:${camera.key}`, cartQuantity(`camera:${camera.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`camera:${camera.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`camera:${camera.key}`, cartQuantity(`camera:${camera.key}`) + 1)">+</button></div></div>
                     <div v-for="speaker in selectedSpeakers" :key="`cart-speaker-${speaker.key}`" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg border border-neutral-700 bg-black"><img v-if="speaker.image" :src="speaker.image" alt="" class="h-full w-full object-contain" /></div><div class="min-w-0"><p class="line-clamp-2 font-semibold">{{ speaker.productTitle }}</p><p v-if="speaker.title !== speaker.productTitle" class="truncate text-sm text-neutral-400">{{ speaker.title }}</p><p class="mt-1 text-amber-400">{{ (speaker.price * cartQuantity(`speaker:${speaker.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white hover:text-red-400" @click="toggleSpeaker(speaker.key)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`speaker:${speaker.key}`, cartQuantity(`speaker:${speaker.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`speaker:${speaker.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`speaker:${speaker.key}`, cartQuantity(`speaker:${speaker.key}`) + 1)">+</button></div></div>
-                    <div v-for="product in selectedCustomProducts" :key="`cart-custom-${product.key}`" class="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"><button type="button" @click="toggleCustomProduct(product.key)">🗑</button><div class="min-w-0"><p class="truncate font-semibold">{{ product.title }}</p><p class="text-amber-400">{{ ((product.price + customImportCost(product.key)) * cartQuantity(`custom:${product.key}`)).toFixed(2) }} €</p><p v-if="customImportCost(product.key)" class="text-xs text-neutral-400">{{ customQuoteCopy.importUnit }}: {{ euroFormatter.format(customImportCost(product.key)) }}</p></div><div class="col-span-2 flex items-center justify-end gap-2 sm:col-span-1"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) + 1)">+</button></div></div>
+                    <div v-for="product in selectedCustomProducts" :key="`cart-custom-${product.key}`" class="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"><button type="button" @click="toggleCustomProduct(product.key)">🗑</button><div class="min-w-0"><p class="truncate font-semibold">{{ product.title }}</p><p class="text-amber-400">{{ (product.price * cartQuantity(`custom:${product.key}`)).toFixed(2) }} €</p></div><div class="col-span-2 flex items-center justify-end gap-2 sm:col-span-1"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) + 1)">+</button></div></div>
                     <div v-if="selectedInstallation" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="relative flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg bg-amber-400"><img  :src="selectedInstallation.image || '/images/icons/installation-tools.png'" :alt="stepContextLabel('installation')" class="h-full w-full object-cover" /></div><div class="min-w-0"><p class="line-clamp-2 font-semibold">{{ selectedInstallation.title }}</p><p class="mt-1 text-amber-400">{{ (selectedInstallation.price * cartQuantity(`installation:${selectedInstallation.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white transition hover:border-red-400 hover:text-red-400" :aria-label="t('actions.remove_product')" @click="selectedInstallationKey = null"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`installation:${selectedInstallation.key}`, cartQuantity(`installation:${selectedInstallation.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`installation:${selectedInstallation.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`installation:${selectedInstallation.key}`, cartQuantity(`installation:${selectedInstallation.key}`) + 1)">+</button></div></div>
                     <div v-if="selectedPrecheckMethod === 'installer'" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3">
                         <div class="flex h-[76px] w-[76px] items-center justify-center rounded-lg bg-amber-400 text-black">
@@ -5896,15 +5906,17 @@ watch(
                                 <input type="number" min="1" step="1" class="w-16 rounded border border-neutral-600 bg-neutral-900 p-2 text-center" :aria-label="funnelCopy.quantity" :value="cartQuantity(`custom:${product.key}`)" @change="setCartQuantityFromInput(`custom:${product.key}`, $event)" />
                                 <button type="button" class="h-9 w-9 rounded border border-neutral-600" :aria-label="`+ ${product.title}`" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) + 1)">+</button>
                             </div>
-                            <label class="flex items-center gap-2">
-                                {{ customQuoteCopy.importUnit }}
-                                <input type="number" min="0" step="0.01" inputmode="decimal" class="w-24 rounded border border-neutral-600 bg-neutral-900 p-2" :value="customImportCost(product.key)" @change="setCustomImportCost(product.key, $event)" />
-                            </label>
-                            <span class="font-semibold text-amber-400">{{ euroFormatter.format((product.price + customImportCost(product.key)) * cartQuantity(`custom:${product.key}`)) }}</span>
+
+                            <span class="font-semibold text-amber-400">{{ euroFormatter.format(product.price * cartQuantity(`custom:${product.key}`)) }}</span>
                             <button type="button" class="text-neutral-400 hover:text-red-400" :aria-label="customQuoteCopy.remove" @click="toggleCustomProduct(product.key)">✕</button>
                         </div>
                     </div>
                 </div>
+
+                <label v-if="selectedCustomProducts.length" class="mt-4 flex items-center justify-between gap-3 text-sm text-white">
+                    <span>{{ customQuoteCopy.importTotal }} (€)</span>
+                    <input type="number" min="0" max="999999.99" step="0.01" inputmode="decimal" class="w-32 rounded border border-neutral-600 bg-neutral-900 p-2" :value="customImportAmount" @change="setCustomImportAmount($event)" />
+                </label>
 
                 <div class="quote-scrollbar quote-summary-scrollbar mt-4 min-h-0 flex-1 space-y-2 overflow-y-auto pr-3">
                     <div
