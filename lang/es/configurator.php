@@ -77,7 +77,7 @@ return [
         'original_radio_compatible_one' => 'Compatible con esta radio original',
         'original_radio_compatible_many' => 'Compatible con estas radios originales',
         'change_original_radio_variant' => 'Cambiar variante',
-        'product_details' => 'Detalles del producto',
+        'product_details' => 'Ver detalles',
         'select_vehicle' => 'Selecciona marca, año y modelo para ver las pantallas disponibles.',
         'zoom' => 'Ampliar imagen de la pantalla',
         'missing_message' => 'Parece que la pantalla para tu modelo aún no está cargada en nuestro configurador.',
@@ -123,7 +123,8 @@ return [
     ],
     'installation' => [
         'request_button' => 'Solicitar instalación',
-        'intro' => 'Antes de confirmar la compatibilidad, todos los clientes deben completar un precheck de los conectores del vehículo.',
+        'intro' => 'Antes de confirmar la instalación, revisaremos los conectores de tu vehículo.',
+        'payment_notice' => 'La instalación no se paga online: se abona directamente al instalador el día del montaje. El precio es orientativo y puede variar tras la revisión técnica. Te informaremos antes de realizar cualquier trabajo.',
         'external_intro' => 'Comprueba la disponibilidad para instalar una pantalla comprada a otro vendedor.',
         'no_precheck_intro' => 'Comprueba la disponibilidad de instalación para los productos seleccionados.',
         'question' => '¿Cuál es tu código postal?',

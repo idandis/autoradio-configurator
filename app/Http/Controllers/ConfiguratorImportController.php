@@ -12,8 +12,12 @@ class ConfiguratorImportController extends Controller
     public function store(Request $request, ConfiguratorCsvImporter $importer): RedirectResponse
     {
         $validated = $request->validate([
-            'catalog' => ['required', 'file', 'mimes:csv,txt,xls,xlsx'],
+            'catalog' => ['required', 'file', 'mimes:csv,txt,xls,xlsx', 'max:65536'],
             'mode' => ['nullable', 'in:replace,add'],
+        ], [
+            'catalog.uploaded' => 'Il catalogo non è stato caricato. Il file supera il limite consentito dal server.',
+            'catalog.max' => 'Il catalogo non può superare 64 MB.',
+            'catalog.mimes' => 'Il catalogo deve essere un file CSV, XLS o XLSX.',
         ]);
 
         $mode = $validated['mode'] ?? 'replace';

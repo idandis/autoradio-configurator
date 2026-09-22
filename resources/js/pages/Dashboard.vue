@@ -58,8 +58,20 @@ const copyPostImportPrompt = async () => {
 
 const updateFile = (event: Event) => {
     const target = event.target as HTMLInputElement | null;
+    const file = target?.files?.[0] ?? null;
 
-    form.catalog = target?.files?.[0] ?? null;
+    form.clearErrors('catalog');
+
+    if (file && file.size > 64 * 1024 * 1024) {
+        form.catalog = null;
+        form.setError('catalog', 'Il catalogo non può superare 64 MB.');
+
+        if (target) target.value = '';
+
+        return;
+    }
+
+    form.catalog = file;
 };
 
 const submit = () => {
@@ -218,6 +230,9 @@ const verifyCatalog = () => {
                             />
                             <p v-if="form.errors.catalog" class="text-sm text-red-400">
                                 {{ form.errors.catalog }}
+                            </p>
+                            <p v-else class="text-xs text-muted-foreground">
+                                Dimensione massima: 64 MB.
                             </p>
                         </div>
 

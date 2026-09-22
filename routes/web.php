@@ -61,6 +61,9 @@ Route::middleware('extra-eu')->group(function () {
         ->name('configurator.catalog.cameras');
     Route::get('/configurator/catalog/speakers', [ConfiguratorController::class, 'speakers'])
         ->name('configurator.catalog.speakers');
+    Route::get('/configurator/catalog/products/{product}', [ConfiguratorController::class, 'productDetails'])
+        ->whereNumber('product')
+        ->name('configurator.catalog.product-details');
     Route::post('/configurator/missing-vehicle', [ConfiguratorController::class, 'missingVehicle'])->name('configurator.missing-vehicle');
     Route::get('/configurator/postal-code/{postalCode}', ConfiguratorPostalCodeController::class)
         ->where('postalCode', '\\d{5}')

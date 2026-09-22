@@ -17,6 +17,7 @@ class ConfiguratorProduct extends Model
         'title',
         'title_it',
         'title_en',
+        'body_html',
         'brand',
         'model',
         'year_from',

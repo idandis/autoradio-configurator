@@ -92,7 +92,7 @@ return [
         'original_radio_compatible_one' => 'Compatible with this original radio',
         'original_radio_compatible_many' => 'Compatible with these original radios',
         'change_original_radio_variant' => 'Change variant',
-        'product_details' => 'Product details',
+        'product_details' => 'View details',
         'select_vehicle' => 'Select brand, year and model to view available screens.',
         'zoom' => 'Enlarge screen image',
         'missing_message' => 'It looks like the screen for your model has not been added to our configurator yet.',
@@ -138,7 +138,8 @@ return [
     ],
     'installation' => [
         'request_button' => 'Request installation',
-        'intro' => 'Before compatibility can be confirmed, every customer must complete a precheck of the vehicle connectors.',
+        'intro' => 'Before confirming the installation, we will check your vehicle connectors.',
+        'payment_notice' => 'Installation is not paid online: it is paid directly to the installer on the installation day. The price is indicative and may change after the technical inspection. We will inform you before carrying out any work.',
         'external_intro' => 'Check availability to install a screen purchased from another seller.',
         'no_precheck_intro' => 'Check installation availability for the selected products.',
         'question' => 'What is your postcode?',

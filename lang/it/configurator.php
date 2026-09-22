@@ -77,7 +77,7 @@ return [
         'original_radio_compatible_one' => 'Compatibile con questa radio originale',
         'original_radio_compatible_many' => 'Compatibile con queste radio originali',
         'change_original_radio_variant' => 'Cambia variante',
-        'product_details' => 'Dettagli scheda',
+        'product_details' => 'Vedi dettagli',
         'select_vehicle' => 'Seleziona marca, anno e modello per visualizzare gli schermi disponibili.',
         'zoom' => 'Ingrandisci immagine schermo',
         'missing_message' => 'Sembra che lo schermo per il tuo modello non sia ancora caricato nel nostro configuratore.',
@@ -123,7 +123,8 @@ return [
     ],
     'installation' => [
         'request_button' => 'Richiedi installazione',
-        'intro' => 'Prima di confermare la compatibilità, ogni cliente deve completare un precheck dei connettori del veicolo.',
+        'intro' => 'Prima di confermare l’installazione, controlleremo i connettori del tuo veicolo.',
+        'payment_notice' => 'L’installazione non si paga online: viene saldata direttamente all’installatore il giorno del montaggio. Il prezzo è indicativo e può variare dopo la verifica tecnica. Ti informeremo prima di eseguire qualsiasi lavoro.',
         'external_intro' => 'Verifica la disponibilità per installare uno schermo acquistato da un altro venditore.',
         'no_precheck_intro' => 'Verifica la disponibilità dell’installazione per i prodotti selezionati.',
         'question' => 'Qual è il tuo CAP?',

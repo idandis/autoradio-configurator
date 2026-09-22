@@ -102,6 +102,26 @@ CSV;
         ]);
     }
 
+    public function test_import_accepts_body_html_and_additional_columns(): void
+    {
+        $csv = <<<'CSV'
+Title,Body (HTML),Extra Catalog Column,Image Src,Option1 Value,Handle,ID,Variant ID,Type,Variant Price,Variant SKU,Price / Italia,Price / Resto del Mondo,Price / USA-CANADA,Price / spagna,Metafield: custom.radio_type [single_line_text_field],Metafield: custom.altavoces [single_line_text_field],Metafield: custom.modello_auto [single_line_text_field],Metafield: custom.anno [single_line_text_field],Metafield: shopify.vehicle-coaxial-speaker-nominal-size [list.metaobject_reference]
+Original database title,"<p>Descripción <strong>completa</strong></p>",ignored,https://example.com/one.jpg,Default,test-screen,999,1111111111,Radio AM/FM,199.00,TEST-1,,,,199.00,TOYOTA,,Yaris,2018-2020,
+,,,https://example.com/two.jpg,Premium,test-screen,999,2222222222,Radio AM/FM,249.00,TEST-2,,,,249.00,TOYOTA,,Yaris,2018-2020,
+CSV;
+
+        app(ConfiguratorCsvImporter::class)->import(
+            UploadedFile::fake()->createWithContent('catalog-with-extra-column.csv', $csv),
+        );
+
+        $product = ConfiguratorProduct::where('handle', 'test-screen')->firstOrFail();
+        $this->assertSame('<p>Descripción <strong>completa</strong></p>', $product->body_html);
+        $this->assertSame([
+            'https://example.com/one.jpg',
+            'https://example.com/two.jpg',
+        ], $product->meta['gallery_images']);
+    }
+
     public function test_second_variant_option_is_exposed_as_a_color_selector_without_duplicate_configurations(): void
     {
         $csv = <<<'CSV'

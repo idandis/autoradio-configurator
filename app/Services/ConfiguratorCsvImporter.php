@@ -233,6 +233,17 @@ class ConfiguratorCsvImporter
         $primaryImageUrl = $this->extractPrimaryImage(
             $this->value($primaryRow, ['Image Src', 'Product Image'])
         );
+        $galleryImages = collect($rows)
+            ->flatMap(function (array $row) {
+                $value = $this->value($row, ['Image Src', 'Product Image', 'Variant Image']);
+
+                return preg_split('/\s*,\s*/', trim((string) $value), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            })
+            ->map(fn ($image) => trim((string) $image))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
         $title = trim((string) $this->value($primaryRow, ['Title', 'Product Title']));
         $primaryVariantId = $this->normalizeShopifyVariantId(
             $this->value($primaryRow, ['Variant ID', 'Variant Id'])
@@ -368,6 +379,7 @@ class ConfiguratorCsvImporter
                 'category' => $category,
                 'subtype' => $this->detectSubtype($category, $handle, $title),
                 'title' => $title !== '' ? $title : $handle,
+                'body_html' => $this->value($primaryRow, ['Body (HTML)', 'Body HTML', 'Description HTML']),
                 'brand' => $brand,
                 'model' => $explicitModel,
                 'year_from' => $explicitYears['year_from'] ?? null,
@@ -400,6 +412,7 @@ class ConfiguratorCsvImporter
                         'Foto cruscotto originale (product.metafields.custom.foto_cruscotto_originale)',
                         'FOTO CRUSCOTTO ORIGINALE (product.metafields.custom.foto_cruscotto_originale)',
                     ]), $primaryImageUrl),
+                    'gallery_images' => $galleryImages,
                 ],
             ],
             'variants' => $variants,
