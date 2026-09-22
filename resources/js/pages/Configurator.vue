@@ -582,6 +582,7 @@ const customImportTotal = computed(() => selectedCustomProducts.value.reduce(
     (sum, product) => sum + customImportCost(product.key) * cartQuantity(`custom:${product.key}`), 0,
 ));
 const selectedCustomProductKeys = ref<string[]>([]);
+const customQuoteActive = computed(() => showCustomQuoteModal.value || selectedCustomProductKeys.value.length > 0);
 const customProducts = ref<CustomProduct[]>([...(props.customProducts ?? [])]);
 const customProductsLoaded = ref(customProducts.value.length > 0);
 const customProductsLoading = ref(false);
@@ -642,6 +643,7 @@ const startCustomQuote = async () => {
     selectedSpeakerKeys.value = [];
     selectedInstallationKey.value = null;
     selectedPrecheckMethod.value = null;
+    openSteps.value = openSteps.value.filter((step) => step !== 'vehicle');
     showCustomQuoteModal.value = true;
     await loadCustomProducts();
 };
@@ -673,6 +675,11 @@ const handleBrandTypeahead = (event: KeyboardEvent) => {
     }
 };
 const openSteps = ref<string[]>([]);
+watch(customQuoteActive, (active, wasActive) => {
+    if (wasActive && !active && isSpecificMode.value && !openSteps.value.includes('vehicle')) {
+        openSteps.value = ['vehicle', ...openSteps.value];
+    }
+});
 const modeSensitiveSelectionCount = computed(() => {
     const specificCameraCount = selectedCameraKeys.value.filter((key) =>
         !cameraOptions.value.find((option) => option.key === key)?.isStandard,
@@ -4115,7 +4122,7 @@ watch(
             <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_360px]">
                 <section class="min-w-0 max-w-full rounded-2xl border border-neutral-800 bg-neutral-900/80 p-6">
                     <div
-                        v-if="isSpecificMode && selectedBrand && selectedModel && selectedYear"
+                        v-if="!customQuoteActive && isSpecificMode && selectedBrand && selectedModel && selectedYear"
                         id="mobile-vehicle-marker"
                         class="mb-6 scroll-mt-2 overflow-hidden rounded-xl border border-neutral-700 bg-[#121212] lg:hidden"
                     >
@@ -4151,14 +4158,14 @@ watch(
                         </button>
                     </div>
                     <div class="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6">
-                        <button v-if="isSpecificMode" type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStepAndCenter('vehicle', 'vehicle-brand', true)">
+                        <button v-if="!customQuoteActive && isSpecificMode" type="button" :class="mainStepButtonClass('vehicle')" @click="toggleStepAndCenter('vehicle', 'vehicle-brand', true)">
                             <span class="step-context-label">{{ stepContextLabel('vehicle') }}</span>
                             <span class="block max-w-full truncate whitespace-nowrap" :class="selectedBrand ? 'normal-case' : 'uppercase'">{{ selectedBrand ? vehicleStepTitle : `+ ${stepContextLabel('vehicle')}` }}</span>
                             <svg viewBox="0 0 24 24" fill="none" class="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 stroke-current transition-transform" :class="openSteps.includes('vehicle') ? '' : 'rotate-180'" aria-hidden="true">
                                 <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
                         </button>
-                        <div v-if="isSpecificMode && openSteps.includes('vehicle')">
+                        <div v-if="!customQuoteActive && isSpecificMode && openSteps.includes('vehicle')">
 
                         <div
                             class="grid gap-4"

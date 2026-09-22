@@ -944,8 +944,8 @@
         "translation": "Schermo Android 10.4\" CarPlay wireless GPS per Audi A4 B6 B7 S4 RS4 2002-2008"
     },
     "pantalla-android-10-carplay-gps-para-nissan-x-trail-t32-2013-2022-y-qashqai-j11-potencia-conectividad-total-y-control-inteligente": {
-        "source": "Pantalla Android 10” CarPlay GPS para Nissan X-Trail T32 (2013-2022) y Qashqai J11 – Potencia, Conectividad Total y Control Inteligente",
-        "translation": "Schermo Android 10” CarPlay GPS per Nissan X-Trail T32 (2013-2022) e Qashqai J11 – Potenza, Connettività Totale e Controllo Intelligente"
+        "source": "Pantalla Android 14 CarPlay 4G para Nissan Qashqai J11 y X-Trail T32 2013-2020",
+        "translation": "Schermo Android 14 CarPlay 4G per Nissan Qashqai J11 e X-Trail T32 2013-2020"
     },
     "pantalla-android-10-hd-con-carplay-y-android-auto-inalambrico-gps-y-wifi-sistema-multimedia-8-core-para-vito-2014-2020": {
         "source": "Autoradio Android 10\" 8-Core CarPlay para Mercedes-Benz Vito W447 2014–2020",
@@ -1594,5 +1594,9 @@
     "autoradio-android-16-9-carplay-gps-para-mercedes-benz-sl-r230-2001-2007": {
         "source": "Autoradio Android 16 9” CarPlay GPS para Mercedes-Benz SL R230 2001-2007",
         "translation": "Autoradio Android 16 9” CarPlay GPS per Mercedes-Benz SL R230 2001-2007"
+    },
+    "donation": {
+        "source": "Donation",
+        "translation": "Donazione"
     }
 }

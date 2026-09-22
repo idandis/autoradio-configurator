@@ -51,11 +51,13 @@ class ItalianCheckoutController extends Controller
             || $requestedLocale === 'es' ? 'es' : 'it';
         $items = $checkout->normalizeItems($request->all(), $allowCustomAmounts, $locale);
         $discount = $checkout->normalizeDiscount($request->all(), $allowCustomAmounts, $locale);
-        $quote = $checkout->quote($items, locale: $locale, customDiscount: $discount);
+        $importAmount = $checkout->normalizeImportAmount($request->all(), $allowCustomAmounts);
+        $quote = $checkout->quote($items, locale: $locale, customDiscount: $discount, importAmount: $importAmount);
         $drafts = $request->session()->get('italian_checkout_drafts', []);
         // Repeated clicks for the same active cart reuse the same idempotency token.
         foreach ($drafts as $token => $draft) {
             if ($draft['items'] === $items
+                && ($draft['import_amount'] ?? 0) === $importAmount
                 && ($draft['discount'] ?? null) === $discount
                 && ($draft['locale'] ?? 'it') === $locale
                 && ! ItalianOrder::withTrashed()->where('checkout_token', $token)->exists()) {
@@ -66,6 +68,7 @@ class ItalianCheckoutController extends Controller
         $drafts[$token] = [
             'items' => $items,
             'discount' => $discount,
+            'import_amount' => $importAmount,
             'locale' => $locale,
             'origin' => $request->getSchemeAndHttpHost(),
             'quote_hash' => $checkout->fingerprint($quote),
@@ -88,7 +91,7 @@ class ItalianCheckoutController extends Controller
             $quote = $draft['locked_quote'];
         } else {
             try {
-                $quote = $checkout->quote($draft['items'], locale: $draft['locale'], customDiscount: $draft['discount']);
+                $quote = $checkout->quote($draft['items'], locale: $draft['locale'], customDiscount: $draft['discount'], importAmount: $draft['import_amount'] ?? 0);
                 $hash = $checkout->fingerprint($quote);
                 $changed = $hash !== $draft['quote_hash'];
                 $request->session()->put("italian_checkout_drafts.$token.quote_hash", $hash);
@@ -150,7 +153,7 @@ class ItalianCheckoutController extends Controller
                 if (ItalianOrder::where('checkout_token', $token)->exists()) {
                     return;
                 }
-                $quote = $draft['locked_quote'] ?? $checkout->quote($draft['items'], lock: true, locale: $draft['locale'], customDiscount: $draft['discount']);
+                $quote = $draft['locked_quote'] ?? $checkout->quote($draft['items'], lock: true, locale: $draft['locale'], customDiscount: $draft['discount'], importAmount: $draft['import_amount'] ?? 0);
                 if (! hash_equals($checkout->fingerprint($quote), $data['quote_hash'])
                     || ! hash_equals($draft['quote_hash'], $data['quote_hash'])) {
                     throw ValidationException::withMessages(['quote_hash' => $draft['locale'] === 'es'
