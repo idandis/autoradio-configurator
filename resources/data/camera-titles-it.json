@@ -380,11 +380,15 @@
         "translation": "Dashcam Dasaita 170° 1080P con visione notturna e resistente all’acqua per auto"
     },
     "camara-de-vision-trasera-hd-integrada-en-tercera-luz-de-freno-para-fiat-ducato-peugeot-boxer-y-citroen-jumper-2006-2026": {
-        "source": "Cámara de Visión Trasera HD Integrada en Tercera Luz de Freno para Fiat Ducato, Peugeot Boxer y Citroen Jumper 2006-2026",
-        "translation": "Telecamera posteriore HD integrata nella terza luce di stop per Fiat Ducato, Peugeot Boxer e Citroen Jumper 2006-2026"
+        "source": "Cámara de Visión Trasera HD Integrada en Tercera Luz de Freno para Fiat Ducato, Peugeot Boxer y Citroen Jumper 2018-2026",
+        "translation": "Telecamera posteriore HD integrata nella terza luce di stop per Fiat Ducato, Peugeot Boxer e Citroen Jumper 2018-2026"
     },
     "camara-trasera-ccd-nocturna-para-nissan-sentra-b16-2007-2011-y-x-trail-t32-2013-2023": {
         "source": "Cámara Trasera CCD Nocturna para Nissan Sentra B16 2007-2011 y X-Trail T32 2013-2023",
         "translation": "Telecamera posteriore CCD con visione notturna per Nissan Sentra B16 2007-2011 e X-Trail T32 2013-2023"
+    },
+    "camara-trasera-ahd-1080p-170-peugeot": {
+        "source": "Cámara Trasera AHD 1080P 170° Modelos Peugeot 1996-2026",
+        "translation": "Telecamera posteriore AHD 1080P 170° per modelli Peugeot 1996-2026"
     }
 }

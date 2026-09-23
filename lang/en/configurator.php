@@ -136,6 +136,9 @@ return [
         'select_size' => 'Select a size',
         'label' => 'Speakers',
     ],
+    'dashcam' => [
+        'no_options' => 'No dashcams available.',
+    ],
     'installation' => [
         'request_button' => 'Request installation',
         'intro' => 'Before confirming the installation, we will check your vehicle connectors.',

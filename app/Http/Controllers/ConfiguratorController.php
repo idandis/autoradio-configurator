@@ -101,6 +101,7 @@ class ConfiguratorController extends Controller
         $screenProducts = ConfiguratorProduct::query()
             ->select(['id', 'brand', 'model', 'year_from', 'year_to'])
             ->where('category', 'screen')
+            ->where(fn ($query) => $query->whereNull('meta->type')->orWhere('meta->type', '!=', 'DASHCAM'))
             ->whereNotNull('brand')
             ->where('brand', '!=', '')
             ->whereNotNull('model')
@@ -122,6 +123,7 @@ class ConfiguratorController extends Controller
             ? collect()
             : ConfiguratorProduct::with('variants')
                 ->where('category', 'screen')
+                ->where(fn ($query) => $query->whereNull('meta->type')->orWhere('meta->type', '!=', 'DASHCAM'))
                 ->whereIn('handle', $sharedScreenHandles)
                 ->get();
 
@@ -140,6 +142,7 @@ class ConfiguratorController extends Controller
         $cameraProducts = ConfiguratorProduct::query()
             ->select(['id', 'handle', 'brand', 'model', 'year_from', 'year_to'])
             ->where('category', 'camera')
+            ->where(fn ($query) => $query->whereNull('meta->type')->orWhere('meta->type', '!=', 'DASHCAM'))
             ->orderBy('price_min')
             ->get()
             ->values();
@@ -258,6 +261,7 @@ class ConfiguratorController extends Controller
 
         $products = ConfiguratorProduct::with('variants')
             ->where('category', 'screen')
+            ->where(fn ($query) => $query->whereNull('meta->type')->orWhere('meta->type', '!=', 'DASHCAM'))
             ->whereRaw('LOWER(TRIM(model)) != ?', ['universal'])
             ->where('year_from', '<=', $data['year'])
             ->where('year_to', '>=', $data['year'])
@@ -285,6 +289,7 @@ class ConfiguratorController extends Controller
 
         $products = ConfiguratorProduct::with('variants')
             ->where('category', 'screen')
+            ->where(fn ($query) => $query->whereNull('meta->type')->orWhere('meta->type', '!=', 'DASHCAM'))
             ->whereRaw('LOWER(TRIM(model)) = ?', ['universal'])
             ->orderBy('price_min')
             ->get()
@@ -309,9 +314,9 @@ class ConfiguratorController extends Controller
             && isset($data['year']);
 
         $products = ConfiguratorProduct::with('variants')
-            ->where('category', 'camera')
+            ->where(fn ($query) => $query->where('category', 'camera')->orWhere('meta->type', 'DASHCAM'))
             ->where(function ($query) use ($data, $hasVehicle) {
-                $query->whereIn('handle', self::STANDARD_CAMERA_HANDLES);
+                $query->whereIn('handle', self::STANDARD_CAMERA_HANDLES)->orWhere('meta->type', 'DASHCAM');
                 if ($hasVehicle) {
                     $query->orWhere(function ($specific) use ($data) {
                         $specific->where('year_from', '<=', $data['year'])
@@ -322,7 +327,7 @@ class ConfiguratorController extends Controller
             ->orderBy('price_min')
             ->get()
             ->filter(function (ConfiguratorProduct $product) use ($data, $hasVehicle, $vehicleImageResolver) {
-                if (in_array($product->handle, self::STANDARD_CAMERA_HANDLES, true)) {
+                if (($product->meta['type'] ?? null) === 'DASHCAM' || in_array($product->handle, self::STANDARD_CAMERA_HANDLES, true)) {
                     return true;
                 }
                 if (! $hasVehicle) {
@@ -606,6 +611,7 @@ class ConfiguratorController extends Controller
 
             $options[] = [
                 'key' => $product->handle,
+                'isDashcam' => ($product->meta['type'] ?? null) === 'DASHCAM',
                 'productHandle' => $product->handle,
                 'productId' => $product->id,
                 'variantId' => $defaultVariant?->id,

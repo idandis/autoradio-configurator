@@ -121,6 +121,9 @@ return [
         'select_size' => 'Selecciona una medida',
         'label' => 'Altavoces',
     ],
+    'dashcam' => [
+        'no_options' => 'No hay dashcams disponibles.',
+    ],
     'installation' => [
         'request_button' => 'Solicitar instalación',
         'intro' => 'Antes de confirmar la instalación, revisaremos los conectores de tu vehículo.',
@@ -220,7 +223,7 @@ return [
         'installation_payment_notice' => 'El coste de la instalación no está incluido en el pago online y deberá abonarse directamente al instalador el día del montaje. El precio indicado es una estimación basada en la instalación seleccionada. Si durante la verificación técnica se detectara alguna particularidad que pudiera modificar el precio, te informaremos antes de realizar cualquier trabajo.',
         'shipping_tracking' => 'Seguimiento del pedido incluido',
         'trust_title' => 'Compra con tranquilidad',
-        'trust_details' => 'Verificación de compatibilidad antes del envío · Asistencia antes y después de la compra · Instalación con profesionales colaboradores',
+        'trust_details' => 'Antes de enviar tu pedido, contactaremos contigo para confirmar la compatibilidad con tu vehículo.',
         'checkout_trust' => 'No enviamos tu pedido hasta comprobar que la configuración corresponde a tu vehículo.',
         'service_amount_notice' => 'El importe indicado corresponde al servicio completo contratado e incluye tanto el coste del producto como la remuneración por los servicios de intermediación, gestión, coordinación y asistencia prestados por AutoRadioCanario.',
         'discount_remaining' => 'Añade solo :amount € más y obtén un :percentage% de descuento en todo el pedido.',
@@ -276,7 +279,7 @@ return [
         'amount' => 'Importe',
         'includes' => 'Incluye',
         'purchase_link' => 'Enlace de pago',
-        'purchase_authorization' => 'Al utilizar este enlace de compra, el cliente autoriza expresamente a AutoRadioCanario a gestionar los fondos abonados para adquirir el producto en su nombre y por su cuenta, conforme a las Condiciones del Servicio.',
+        'purchase_authorization' => 'Al utilizar este enlace de compra, el cliente acepta las Condiciones del Servicio.',
         'screen' => 'Pantalla de autorradio',
         'variant' => 'Variante: :variant',
         'online_discount' => 'Descuento por compra online (:percentage%)',

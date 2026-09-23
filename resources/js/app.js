@@ -17,6 +17,17 @@ const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 // receive a new asset URL after frontend releases.
 document.documentElement.dataset.frontendBuild = '2026-08-27-2';
 
+const keepNavigationInWindow = (event) => {
+    const link = event.target instanceof Element ? event.target.closest('a, area') : null;
+    const form = event.type === 'submit' ? event.target : null;
+    const element = link ?? form;
+    if (element?.hasAttribute('target')) element.setAttribute('target', '_self');
+    const submitter = event.submitter;
+    if (submitter?.hasAttribute('formtarget')) submitter.setAttribute('formtarget', '_self');
+};
+document.addEventListener('click', keepNavigationInWindow, true);
+document.addEventListener('submit', keepNavigationInWindow, true);
+
 createInertiaApp({
     title: (title) => title || appName,
     resolve: async (name) => {

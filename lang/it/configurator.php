@@ -121,6 +121,9 @@ return [
         'select_size' => 'Seleziona una misura',
         'label' => 'Altoparlanti',
     ],
+    'dashcam' => [
+        'no_options' => 'Nessuna dashcam disponibile.',
+    ],
     'installation' => [
         'request_button' => 'Richiedi installazione',
         'intro' => 'Prima di confermare l’installazione, controlleremo i connettori del tuo veicolo.',

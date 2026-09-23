@@ -493,7 +493,7 @@ class ConfiguratorCsvImporter
     {
         $needle = mb_strtolower(trim($handle.' '.$title.' '.$tags));
 
-        if ($type === 'CAM') {
+        if (in_array($type, ['CAM', 'DASHCAM'], true)) {
             return 'camera';
         }
 
