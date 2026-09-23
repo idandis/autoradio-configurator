@@ -5690,7 +5690,7 @@ watch(
                     </div>
 
                     <div class="flex shrink-0 flex-col gap-2 pt-2">
-                        <div class="flex flex-col items-center justify-center rounded-lg border border-amber-400/60 bg-amber-400/10 px-3 py-2 text-center text-xs font-semibold text-amber-300">
+                        <div class="flex flex-col items-center justify-center rounded-lg border border-neutral-700 bg-neutral-900/70 px-3 py-2 text-center text-xs font-semibold text-neutral-300">
                             <span class="flex items-center justify-center gap-2">
                                 <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
                                     <path d="M10 17h4V5H2v12h3" />
@@ -5701,17 +5701,17 @@ watch(
                                 <span>{{ t('quote.home_delivery_title') }}</span>
                             </span>
                             <span>{{ t('quote.home_delivery_estimate') }}</span>
-                            <span class="mt-0.5 text-amber-200/80">{{ t('quote.shipping_tracking') }}</span>
+                            <span class="mt-0.5 text-neutral-400">{{ t('quote.shipping_tracking') }}</span>
                         </div>
 
-                        <div class="rounded-lg border border-neutral-700 bg-neutral-900/70 px-3 py-3 text-center">
+                        <div class="rounded-lg border border-amber-400/60 bg-amber-400/10 px-3 py-3 text-center">
                             <p class="text-sm font-semibold text-amber-400">{{ t('quote.trust_title') }}</p>
-                            <p class="mt-1 text-xs leading-5 text-neutral-400">{{ t('quote.trust_details') }}</p>
+                            <p class="mt-1 text-xs leading-5 text-amber-200/80">{{ t('quote.trust_details') }}</p>
                         </div>
 
                         <p v-if="usesItalianCheckout" class="text-center text-sm text-amber-300">{{ localCheckoutCopy.shipping }}{{ italianCheckoutIsTest ? (props.locale === 'es' ? ' · Pago de prueba' : ' · Pagamento di prova') : '' }}</p>
                         <p v-if="italianCheckoutError" role="alert" class="text-center text-sm text-red-400">{{ italianCheckoutError }}</p>
-                        <label v-if="!usesItalianCheckout" ref="checkoutConsentSection" class="flex cursor-pointer items-start gap-2 rounded-lg px-1 text-xs leading-5 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 p-3 ring-2 ring-amber-400' : ''">
+                        <label v-if="!usesItalianCheckout" ref="checkoutConsentSection" class="flex cursor-pointer items-start gap-2 rounded-xl border border-neutral-700 px-4 py-4 text-xs leading-5 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 ring-2 ring-amber-400' : 'bg-[#121212]'">
                             <input
                                 v-model="checkoutConsentAccepted"
                                 type="checkbox"
@@ -5740,10 +5740,6 @@ watch(
                                 </a>
                             </span>
                         </label>
-
-                        <p class="px-2 text-center text-xs leading-5 text-neutral-400">
-                            {{ t('quote.checkout_trust') }}
-                        </p>
 
                         <button
                             type="button"
@@ -6110,18 +6106,17 @@ watch(
                         <div v-if="installationCost > 0" class="mt-3 flex justify-between rounded-lg border border-sky-400/30 bg-sky-400/5 px-3 py-3 text-sky-200"><span>{{ t('quote.installation_direct') }}</span><b>{{ installationCost.toFixed(2) }} €</b></div>
                     </div>
 
-                    <div class="rounded-xl border border-amber-400/60 bg-amber-400/10 px-4 py-3 text-center text-sm font-semibold text-amber-300">
-                        <p>🚚 &nbsp;{{ t('quote.home_delivery_title') }}</p><p>{{ t('quote.home_delivery_estimate') }}</p><p class="text-xs text-amber-200/80">{{ t('quote.shipping_tracking') }}</p>
+                    <div class="rounded-xl border border-neutral-700 bg-[#121212] px-4 py-3 text-center text-sm font-semibold text-neutral-300">
+                        <p>🚚 &nbsp;{{ t('quote.home_delivery_title') }}</p><p>{{ t('quote.home_delivery_estimate') }}</p><p class="text-xs text-neutral-400">{{ t('quote.shipping_tracking') }}</p>
                     </div>
-                    <div class="rounded-xl border border-neutral-700 bg-[#121212] px-4 py-4 text-center"><p class="font-semibold text-amber-400">{{ t('quote.trust_title') }}</p><p class="mt-2 text-sm leading-6 text-neutral-400">{{ t('quote.trust_details') }}</p></div>
+                    <div class="rounded-xl border border-amber-400/60 bg-amber-400/10 px-4 py-4 text-center"><p class="font-semibold text-amber-400">{{ t('quote.trust_title') }}</p><p class="mt-2 text-sm leading-6 text-amber-200/80">{{ t('quote.trust_details') }}</p></div>
 
                     <p v-if="usesItalianCheckout" class="text-center text-sm text-amber-300">{{ localCheckoutCopy.shipping }}{{ italianCheckoutIsTest ? (props.locale === 'es' ? ' · Pago de prueba' : ' · Pagamento di prova') : '' }}</p>
                         <p v-if="italianCheckoutError" role="alert" class="text-center text-sm text-red-400">{{ italianCheckoutError }}</p>
-                        <label v-if="!usesItalianCheckout" ref="cartCheckoutConsentSection" class="flex cursor-pointer items-start gap-3 rounded-xl text-sm leading-6 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 p-4 ring-2 ring-amber-400' : ''">
+                        <label v-if="!usesItalianCheckout" ref="cartCheckoutConsentSection" class="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-700 px-4 py-4 text-sm leading-6 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 ring-2 ring-amber-400' : 'bg-[#121212]'">
                         <input v-model="checkoutConsentAccepted" type="checkbox" class="mt-1 h-4 w-4 shrink-0 accent-amber-400" />
                         <span>{{ t('checkout_consent.checkbox') }} <a href="https://www.autoradiocanario.com/policies/terms-of-service" target="_blank" rel="noopener noreferrer" class="block text-neutral-300 underline">{{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}</a></span>
                     </label>
-                    <p class="text-center text-sm leading-6 text-neutral-400">{{ t('quote.checkout_trust') }}</p>
 
 
                 </div>
