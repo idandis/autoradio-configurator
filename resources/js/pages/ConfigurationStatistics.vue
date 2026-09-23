@@ -38,6 +38,12 @@ const cleanFilters = () => Object.fromEntries(Object.entries(filters).filter(([,
 const applyFilters = () => router.get('/configuration-statistics', cleanFilters(), { preserveState: true, replace: true });
 const resetFilters = () => { Object.assign(filters, filterDefaults); applyFilters(); };
 const applyAnalysis = () => { filters.analysis = analysisChoice.value; filters.visualization = visualizationChoice.value; filters.counting_mode = countingModeChoice.value; showAnalysisModal.value = false; applyFilters(); };
+const vehicleTabs = [{ key: 'brands', label: 'Marca' }, { key: 'models', label: 'Modello' }, { key: 'years', label: 'Anno' }];
+const selectVehicleTab = (type: string) => {
+    filters.analysis = type;
+    analysisChoice.value = type;
+    router.get('/configuration-statistics', cleanFilters(), { preserveState: true, preserveScroll: true, replace: true });
+};
 
 const analysisLabels: Record<string, string> = {
     brands: 'Marche', models: 'Modelli', years: 'Anni', products: 'Prodotti', variants: 'Varianti', prices: 'Prezzi',
@@ -149,6 +155,17 @@ const deleteAll = () => {
 
         <section class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
             <article class="rounded-xl border border-sidebar-border/70 bg-card p-5">
+                <div class="mb-5 flex gap-1 border-b border-sidebar-border/70" role="group" aria-label="Statistiche veicolo">
+                    <button
+                        v-for="tab in vehicleTabs"
+                        :key="tab.key"
+                        type="button"
+                        :aria-pressed="analysis.type === tab.key"
+                        class="flex-1 border-b-2 px-4 py-3 text-sm font-semibold transition"
+                        :class="analysis.type === tab.key ? 'border-amber-400 text-amber-500' : 'border-transparent text-muted-foreground hover:border-amber-400/50 hover:text-foreground'"
+                        @click="selectVehicleTab(tab.key)"
+                    >{{ tab.label }}</button>
+                </div>
                 <div class="flex items-center justify-between gap-3"><div><h2 class="text-lg font-semibold">{{ analysisLabels[analysis.type] }}</h2><p class="text-sm text-muted-foreground">{{ visualizationLabels[analysis.visualization] }} · {{ analysis.counting_mode === 'unique' ? 'Configurazioni uniche' : 'Eventi totali' }}</p></div><button class="text-sm text-amber-500" @click="showAnalysisModal = true">Modifica</button></div>
                 <div v-if="analysis.data.length === 0" class="py-16 text-center text-muted-foreground">Nessun dato per questa analisi.</div>
                 <div v-else-if="analysis.visualization === 'table'" class="mt-5 overflow-hidden rounded-lg border"><div v-for="item in analysis.data" :key="item.label" class="flex justify-between border-b px-4 py-3 last:border-0"><span>{{ item.label }}</span><strong>{{ item.value }}</strong></div></div>

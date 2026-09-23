@@ -23,6 +23,14 @@
         "source": "Cámara AHD 1080P Universal 2.8mm Visión Estelar",
         "translation": "Telecamera AHD 1080P universale 2.8mm visione stellare"
     },
+    "camara-dashcam-dasaita-170-1080p-vision-nocturna-y-resistente-al-agua-para-coche": {
+        "source": "Cámara Dashcam Dasaita 170° 1080P, Visión Nocturna y Resistente al Agua para Coche",
+        "translation": "Dashcam Dasaita 170° 1080P con visione notturna e resistente all’acqua per auto"
+    },
+    "camara-dashcam-dual-4k-1080p-con-wifi-gps-y-vigilancia-24h": {
+        "source": "Cámara Dashcam Dual 4K + 1080P con WiFi, GPS y Vigilancia 24H",
+        "translation": "Dashcam Dual 4K + 1080P con WiFi, GPS e sorveglianza 24H"
+    },
     "camara-de-aparcamiento-trasera-para-dodge-chrysler-grand-caravan-2011-2020": {
         "source": "Cámara de aparcamiento trasera para Dodge Chrysler Grand Caravan 2011-2020",
         "translation": "Telecamera di parcheggio posteriore per Dodge Chrysler Grand Caravan 2011-2020"
@@ -79,6 +87,14 @@
         "source": "Cámara de visión trasera gran angular para Toyota Auris / Blade 2006–2012 – Alta definición con visión nocturna real y líneas de guía",
         "translation": "Telecamera posteriore grandangolare per Toyota Auris / Blade 2006–2012 – alta definizione con vera visione notturna e linee guida"
     },
+    "camara-de-vision-trasera-hd-integrada-en-tercera-luz-de-freno-para-fiat-ducato-peugeot-boxer-y-citroen-jumper-2006-2026": {
+        "source": "Cámara de Visión Trasera HD Integrada en Tercera Luz de Freno para Fiat Ducato, Peugeot Boxer y Citroen Jumper 2018-2026",
+        "translation": "Telecamera posteriore HD integrata nel terzo stop per Fiat Ducato, Peugeot Boxer e Citroen Jumper 2018-2026"
+    },
+    "camara-dvr-1080p-con-vision-nocturna-para-coche": {
+        "source": "Cámara DVR 1080P con Visión Nocturna para Coche",
+        "translation": "Telecamera DVR 1080P con visione notturna per auto"
+    },
     "camara-dvr-para-coche-4k-wifi-control-app-y-monitor-de-aparcamiento": {
         "source": "Cámara DVR para Coche 4K WiFi, Control APP y Monitor de Aparcamiento",
         "translation": "Telecamera DVR per auto 4K WiFi, controllo APP e monitor di parcheggio"
@@ -86,6 +102,10 @@
     "camara-emblema-hd-170-dinamica-golf-passat-2005-2015": {
         "source": "Cámara Emblema HD 170° Dinámica Golf/Passat 2005-2015",
         "translation": "Telecamera emblema HD 170° dinamica per Golf/Passat 2005-2015"
+    },
+    "camara-frontal-ahd-1080p-170-para-volvo-xc40-xc60-xc90-2019-2021-y-s60-s90-v60-v90-2020": {
+        "source": "Cámara Frontal AHD 1080P 170° para Volvo XC40/XC60/XC90 2019-2021 y S60/S90/V60/V90 2000-2020",
+        "translation": "Telecamera anteriore AHD 1080P 170° per Volvo XC40/XC60/XC90 2019-2021 e S60/S90/V60/V90 2000-2020"
     },
     "camara-frontal-ahd-1080p-fisheye-para-vw-golf-mk5-y-mas": {
         "source": "Cámara Frontal AHD 1080P Fisheye para VW Golf MK5 y Más",
@@ -102,6 +122,10 @@
     "camara-trasera-170-1080p-hd-2din-impermeable": {
         "source": "Cámara Trasera 170° 1080P HD Impermeable",
         "translation": "Telecamera posteriore 170° 1080P HD impermeabile"
+    },
+    "camara-trasera-ahd-1080p-170-peugeot": {
+        "source": "Cámara Trasera AHD 1080P 170° Modelos Peugeot 1996-2026",
+        "translation": "Telecamera posteriore AHD 1080P 170° per modelli Peugeot 1996-2026"
     },
     "camara-trasera-ahd-1080p-con-vision-nocturna-para-toyota-corolla-verso-2004-2009": {
         "source": "Cámara Trasera AHD 1080P con Visión Nocturna para Toyota Corolla Verso 2004-2009",
@@ -131,10 +155,6 @@
         "source": "Cámara Trasera AHD 1080P Gran Angular 170° para Volvo S40 / S60 / V50 / V60 / XC60 / XC90 / C70 – Visión Nocturna Starlight IP68",
         "translation": "Telecamera posteriore AHD 1080P grandangolare 170° per Volvo S40 / S60 / V50 / V60 / XC60 / XC90 / C70 – Visione notturna Starlight IP68"
     },
-    "camara-trasera-ahd-170-para-toyota-land-cruiser-y-prado": {
-        "source": "Cámara Trasera AHD 170° para Toyota Land Cruiser y Prado 1989-2019",
-        "translation": "Telecamera posteriore AHD 170° per Toyota Land Cruiser e Prado 1989-2019"
-    },
     "camara-trasera-ahd-1080p-integrada-para-alfa-romeo-giulietta-2010-2020-mito-2008-2018-brera-y-spider-2005-2010-con-vision-nocturna-y-guias-de-aparcamiento": {
         "source": "Cámara Trasera AHD 1080P Integrada para Alfa Romeo Giulietta 2010–2020, MiTo 2008–2018, Brera y Spider 2005–2010 con Visión Nocturna y Guías de Aparcamiento",
         "translation": "Telecamera posteriore AHD 1080P integrata per Alfa Romeo Giulietta 2010–2020, MiTo 2008–2018, Brera e Spider 2005–2010 con visione notturna e guide di parcheggio"
@@ -151,6 +171,10 @@
         "source": "Cámara Trasera AHD 170° para Dacia Sandero, Sandero Stepway y Logan",
         "translation": "Telecamera posteriore AHD 170° per Dacia Sandero, Sandero Stepway e Logan"
     },
+    "camara-trasera-ahd-170-para-toyota-land-cruiser-y-prado": {
+        "source": "Cámara Trasera AHD 170° para Toyota Land Cruiser y Prado 1989-2019",
+        "translation": "Telecamera posteriore AHD 170° per Toyota Land Cruiser e Prado 1989-2019"
+    },
     "camara-trasera-ahd-golden-lens-para-honda-cr-v-ii-2003-2007": {
         "source": "Cámara Trasera AHD Golden Lens para Honda CR-V II 2003-2007",
         "translation": "Telecamera posteriore AHD Golden Lens per Honda CR-V II 2003-2007"
@@ -163,6 +187,18 @@
         "source": "Cámara Trasera AHD HD para Mercedes-Benz SL R230 (SL350, SL400) 2008-2012 con Visión Nocturna y Líneas de Aparcamiento",
         "translation": "Telecamera posteriore AHD HD per Mercedes-Benz SL R230 (SL350, SL400) 2008-2012 con visione notturna e linee di parcheggio"
     },
+    "camara-trasera-ahd-ntsc-con-vision-nocturna-para-toyota-yaris-xp90-2006-2013": {
+        "source": "Cámara Trasera AHD/NTSC con Visión Nocturna para Toyota Yaris XP90 2006-2013",
+        "translation": "Telecamera posteriore AHD/NTSC con visione notturna per Toyota Yaris XP90 2006-2013"
+    },
+    "camara-trasera-ccd-170-ip68-para-volvo-s60-s60-r-s60l-2001-2009": {
+        "source": "Cámara Trasera CCD 170° IP68 para Volvo S60 / S60 R / S60L 2001-2009",
+        "translation": "Telecamera posteriore CCD 170° IP68 per Volvo S60 / S60 R / S60L 2001-2009"
+    },
+    "camara-trasera-ccd-nocturna-para-nissan-sentra-b16-2007-2011-y-x-trail-t32-2013-2023": {
+        "source": "Cámara Trasera CCD Nocturna para Nissan Sentra B16 2007-2011 y X-Trail T32 2013-2023",
+        "translation": "Telecamera posteriore CCD con visione notturna per Nissan Sentra B16 2007-2011 e X-Trail T32 2013-2023"
+    },
     "camara-trasera-con-trayectoria-dinamica-para-volkswagen-polo-2c-2000-2010-golf-4-5-6-bora-y-passat-vision-nocturna-y-aparcamiento-preciso": {
         "source": "Cámara Trasera con Trayectoria Dinámica para Volkswagen Polo 2C 2000-2010, Golf 4 5 6, Bora y Passat – Visión Nocturna y Aparcamiento Preciso",
         "translation": "Telecamera posteriore con linee guida dinamiche per Volkswagen Polo 2C 2000-2010, Golf 4 5 6, Bora e Passat – visione notturna e parcheggio preciso"
@@ -170,6 +206,10 @@
     "camara-trasera-cvbs-170-con-lineas-dinamicas-para-toyota-rav4-2006-2012": {
         "source": "Cámara Trasera CVBS 170° con Líneas Dinámicas para Toyota RAV4 2006-2012",
         "translation": "Telecamera posteriore CVBS 170° con linee dinamiche per Toyota RAV4 2006-2012"
+    },
+    "camara-trasera-cvbs-170-con-vision-nocturna-para-mercedes-clk-w209-2002-2009": {
+        "source": "Cámara Trasera CVBS 170° con Visión Nocturna para Mercedes CLK W209 2002-2009",
+        "translation": "Telecamera posteriore CVBS 170° con visione notturna per Mercedes CLK W209 2002-2009"
     },
     "camara-trasera-de-aparcamiento-compatible-fiat-stilo-2001-2007-punto-doblo-marea-multipla-y-alfa-romeo-2000-2011": {
         "source": "Cámara Trasera de Aparcamiento Compatible Fiat Stilo 2001–2007, Punto, Doblo, Marea, Multipla y Alfa Romeo 2000–2010",
@@ -182,6 +222,10 @@
     "camara-trasera-estandar": {
         "source": "Camara trasera estandar",
         "translation": "Telecamera posteriore standard"
+    },
+    "camara-trasera-fhd-ccd-night-vision-para-nissan-micra-k12-2002-2010": {
+        "source": "Cámara Trasera FHD CCD Night Vision para Nissan Micra K12 2002-2010",
+        "translation": "Telecamera posteriore FHD CCD con visione notturna per Nissan Micra K12 2002-2010"
     },
     "camara-trasera-frontal-ahd-1080p-gran-angular-con-vision-nocturna": {
         "source": "Cámara Frontal AHD 1080P Gran Angular con Visión Nocturna",
@@ -235,6 +279,14 @@
         "source": "Cámara Trasera HD 170° Visión Nocturna para Toyota Land Cruiser LC 100 1998-2007 – Estilo Luz de Matrícula, IP68",
         "translation": "Telecamera posteriore HD 170° visione notturna per Toyota Land Cruiser LC 100 1998-2007 – stile luce targa, IP68"
     },
+    "camara-trasera-hd-ccd-con-vision-nocturna-para-kia-picanto-morning-2011-2019": {
+        "source": "Cámara Trasera HD CCD con Visión Nocturna para Kia Picanto / Morning 2011-2019",
+        "translation": "Telecamera posteriore HD CCD con visione notturna per Kia Picanto / Morning 2011-2019"
+    },
+    "camara-trasera-hd-ccd-con-vision-nocturna-para-mazda-cx-5-2012-2023": {
+        "source": "Cámara Trasera HD CCD con Visión Nocturna para Mazda CX-5 2012-2023",
+        "translation": "Telecamera posteriore HD CCD con visione notturna per Mazda CX-5 2012-2023"
+    },
     "camara-trasera-hd-con-vision-nocturna-para-audi-a8-d3-2002-2007": {
         "source": "Cámara trasera HD con visión nocturna para Audi A8 D3 2002-2007",
         "translation": "Telecamera posteriore HD con visione notturna per Audi A8 D3 2002-2007"
@@ -258,6 +310,10 @@
     "camara-trasera-hd-integrada-en-manilla-para-volkswagen-sharan-7n-y-seat-alhambra-2010-2018-vision-nocturna-starlight-170-full-hd-1080p": {
         "source": "Cámara Trasera HD Integrada en Manilla para Volkswagen Sharan 7N y SEAT Alhambra 2010–2018 | Visión Nocturna Starlight 170° Full HD 1080P",
         "translation": "Telecamera posteriore HD integrata nella maniglia per Volkswagen Sharan 7N e SEAT Alhambra 2010–2018 | visione notturna Starlight 170° Full HD 1080P"
+    },
+    "camara-trasera-hd-night-vision-120-170-para-citroen-c3-c4-c5-c6-c8-cactus-y-ds-2006-actualidad": {
+        "source": "Cámara Trasera HD Night Vision 170° para Citroën C3/C4/C5/C6/C8, Cactus y DS 2006-Actualidad",
+        "translation": "Telecamera posteriore HD Night Vision 170° per Citroën C3/C4/C5/C6/C8, Cactus e DS dal 2006 a oggi"
     },
     "camara-trasera-hd-oem-con-vision-nocturna-ccd-y-adaptador-24-pin-para-renault-clio-iv-2012-2020": {
         "source": "Cámara Trasera HD OEM con Visión Nocturna CCD y Adaptador 24 Pin para Renault Clio IV 2012-2020",
@@ -291,6 +347,10 @@
         "source": "Cámara Visión Nocturna Ford Edge 2015-2017, 170° Impermeable",
         "translation": "Telecamera per visione notturna Ford Edge 2015-2017, 170° impermeabile"
     },
+    "camaras-frontal-ahd-1080p-gran-angular-con-vision-nocturna-3-variantes": {
+        "source": "Cámaras Frontal AHD 1080P Gran Angular con Visión Nocturna 3 variantes",
+        "translation": "Telecamere anteriori AHD 1080P grandangolari con visione notturna, 3 varianti"
+    },
     "car-rear-view-camera-170-degree-hd-video-night-vision-reversing-auto-parking-camera-ccd-waterproof-led-auto-backup-monitor": {
         "source": "Cámara de Visión Trasera 170° HD para Parking Nocturno",
         "translation": "Telecamera posteriore 170° HD per parcheggio notturno"
@@ -303,6 +363,30 @@
         "source": "Cámara Trasera HD AHD/CVBS Integrada en Luz de Matrícula para Chevrolet Cruze 2008-2014",
         "translation": "Telecamera posteriore HD AHD/CVBS integrata nella luce della targa per Chevrolet Cruze 2008-2014"
     },
+    "dash-cam-3-camaras-wifi-1080p-3": {
+        "source": "Dash Cam 3 Cámaras WiFi 1080P 3''",
+        "translation": "Dash Cam a 3 telecamere WiFi 1080P 3''"
+    },
+    "dash-cam-7-adas-full-hd-1080p": {
+        "source": "Dash Cam 7'' ADAS Full HD 1080P",
+        "translation": "Dash Cam 7'' ADAS Full HD 1080P"
+    },
+    "dashcam-2k-super-night-vision-con-modo-parking-gps-y-filtro-cpl": {
+        "source": "Dashcam 2K Super Night Vision con Modo Parking, GPS y Filtro CPL",
+        "translation": "Dashcam 2K Super Night Vision con modalità parcheggio, GPS e filtro CPL"
+    },
+    "dashcam-jimimax-jc120-4g-con-gps-y-transmision-en-vivo": {
+        "source": "Dashcam 4G con GPS y Transmisión en Vivo",
+        "translation": "Dashcam 4G con GPS e trasmissione in diretta"
+    },
+    "dashcam-junsun-720p-mini-adas-para-android": {
+        "source": "Dashcam 720P Mini ADAS para Android",
+        "translation": "Dashcam 720P Mini ADAS per Android"
+    },
+    "dashcam-kawa-d8-4k-con-dual-cam-y-gps-3-5": {
+        "source": "Dashcam KAWA D8 4K con Dual-Cam y GPS, 3-5''",
+        "translation": "Dashcam KAWA D8 4K con Dual-Cam e GPS, 3-5''"
+    },
     "dual-dash-cam-jmcq-para-android-720p-con-deteccion-de-movimiento": {
         "source": "Dual Dash Cam JMCQ para Android, 720P con Detección de Movimiento",
         "translation": "Dual Dash Cam JMCQ per Android, 720P con rilevamento movimento"
@@ -310,6 +394,10 @@
     "for-kia-soul-niro-picanto-morning-2011-2019-rio-3-ub-pride-ceed-pro-ceed-3d-coupe-car-parking-rear-view-camera-hd-night-vision": {
         "source": "Cámara Trasera HD CCD 170° Visión Nocturna para Kia Niro, Soul, Picanto, Rio, Ceed 2007–2020",
         "translation": "Telecamera posteriore HD CCD 170° visione notturna per Kia Niro, Soul, Picanto, Rio, Ceed 2007–2020"
+    },
+    "garmin-dash-cam-mini-3-camara-dash-cam-1080p-ultracompacta-con-campo-de-vision-de-140-grados-y-polarizador-clarity-integrado": {
+        "source": "Garmin Dash Cam Mini 3 1080p 140° Clarity",
+        "translation": "Garmin Dash Cam Mini 3 1080p 140° Clarity"
     },
     "greenyi-cvbs-ahd-1080p-vehicle-trunk-handle-car-reverse-backup-camera-for-vw-skoda-octavia-2-3-a5-fabio-yeti-superb-audi-a1-a3": {
         "source": "Cámara Trasera AHD 1080P Integrada en Maneta de Maletero para Skoda Yeti L5 (2010-2016) Angular 175° · Visión Nocturna",
@@ -331,64 +419,24 @@
         "source": "Monitor de Visión Trasera 5\" Plegable para Coche con Cámara",
         "translation": "Monitor di retromarcia 5\" pieghevole per auto con telecamera"
     },
+    "quystetes-camara-de-salpicadero-de-doble-lente-dvr-para-coche-camara-frontal-e-interior-grabadora-de-conduccion-de-video-monitor-de-aparcamiento-vision-g-sensor-1080p": {
+        "source": "Quystetes Dashcam Dual 1080P Frontal e Interior con G‑Sensor",
+        "translation": "Quystetes Dashcam Dual 1080P anteriore e interna con G‑Sensor"
+    },
     "tuo3eu-camara-de-marcha-atras-y-7-pulgadas-tft-lcd-monitor-ip68-resistente-al-agua-ir-vision-nocturna-camaras-de-vision-trasera-reversa-con-15m-cable-para-coche-rv-bus-remolque-camion": {
         "source": "Tuo3eu Cámara de Marcha atrás y 7 Pulgadas TFT LCD Monitor + IP68 Resistente al Agua IR Visión Nocturna Cámaras de Visión Trasera Reversa con 15M Cable para Coche RV Bus Remolque Camión",
         "translation": "Tuo3eu Telecamera di retromarcia e monitor TFT LCD 7\" + IP68 resistente all'acqua IR visione notturna con cavo 15M per auto, RV, bus, rimorchio, camion"
     },
-    "camara-frontal-ahd-1080p-170-para-volvo-xc40-xc60-xc90-2019-2021-y-s60-s90-v60-v90-2020": {
-        "source": "Cámara Frontal AHD 1080P 170° para Volvo XC40/XC60/XC90 2019-2021 y S60/S90/V60/V90 2000-2020",
-        "translation": "Telecamera anteriore AHD 1080P 170° per Volvo XC40/XC60/XC90 2019-2021 e S60/S90/V60/V90 2000-2020"
+    "wolfang-camara-de-coche-delantera-y-trasera-2-5k-qhd-arjeta-32gb-sd-incluida-dashcam-de-doble-lente-para-coches-de-170º-gran-angular-monitor-de-aparcamiento-24h-con-grabacion-en-bucle-y-sensor-g-1": {
+        "source": "WOLFANG Dashcam Dual 2.5K QHD 170° con Sensor G y SD 32 GB",
+        "translation": "WOLFANG Dashcam Dual 2.5K QHD 170° con sensore G e SD 32 GB"
     },
-    "camara-trasera-ccd-170-ip68-para-volvo-s60-s60-r-s60l-2001-2009": {
-        "source": "Cámara Trasera CCD 170° IP68 para Volvo S60 / S60 R / S60L 2001-2009",
-        "translation": "Telecamera posteriore CCD 170° IP68 per Volvo S60 / S60 R / S60L 2001-2009"
-    },
-    "camara-trasera-cvbs-170-con-vision-nocturna-para-mercedes-clk-w209-2002-2009": {
-        "source": "Cámara Trasera CVBS 170° con Visión Nocturna para Mercedes CLK W209 2002-2009",
-        "translation": "Telecamera posteriore CVBS 170° con visione notturna per Mercedes CLK W209 2002-2009"
-    },
-    "camara-trasera-hd-night-vision-120-170-para-citroen-c3-c4-c5-c6-c8-cactus-y-ds-2006-actualidad": {
-        "source": "Cámara Trasera HD Night Vision 170° para Citroën C3/C4/C5/C6/C8, Cactus y DS 2006-Actualidad",
-        "translation": "Telecamera posteriore HD Night Vision 170° per Citroën C3/C4/C5/C6/C8, Cactus e DS dal 2006 a oggi"
-    },
-    "camara-trasera-ahd-ntsc-con-vision-nocturna-para-toyota-yaris-xp90-2006-2013": {
-        "source": "Cámara Trasera AHD/NTSC con Visión Nocturna para Toyota Yaris XP90 2006-2013",
-        "translation": "Telecamera posteriore AHD/NTSC con visione notturna per Toyota Yaris XP90 2006-2013"
+    "wolfang-camara-de-coche-delantera-y-trasera-4k-uhd-arjeta-32gb-sd-incluida-dashcam-de-doble-lente-para-coches-de-170º-gran-angular-monitor-de-aparcamiento-24h-con-grabacion-en-bucle-y-sensor-g": {
+        "source": "WOLFANG Dashcam Dual 4K 170° con G‑Sensor y SD32GB",
+        "translation": "WOLFANG Dashcam Dual 4K 170° con G‑Sensor e SD32GB"
     },
     "xrc-tech-camara-de-salpicadero-de-doble-lente-para-coche-vision-nocturna-ir-hd-1080p-camara-frontal-e-interior-dvr-grabacion-en-bucle-sensor-g-monitor-de-estacionamiento-de-24-horas-grabadora": {
         "source": "Cámara Dual XRC TECH 1080P con DVR e IR para Coche",
         "translation": "Telecamera Dual XRC TECH 1080P con DVR e IR per auto"
-    },
-    "camaras-frontal-ahd-1080p-gran-angular-con-vision-nocturna-3-variantes": {
-        "source": "Cámaras Frontal AHD 1080P Gran Angular con Visión Nocturna 3 variantes",
-        "translation": "Telecamere anteriori AHD 1080P grandangolari con visione notturna, 3 varianti"
-    },
-    "camara-trasera-fhd-ccd-night-vision-para-nissan-micra-k12-2002-2010": {
-        "source": "Cámara Trasera FHD CCD Night Vision para Nissan Micra K12 2002-2010",
-        "translation": "Telecamera posteriore FHD CCD con visione notturna per Nissan Micra K12 2002-2010"
-    },
-    "camara-trasera-hd-ccd-con-vision-nocturna-para-mazda-cx-5-2012-2023": {
-        "source": "Cámara Trasera HD CCD con Visión Nocturna para Mazda CX-5 2012-2023",
-        "translation": "Telecamera posteriore HD CCD con visione notturna per Mazda CX-5 2012-2023"
-    },
-    "camara-trasera-hd-ccd-con-vision-nocturna-para-kia-picanto-morning-2011-2019": {
-        "source": "Cámara Trasera HD CCD con Visión Nocturna para Kia Picanto / Morning 2011-2019",
-        "translation": "Telecamera posteriore HD CCD con visione notturna per Kia Picanto / Morning 2011-2019"
-    },
-    "camara-dashcam-dasaita-170-1080p-vision-nocturna-y-resistente-al-agua-para-coche": {
-        "source": "Cámara Dashcam Dasaita 170° 1080P, Visión Nocturna y Resistente al Agua para Coche",
-        "translation": "Dashcam Dasaita 170° 1080P con visione notturna e resistente all’acqua per auto"
-    },
-    "camara-de-vision-trasera-hd-integrada-en-tercera-luz-de-freno-para-fiat-ducato-peugeot-boxer-y-citroen-jumper-2006-2026": {
-        "source": "Cámara de Visión Trasera HD Integrada en Tercera Luz de Freno para Fiat Ducato, Peugeot Boxer y Citroen Jumper 2018-2026",
-        "translation": "Telecamera posteriore HD integrata nella terza luce di stop per Fiat Ducato, Peugeot Boxer e Citroen Jumper 2018-2026"
-    },
-    "camara-trasera-ccd-nocturna-para-nissan-sentra-b16-2007-2011-y-x-trail-t32-2013-2023": {
-        "source": "Cámara Trasera CCD Nocturna para Nissan Sentra B16 2007-2011 y X-Trail T32 2013-2023",
-        "translation": "Telecamera posteriore CCD con visione notturna per Nissan Sentra B16 2007-2011 e X-Trail T32 2013-2023"
-    },
-    "camara-trasera-ahd-1080p-170-peugeot": {
-        "source": "Cámara Trasera AHD 1080P 170° Modelos Peugeot 1996-2026",
-        "translation": "Telecamera posteriore AHD 1080P 170° per modelli Peugeot 1996-2026"
     }
 }

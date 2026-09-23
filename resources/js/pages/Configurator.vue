@@ -769,6 +769,7 @@ const setConfiguratorMode = async (mode: ConfiguratorMode) => {
 
     if (
         configuratorMode.value !== null
+        && mode !== 'universal'
         && modeSensitiveSelectionCount.value > 0
         && !window.confirm(t('mode.change_confirmation'))
     ) {
