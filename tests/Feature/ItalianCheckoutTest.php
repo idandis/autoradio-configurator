@@ -15,6 +15,17 @@ class ItalianCheckoutTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_old_checkout_links_redirect_to_language_neutral_urls(): void
+    {
+        $token = '363d7fd2-bfa9-4705-8ccf-ce4f7f551b29';
+
+        foreach ([$token => $token, "preventivo/$token" => "quote/$token", "$token/pagamento" => "$token/payment", "$token/conferma" => "$token/confirmation"] as $old => $new) {
+            $this->get("/checkout/italiano/$old")->assertStatus(308)->assertRedirect("/checkout/$new");
+        }
+
+        $this->post("/checkout/italiano/$token")->assertStatus(308)->assertRedirect("/checkout/$token");
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -241,7 +252,7 @@ class ItalianCheckoutTest extends TestCase
     {
         $variant = $this->variant('100.00');
         $this->actingAs(User::factory()->create(['is_admin' => true]));
-        $response = $this->post('https://config.autoradiocanario.com/checkout/italiano', [
+        $response = $this->post('https://config.autoradiocanario.com/checkout', [
             'items' => [[
                 'type' => 'variant', 'id' => $variant->id, 'quantity' => 1,
                 'import_unit_amount' => 1500,
@@ -249,14 +260,14 @@ class ItalianCheckoutTest extends TestCase
         ])->assertSessionHasNoErrors()->assertRedirect();
         $token = basename($response->headers->get('Location'));
 
-        $this->get('https://config.autoradiocanario.com/checkout/italiano/'.$token)
+        $this->get('https://config.autoradiocanario.com/checkout/'.$token)
             ->assertInertia(fn (Assert $page) => $page
                 ->where('checkoutLocale', 'es')
                 ->where('quote.items.0.title', 'Radio para coche')
                 ->where('quote.import_amount', 1500)
                 ->where('quote.total_amount', 11500));
 
-        $this->post('https://config.autoradiocanario.com/checkout/italiano/'.$token, [
+        $this->post('https://config.autoradiocanario.com/checkout/'.$token, [
             'first_name' => 'María', 'last_name' => 'García', 'email' => 'maria@example.test',
             'phone' => '+34 600 123 123', 'line1' => 'Avenida Mencey 49', 'line2' => null,
             'postal_code' => '35120', 'city' => 'Mogán', 'province' => 'Las Palmas', 'country' => 'ES',

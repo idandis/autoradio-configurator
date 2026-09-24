@@ -234,7 +234,7 @@ class ItalianOrdersTest extends TestCase
         $order->delete();
         config(['italian_checkout.enabled' => true]);
         $this->withSession(['italian_checkout_drafts' => [$token => ['items' => []]]])
-            ->get('/checkout/italiano/'.$token)->assertStatus(410);
+            ->get('/checkout/'.$token)->assertStatus(410);
     }
 
     public function test_cancellation_keeps_paid_order_visible_and_blocks_further_changes(): void
@@ -278,8 +278,8 @@ class ItalianOrdersTest extends TestCase
         $this->actingAs($this->admin())->post(route('italian-orders.cancel', $order), ['version' => 1])->assertSessionHasNoErrors();
         $this->assertSame('expired', $order->payments()->first()->status);
         $this->withSession(['italian_checkout_drafts' => [$token => ['items' => []]]])
-            ->get('/checkout/italiano/'.$token.'/pagamento')->assertRedirect('/checkout/italiano/'.$token.'/conferma');
-        $this->postJson('/checkout/italiano/'.$token.'/stripe-session')->assertJsonStructure(['redirect']);
+            ->get('/checkout/'.$token.'/payment')->assertRedirect('/checkout/'.$token.'/confirmation');
+        $this->postJson('/checkout/'.$token.'/stripe-session')->assertJsonStructure(['redirect']);
     }
 
     public function test_stripe_failure_leaves_order_active(): void

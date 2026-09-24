@@ -101,7 +101,7 @@ class SharedConfigurationTest extends TestCase
         $uuid = $first->json('uuid');
 
         $this->assertSame($uuid, $second->json('uuid'));
-        $this->assertSame("/checkout/italiano/preventivo/{$uuid}", $first->json('checkout_url'));
+        $this->assertSame("/checkout/quote/{$uuid}", $first->json('checkout_url'));
         $this->assertDatabaseCount('shared_configurations', 1);
         $this->assertSame(24000, SharedConfiguration::sole()->checkout['quote']['total_amount']);
 

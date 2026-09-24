@@ -3192,7 +3192,7 @@ const checkoutUrl = computed(() => {
         return null;
     }
 
-    if (usesItalianCheckout.value) return '/checkout/italiano';
+    if (usesItalianCheckout.value) return '/checkout';
 
     const cartPath = checkoutLineItems.value
         .map((item) => `${item.variantId}:${item.quantity}`)
@@ -3949,7 +3949,7 @@ const goToCheckout = async () => {
         italianCheckoutError.value = '';
         persistConfiguratorState();
         italianCheckoutBusy.value = true;
-        router.post('/checkout/italiano', {
+        router.post('/checkout', {
             items: italianCheckoutItems.value,
             custom_discount: italianCheckoutDiscount.value,
             import_amount: Math.round(customImportTotal.value * 100),

@@ -47,7 +47,7 @@ const mountPayment = async () => {
         if (current !== generation) return;
         const checkout = await stripe.createEmbeddedCheckoutPage({
             fetchClientSecret: async () => {
-                const { data } = await axios.post(`/checkout/italiano/${props.token}/stripe-session`);
+                const { data } = await axios.post(`/checkout/${props.token}/stripe-session`);
                 if (data.redirect) {
                     redirecting = true;
                     window.location.assign(data.redirect);

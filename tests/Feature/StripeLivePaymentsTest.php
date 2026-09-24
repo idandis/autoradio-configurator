@@ -71,20 +71,20 @@ class StripeLivePaymentsTest extends TestCase
     public function test_live_checkout_creates_real_order_and_rejects_foreign_shipping(): void
     {
         $product = ConfiguratorProduct::create(['handle' => 'camera', 'category' => 'camera', 'title' => 'Camera', 'price_min' => '100.00']);
-        $response = $this->post('/checkout/italiano', ['items' => [['type' => 'product', 'id' => $product->id, 'quantity' => 1]]])->assertRedirect();
+        $response = $this->post('/checkout', ['items' => [['type' => 'product', 'id' => $product->id, 'quantity' => 1]]])->assertRedirect();
         $token = basename($response->headers->get('Location'));
-        $this->get('/checkout/italiano/'.$token)->assertInertia(fn (Assert $page) => $page->where('isTest', false));
+        $this->get('/checkout/'.$token)->assertInertia(fn (Assert $page) => $page->where('isTest', false));
         $data = ['first_name' => 'Maria', 'last_name' => 'Rossi', 'email' => 'maria@example.test', 'phone' => '+393331234567',
             'line1' => 'Via Roma 1', 'postal_code' => '00100', 'city' => 'Roma', 'province' => 'RM', 'country' => 'ES',
             'reviewed' => true, 'quote_hash' => session("italian_checkout_drafts.$token.quote_hash"), 'is_test' => true];
-        $this->post('/checkout/italiano/'.$token, $data)->assertSessionHasErrors('country');
+        $this->post('/checkout/'.$token, $data)->assertSessionHasErrors('country');
         $this->assertDatabaseCount('italian_orders', 0);
         $data['country'] = 'IT';
-        $this->post('/checkout/italiano/'.$token, $data)->assertSessionHasNoErrors();
+        $this->post('/checkout/'.$token, $data)->assertSessionHasNoErrors();
         $order = ItalianOrder::sole();
         $this->assertFalse($order->is_test);
         $this->assertSame('IT', $order->shipping_address['country']);
-        $this->get('/checkout/italiano/'.$token.'/pagamento')->assertInertia(fn (Assert $page) => $page
+        $this->get('/checkout/'.$token.'/payment')->assertInertia(fn (Assert $page) => $page
             ->where('isTest', false)->where('publishableKey', 'pk_live_fake')->missing('secret'));
     }
 

@@ -37,13 +37,20 @@ use Inertia\Inertia;
     ]);
 });*/
 
-Route::prefix('checkout/italiano')->name('italian-checkout.')->middleware('throttle:30,1')->group(function () {
+Route::match(['get', 'post'], '/checkout/italiano/{path?}', function (\Illuminate\Http\Request $request, ?string $path = null) {
+    $path = strtr($path ?? '', ['preventivo/' => 'quote/', '/conferma' => '/confirmation', '/pagamento' => '/payment']);
+    $query = $request->getQueryString();
+
+    return redirect('/checkout'.($path !== '' ? '/'.$path : '').($query ? '?'.$query : ''), 308);
+})->where('path', '.*');
+
+Route::prefix('checkout')->name('italian-checkout.')->middleware('throttle:30,1')->group(function () {
     Route::post('/', [ItalianCheckoutController::class, 'start'])->name('start');
-    Route::get('/preventivo/{uuid}', [ItalianCheckoutController::class, 'shared'])->whereUuid('uuid')->name('shared');
+    Route::get('/quote/{uuid}', [ItalianCheckoutController::class, 'shared'])->whereUuid('uuid')->name('shared');
     Route::get('/{token}', [ItalianCheckoutController::class, 'show'])->whereUuid('token')->name('show');
     Route::post('/{token}', [ItalianCheckoutController::class, 'store'])->whereUuid('token')->name('store');
-    Route::get('/{token}/conferma', [ItalianCheckoutController::class, 'confirmation'])->whereUuid('token')->name('confirmation');
-    Route::get('/{token}/pagamento', [ItalianCheckoutController::class, 'payment'])->whereUuid('token')->name('payment');
+    Route::get('/{token}/confirmation', [ItalianCheckoutController::class, 'confirmation'])->whereUuid('token')->name('confirmation');
+    Route::get('/{token}/payment', [ItalianCheckoutController::class, 'payment'])->whereUuid('token')->name('payment');
     Route::post('/{token}/stripe-session', [ItalianCheckoutController::class, 'stripeSession'])->whereUuid('token')->name('stripe-session');
 });
 

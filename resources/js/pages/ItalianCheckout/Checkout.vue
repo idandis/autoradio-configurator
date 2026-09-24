@@ -39,7 +39,7 @@ watch(() => props.quoteHash, (hash) => {
     form.quote_hash = hash ?? '';
     form.reviewed = false;
 });
-const submit = () => form.post(`/checkout/italiano/${props.token}`, { preserveScroll: true });
+const submit = () => form.post(`/checkout/${props.token}`, { preserveScroll: true });
 const fields: Array<{ key: 'first_name' | 'last_name' | 'email' | 'phone' | 'line1' | 'line2' | 'postal_code' | 'city' | 'province'; label: string; autocomplete: string; max: number; type?: string; optional?: boolean; wide?: boolean }> = [
     { key: 'first_name', label: copy.fields.first_name, autocomplete: 'given-name', max: 100 },
     { key: 'last_name', label: copy.fields.last_name, autocomplete: 'family-name', max: 100 },
