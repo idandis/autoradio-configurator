@@ -91,14 +91,14 @@ watch(() => props.visitors.data, () => { selectedIds.value = []; });
                     :class="period === option ? 'border-primary bg-primary text-primary-foreground' : 'border-sidebar-border/70 hover:bg-accent'"
                     @click="period = option">Ultimi {{ option }}</button>
             </div>
-            <ol class="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-10">
+            <ol class="mt-4 grid grid-cols-5 gap-1 sm:grid-cols-10 lg:grid-cols-20">
                 <li v-for="item in days" :key="item.label"
-                    class="flex aspect-square min-w-0 flex-col items-center justify-center gap-1 rounded-lg border p-2"
+                    class="flex aspect-square min-w-0 flex-col items-center justify-center rounded border p-0.5"
                     :class="item.value ? 'border-amber-500/40 bg-amber-500/10' : 'border-sidebar-border/70 bg-muted/30'"
                     :aria-label="`${calendarDate(item.label)}: ${item.value} nuovi visitatori`">
-                    <time :datetime="item.label" class="text-xs text-muted-foreground">{{ calendarDate(item.label) }}</time>
-                    <strong class="text-2xl tabular-nums">{{ item.value }}</strong>
-                    <span v-if="item === days[days.length - 1]" class="text-xs font-medium">Oggi</span>
+                    <time :datetime="item.label" class="text-[10px] leading-tight text-muted-foreground">{{ calendarDate(item.label) }}</time>
+                    <strong class="text-lg leading-tight tabular-nums">{{ item.value }}</strong>
+                    <span v-if="item === days[days.length - 1]" class="text-[9px] font-medium leading-tight">Oggi</span>
                 </li>
             </ol>
         </section>

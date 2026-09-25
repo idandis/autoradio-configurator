@@ -1352,6 +1352,20 @@ const cartVehicleTitle = (category: string) => {
 };
 const quotePreviewHtml = ref('');
 const quotePreviewFrame = ref<HTMLIFrameElement | null>(null);
+const quotePrintDocument = ref<HTMLElement | null>(null);
+watch(quotePreviewHtml, async (html) => {
+    await nextTick();
+    const host = quotePrintDocument.value;
+    if (!html || !host) return;
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const root = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
+    root.replaceChildren();
+    doc.querySelectorAll('style').forEach((style) => root.append(style.cloneNode(true)));
+    const style = document.createElement('style');
+    style.textContent = ':host { display: block; color: #292727; font: 11px Arial, Helvetica, sans-serif; }';
+    root.append(style);
+    root.append(...Array.from(doc.body.childNodes));
+});
 const handleCartHistoryBack = () => {
     if (quotePreviewHtml.value) {
         quotePreviewHtml.value = '';
@@ -1365,6 +1379,10 @@ const handleCartHistoryBack = () => {
 const handlePrintPreviewNavigation = (event: MessageEvent) => {
     if (event.origin !== window.location.origin) return;
     if (quotePreviewHtml.value && event.source === quotePreviewFrame.value?.contentWindow) {
+        if (event.data?.type === 'autoradio:print-quote') {
+            window.print();
+            return;
+        }
         if (!['autoradio:return-to-cart', 'autoradio:return-to-configurator'].includes(event.data?.type)) return;
         window.history.back();
     }
@@ -3830,7 +3848,7 @@ const generateQuote = async (withoutClientData = false) => {
     </style>
 </head>
 <body>
-<div class="screen-actions"><button type="button" class="cart" aria-label="Cart" onclick="window.parent.postMessage({type:'autoradio:return-to-cart'}, '/')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L20.5 8H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg></button><button type="button" class="configurator" aria-label="Configurator" onclick="window.parent.postMessage({type:'autoradio:return-to-configurator'}, '/')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg></button><button type="button" onclick="window.print()">${escapeHtml(props.locale === 'es' ? 'Imprimir o guardar PDF' : props.locale === 'it' ? 'Stampa o salva PDF' : 'Print or save PDF')}</button></div>
+<div class="screen-actions"><button type="button" class="cart" aria-label="Cart" onclick="window.parent.postMessage({type:'autoradio:return-to-cart'}, '/')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L20.5 8H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg></button><button type="button" class="configurator" aria-label="Configurator" onclick="window.parent.postMessage({type:'autoradio:return-to-configurator'}, '/')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg></button><button type="button" onclick="window.parent.postMessage({type:'autoradio:print-quote'}, '/')">${escapeHtml(props.locale === 'es' ? 'Imprimir o guardar PDF' : props.locale === 'it' ? 'Stampa o salva PDF' : 'Print or save PDF')}</button></div>
 <main class="page">
     <header class="header">
         <div class="brand">
@@ -4098,6 +4116,9 @@ watch(
     />
     <Head :title="t('page_title')" />
     <iframe v-if="quotePreviewHtml" ref="quotePreviewFrame" :srcdoc="quotePreviewHtml" :title="t('print.document_title')" class="fixed inset-0 z-[120] h-dvh w-full border-0 bg-white" />
+    <Teleport to="body">
+        <div v-if="quotePreviewHtml" ref="quotePrintDocument" class="quote-print-document" :lang="locale" />
+    </Teleport>
 
     <div
         v-if="zoomedImage"
@@ -6398,6 +6419,16 @@ watch(
         </div>
     </div>
 </template>
+
+<style>
+.quote-print-document { display: none; }
+@media print {
+    @page quote-document { size: A4; margin: 12mm; }
+    body:has(> .quote-print-document) { margin: 0 !important; background: white !important; }
+    body:has(> .quote-print-document) > :not(.quote-print-document) { display: none !important; }
+    body > .quote-print-document { display: block; page: quote-document; }
+}
+</style>
 
 <style scoped>
 .step-context-label {
