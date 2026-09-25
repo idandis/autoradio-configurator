@@ -40,6 +40,7 @@ class VisitorStatisticsController extends Controller
             ],
             'analysis' => [
                 'timeline' => $this->timeline($query),
+                'timeline_3_months' => $this->timeline($query, true),
                 'countries' => $this->grouped($query, 'country_code'),
                 'regions' => $this->grouped($query, 'region'),
                 'cities' => $this->grouped($query, 'city'),
@@ -119,14 +120,19 @@ class VisitorStatisticsController extends Controller
             ->toArray();
     }
 
-    private function timeline(Builder $query): array
+    private function timeline(Builder $query, bool $threeMonths = false): array
     {
-        return (clone $query)->selectRaw('DATE(created_at) AS label, COUNT(*) AS value')
-            ->where('created_at', '>=', now()->subDays(29)->startOfDay())
+        $start = $threeMonths ? today()->subMonthsNoOverflow(3)->addDay() : today()->subDays(29);
+        $counts = (clone $query)->selectRaw('DATE(created_at) AS label, COUNT(*) AS value')
+            ->whereBetween('created_at', [$start, today()->endOfDay()])
             ->groupByRaw('DATE(created_at)')
-            ->orderBy('label')
-            ->get()
-            ->toArray();
+            ->pluck('value', 'label');
+
+        return collect(range(0, (int) $start->diffInDays(today())))->map(function (int $day) use ($start, $counts): array {
+            $label = $start->copy()->addDays($day)->toDateString();
+
+            return ['label' => $label, 'value' => (int) ($counts[$label] ?? 0)];
+        })->all();
     }
 
     private function sources(Builder $query): array

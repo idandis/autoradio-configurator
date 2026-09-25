@@ -19,7 +19,7 @@ const props = defineProps<{
     filters: { date_from: string | null; date_to: string | null; country: string; device: string };
     countries: string[];
     stats: { total: number; today: number; last_7_days: number; last_30_days: number };
-    analysis: { timeline: Item[]; countries: Item[]; regions: Item[]; cities: Item[]; devices: Item[]; languages: Item[]; sources: Item[] };
+    analysis: { timeline: Item[]; timeline_3_months: Item[]; countries: Item[]; regions: Item[]; cities: Item[]; devices: Item[]; languages: Item[]; sources: Item[] };
     extraEuVisitors: { data: ExtraEuVisitor[]; from: number | null; to: number | null; total: number; links: Array<{ url: string | null; label: string; active: boolean }> };
     extraEuTotal: number;
     extraEuBots: { data: ExtraEuVisitor[]; from: number | null; to: number | null; total: number; links: Array<{ url: string | null; label: string; active: boolean }> };
@@ -35,7 +35,11 @@ const source = (visitor: Visitor) => {
     if (!visitor.referrer) return 'Diretto';
     try { return new URL(visitor.referrer).hostname; } catch { return 'Altro'; }
 };
-const maxTimeline = computed(() => Math.max(...props.analysis.timeline.map((item) => item.value), 1));
+const calendarDate = (value: string) => new Intl.DateTimeFormat('it-IT', { day: 'numeric', month: 'short' }).format(new Date(`${value}T12:00:00`));
+const periods = ['7 giorni', '30 giorni', '3 mesi'] as const;
+const period = ref<typeof periods[number]>('30 giorni');
+const days = computed(() => period.value === '3 mesi' ? props.analysis.timeline_3_months : props.analysis.timeline.slice(period.value === '7 giorni' ? -7 : -30));
+const total = computed(() => days.value.reduce((sum, day) => sum + day.value, 0));
 const selectedIds = ref<number[]>([]);
 const allPageSelected = computed(() => props.visitors.data.length > 0 && props.visitors.data.every((visitor) => selectedIds.value.includes(visitor.id)));
 const togglePageSelection = () => {
@@ -78,7 +82,26 @@ watch(() => props.visitors.data, () => { selectedIds.value = []; });
             </form>
         </section>
 
-        <section class="rounded-xl border border-sidebar-border/70 bg-card p-5"><h2 class="text-lg font-semibold">Nuovi visitatori negli ultimi 30 giorni</h2><div v-if="analysis.timeline.length" class="mt-5 flex h-56 items-end gap-1"><div v-for="item in analysis.timeline" :key="item.label" class="group relative flex min-w-0 flex-1 items-end" :title="`${item.label}: ${item.value}`"><div class="w-full rounded-t bg-amber-500" :style="{height:`${Math.max(4,(item.value/maxTimeline)*100)}%`}"></div></div></div><p v-else class="py-16 text-center text-muted-foreground">Nessun dato disponibile.</p></section>
+        <section class="rounded-xl border border-sidebar-border/70 bg-card p-5">
+            <h2 class="text-lg font-semibold" aria-live="polite">Nuovi visitatori negli ultimi {{ period }} — {{ total.toLocaleString('it-IT') }}</h2>
+            <p class="mt-1 text-sm text-muted-foreground">Un giorno per casella, fino a oggi. Conteggi in base ai filtri selezionati.</p>
+            <div class="mt-4 flex flex-wrap gap-2" role="group" aria-label="Periodo visitatori">
+                <button v-for="option in periods" :key="option" type="button" :aria-pressed="period === option"
+                    class="rounded-lg border px-4 py-2 text-sm font-medium"
+                    :class="period === option ? 'border-primary bg-primary text-primary-foreground' : 'border-sidebar-border/70 hover:bg-accent'"
+                    @click="period = option">Ultimi {{ option }}</button>
+            </div>
+            <ol class="mt-5 grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-10">
+                <li v-for="item in days" :key="item.label"
+                    class="flex aspect-square min-w-0 flex-col items-center justify-center gap-1 rounded-lg border p-2"
+                    :class="item.value ? 'border-amber-500/40 bg-amber-500/10' : 'border-sidebar-border/70 bg-muted/30'"
+                    :aria-label="`${calendarDate(item.label)}: ${item.value} nuovi visitatori`">
+                    <time :datetime="item.label" class="text-xs text-muted-foreground">{{ calendarDate(item.label) }}</time>
+                    <strong class="text-2xl tabular-nums">{{ item.value }}</strong>
+                    <span v-if="item === days[days.length - 1]" class="text-xs font-medium">Oggi</span>
+                </li>
+            </ol>
+        </section>
 
         <section class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <article v-for="group in [{title:'Paesi',items:analysis.countries},{title:'Regioni',items:analysis.regions},{title:'Città',items:analysis.cities},{title:'Dispositivi',items:analysis.devices},{title:'Lingue',items:analysis.languages},{title:'Provenienza',items:analysis.sources}]" :key="group.title" class="rounded-xl border border-sidebar-border/70 bg-card p-5"><h2 class="font-semibold">{{ group.title }}</h2><div class="mt-4 space-y-2"><div v-for="item in group.items" :key="item.label" class="flex justify-between gap-3 border-b border-sidebar-border/50 pb-2 text-sm last:border-0"><span class="truncate">{{ item.label }}</span><strong>{{ item.value }}</strong></div><p v-if="!group.items.length" class="text-sm text-muted-foreground">Nessun dato.</p></div></article>

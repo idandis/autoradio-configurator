@@ -215,6 +215,37 @@ class ConfigurationStatisticTest extends TestCase
         );
     }
 
+    public function test_visitor_calendar_includes_empty_days_and_only_the_last_thirty_days(): void
+    {
+        $this->travelTo(Carbon::parse('2026-09-25 12:00:00'));
+        $admin = User::factory()->create(['is_admin' => true]);
+
+        foreach (['2026-08-26 23:59:59', '2026-08-27 00:00:00', '2026-09-25 09:00:00', '2026-09-25 10:00:00', '2026-09-26 00:00:00'] as $date) {
+            ConfigurationStatistic::create([
+                ...$this->payload(),
+                'event_type' => 'configurator_entered',
+                'country_code' => 'ES',
+                'created_at' => $date,
+            ]);
+        }
+
+        $this->actingAs($admin)->get('/visitor-statistics')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->has('analysis.timeline', 30)
+            ->where('analysis.timeline.0', ['label' => '2026-08-27', 'value' => 1])
+            ->where('analysis.timeline.1', ['label' => '2026-08-28', 'value' => 0])
+            ->where('analysis.timeline.29', ['label' => '2026-09-25', 'value' => 2])
+            ->has('analysis.timeline_3_months', 92)
+            ->where('analysis.timeline_3_months.0', ['label' => '2026-06-26', 'value' => 0])
+            ->where('analysis.timeline_3_months.91', ['label' => '2026-09-25', 'value' => 2])
+            ->where('analysis.timeline_3_months', fn ($days) => collect($days)->sum('value') === 4)
+        );
+        $this->get('/visitor-statistics?country=IT')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->has('analysis.timeline', 30)
+            ->where('analysis.timeline', fn ($days) => collect($days)->sum('value') === 0)
+        );
+        $this->travelBack();
+    }
+
     public function test_admin_can_delete_one_or_selected_visits_without_deleting_commercial_events(): void
     {
         $admin = User::factory()->create(['is_admin' => true]);
