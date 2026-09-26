@@ -38,14 +38,24 @@ class DashboardController extends Controller
 
         $translationTasks = ConfiguratorProduct::query()
             ->whereIn('category', ['screen', 'camera', 'speaker'])
-            ->where(fn ($query) => $query
+            ->where(function ($query) {
+                $query->where(fn ($query) => $query
                 ->whereNull('title_it')
                 ->orWhere('title_it', '')
                 ->orWhereNull('title_en')
                 ->orWhere('title_en', ''))
+                ->orWhere(function ($query) {
+                    $query->whereNotNull('body_html')->where('body_html', '!=', '')
+                        ->where(fn ($query) => $query->whereNull('body_html_it')->orWhere('body_html_it', '')
+                            ->orWhereNull('body_html_en')->orWhere('body_html_en', ''));
+                });
+            })
             ->orderBy('category')
             ->orderBy('handle')
-            ->get(['handle', 'category', 'title', 'title_it', 'title_en', 'brand', 'model', 'year_from', 'year_to']);
+            ->get(['handle', 'category', 'title', 'title_it', 'title_en', 'body_html', 'body_html_it', 'body_html_en', 'brand', 'model', 'year_from', 'year_to']);
+        $titleTranslationCount = $translationTasks->filter(fn ($product) => blank($product->title_it) || blank($product->title_en))->count();
+        $descriptionTranslationCount = $translationTasks->filter(fn ($product) => filled($product->body_html)
+            && (blank($product->body_html_it) || blank($product->body_html_en)))->count();
         $imageTasks = $vehicleImageGenerator->missingVehicles();
         $vehicleDataIssues = $vehicleImageGenerator->unresolvedVehicleProducts();
         $prompt = $this->postImportPrompt($translationTasks, $imageTasks, $vehicleDataIssues);
@@ -65,6 +75,8 @@ class DashboardController extends Controller
             ],
             'postImportTasks' => [
                 'translationCount' => $translationTasks->count(),
+                'titleTranslationCount' => $titleTranslationCount,
+                'descriptionTranslationCount' => $descriptionTranslationCount,
                 'imageCount' => $imageTasks->count(),
                 'vehicleDataIssueCount' => $vehicleDataIssues->count(),
                 'prompt' => $prompt,
@@ -83,6 +95,8 @@ class DashboardController extends Controller
             '',
             'TRADUZIONI TITOLI',
             'Per ogni prodotto elencato traduci il titolo spagnolo nelle lingue mancanti. Conserva marche, modelli, anni, pollici, RAM, memoria e sigle tecniche. Crea o aggiorna resources/data/{category}-titles-{locale}.json usando l’handle come chiave e il formato {"source":"titolo ES","translation":"titolo tradotto"}. Se il prodotto esiste anche nel database locale, aggiorna title_it/title_en. Non modificare mai il titolo spagnolo originale.',
+            'TRADUZIONI DESCRIZIONI',
+            'Traduci in italiano e inglese ogni descrizione HTML spagnola mancante. Mantieni struttura e tag HTML, link, specifiche, dati tecnici e significato; non aggiungere caratteristiche. Crea o aggiorna resources/data/{category}-descriptions-{locale}.json usando l’handle e il formato {"source":"descrizione HTML ES","translation":"descrizione HTML tradotta"}. Aggiorna body_html_it/body_html_en nel database locale senza modificare body_html originale.',
         ];
 
         if ($translationTasks->isEmpty()) {
@@ -95,12 +109,17 @@ class DashboardController extends Controller
                     ->map(fn ($locale) => mb_strtoupper($locale))
                     ->implode(', ');
                 $lines[] = sprintf(
-                    '- [%s] %s | lingue mancanti: %s | titolo ES: %s',
+                    '- [%s] %s | lingue mancanti titolo: %s | titolo ES: %s',
                     $product->category,
                     $product->handle,
                     $missing,
                     $product->title,
                 );
+                if (filled($product->body_html) && (blank($product->body_html_it) || blank($product->body_html_en))) {
+                    $descriptionMissing = collect(['it' => $product->body_html_it, 'en' => $product->body_html_en])
+                        ->filter(fn ($description) => blank($description))->keys()->map(fn ($locale) => mb_strtoupper($locale))->implode(', ');
+                    $lines[] = sprintf('- descrizione lingue mancanti: %s | descrizione HTML ES: %s', $descriptionMissing, $product->body_html);
+                }
             }
         }
 
@@ -140,7 +159,7 @@ class DashboardController extends Controller
         }
 
         $lines[] = '';
-        $lines[] = 'Alla fine verifica JSON e immagini, esegui i controlli pertinenti e indicami esattamente quali file devo caricare su Aruba. Dopo il caricamento dovrò premere “Aggiorna database” per importare le traduzioni; le attività completate dovranno quindi sparire dalla Dashboard.';
+        $lines[] = 'Per la prima traduzione massiva traduci tutte le descrizioni presenti nel database, non solo quelle dell’ultimo import; prepara i cataloghi JSON italiano e inglese. Verifica anche che gli import successivi salvino la descrizione originale e conservino le traduzioni se il testo sorgente non cambia. Alla fine verifica JSON e immagini, esegui i controlli pertinenti e indicami esattamente quali file devo caricare su Aruba. Dopo il caricamento premerò “Aggiorna database” per importare titoli e descrizioni tradotti senza SSH; le attività completate dovranno sparire dalla Dashboard.';
 
         return implode("\n", $lines);
     }

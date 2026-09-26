@@ -18,6 +18,8 @@ class ConfiguratorProduct extends Model
         'title_it',
         'title_en',
         'body_html',
+        'body_html_it',
+        'body_html_en',
         'brand',
         'model',
         'year_from',
@@ -48,5 +50,16 @@ class ConfiguratorProduct extends Model
         };
 
         return filled($translated) ? (string) $translated : (string) $this->title;
+    }
+
+    public function localizedDescription(?string $locale = null): ?string
+    {
+        $translated = match ($locale ?? app()->getLocale()) {
+            'it' => $this->body_html_it,
+            'en' => $this->body_html_en,
+            default => null,
+        };
+
+        return filled($translated) ? (string) $translated : $this->body_html;
     }
 }

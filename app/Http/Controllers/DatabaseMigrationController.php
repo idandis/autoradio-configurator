@@ -52,6 +52,9 @@ class DatabaseMigrationController extends Controller
 
             foreach (['screen', 'camera', 'speaker'] as $category) {
                 foreach (['it' => 'italiani', 'en' => 'inglesi'] as $locale => $label) {
+                    if ($error = $this->importMissingDescriptions($category, $locale, $label)) {
+                        return back()->withErrors(['database' => $error]);
+                    }
                     if ($error = $this->importMissingTranslations($category, $locale, $label)) {
                         return back()->withErrors(['database' => $error]);
                     }
@@ -65,8 +68,13 @@ class DatabaseMigrationController extends Controller
                 ->whereIn('category', ['screen', 'camera', 'speaker'])->whereNotNull('title_it')->count();
             $translatedEnglishTitles = ConfiguratorProduct::query()
                 ->whereIn('category', ['screen', 'camera', 'speaker'])->whereNotNull('title_en')->count();
+            $translatedItalianDescriptions = ConfiguratorProduct::query()
+                ->whereIn('category', ['screen', 'camera', 'speaker'])->whereNotNull('body_html_it')->count();
+            $translatedEnglishDescriptions = ConfiguratorProduct::query()
+                ->whereIn('category', ['screen', 'camera', 'speaker'])->whereNotNull('body_html_en')->count();
             $status = 'Database e cache Laravel aggiornati correttamente.';
-            $status .= " Traduzioni presenti: {$translatedItalianTitles} italiane e {$translatedEnglishTitles} inglesi.";
+            $status .= " Titoli tradotti: {$translatedItalianTitles} italiani e {$translatedEnglishTitles} inglesi.";
+            $status .= " Descrizioni tradotte: {$translatedItalianDescriptions} italiane e {$translatedEnglishDescriptions} inglesi.";
 
             if ($opcacheReset) {
                 $status .= ' Anche la cache PHP OPcache è stata svuotata.';
@@ -119,6 +127,37 @@ class DatabaseMigrationController extends Controller
 
         return "Database aggiornato, ma la traduzione dei titoli {$label} della categoria {$category} non è terminata"
             .($output !== '' ? ': '.$output : '.');
+    }
+
+    private function importMissingDescriptions(string $category, string $locale, string $label): ?string
+    {
+        if (! is_file(resource_path("data/{$category}-descriptions-{$locale}.json"))) {
+            return null;
+        }
+
+        $missing = ConfiguratorProduct::query()->where('category', $category)
+            ->whereNotNull('body_html')->where('body_html', '!=', '')
+            ->where(fn ($query) => $query->whereNull('body_html_'.$locale)->orWhere('body_html_'.$locale, ''))
+            ->count();
+        if ($missing === 0) {
+            return null;
+        }
+
+        $exitCode = Artisan::call('configurator:translate-descriptions', [
+            'locale' => $locale,
+            '--category' => $category,
+            '--catalog-only' => true,
+            '--no-interaction' => true,
+        ]);
+        if ($exitCode === 0) {
+            return null;
+        }
+
+        Log::error("Import descrizioni {$label} della categoria {$category} fallito dalla dashboard.", [
+            'exit_code' => $exitCode,
+            'output' => Artisan::output(),
+        ]);
+        return "Database aggiornato, ma l’importazione delle descrizioni {$label} della categoria {$category} non è terminata.";
     }
 
     private function clearApplicationCaches(): void

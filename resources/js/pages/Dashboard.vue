@@ -11,6 +11,8 @@ const props = defineProps<{
     };
     postImportTasks: {
         translationCount: number;
+        titleTranslationCount: number;
+        descriptionTranslationCount: number;
         imageCount: number;
         vehicleDataIssueCount: number;
         prompt: string;
@@ -136,7 +138,7 @@ const verifyCatalog = () => {
         </div>
 
         <section
-            v-if="(postImportTasks.translationCount > 0 || postImportTasks.imageCount > 0 || postImportTasks.vehicleDataIssueCount > 0) && !postImportTasks.dismissed && !tasksDismissedLocally"
+            v-if="(postImportTasks.translationCount > 0 || postImportTasks.titleTranslationCount > 0 || postImportTasks.descriptionTranslationCount > 0 || postImportTasks.imageCount > 0 || postImportTasks.vehicleDataIssueCount > 0) && !postImportTasks.dismissed && !tasksDismissedLocally"
             class="rounded-xl border border-amber-500/40 bg-amber-500/5 p-5"
         >
             <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -145,7 +147,7 @@ const verifyCatalog = () => {
                         {{ verificationCompleted ? 'Verifica catalogo completata' : 'Attività dopo l’importazione' }}
                     </h2>
                     <p class="mt-1 text-sm text-muted-foreground">
-                        Mancano {{ postImportTasks.translationCount }} traduzioni prodotto e
+                        Mancano {{ postImportTasks.titleTranslationCount }} titoli e {{ postImportTasks.descriptionTranslationCount }} descrizioni da tradurre,
                         {{ postImportTasks.imageCount }} immagini auto e
                         {{ postImportTasks.vehicleDataIssueCount }} prodotti con dati veicolo da correggere. Copia le istruzioni e incollale direttamente in Codex.
                     </p>
@@ -176,9 +178,9 @@ const verifyCatalog = () => {
             />
         </section>
 
-        <section v-else-if="postImportTasks.translationCount === 0 && postImportTasks.imageCount === 0 && postImportTasks.vehicleDataIssueCount === 0" class="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-5 py-4 text-sm text-emerald-300">
+        <section v-else-if="postImportTasks.translationCount === 0 && postImportTasks.titleTranslationCount === 0 && postImportTasks.descriptionTranslationCount === 0 && postImportTasks.imageCount === 0 && postImportTasks.vehicleDataIssueCount === 0" class="rounded-xl border border-emerald-500/30 bg-emerald-500/5 px-5 py-4 text-sm text-emerald-300">
             <span class="font-semibold">{{ verificationCompleted ? 'Verifica completata:' : 'Tutto aggiornato:' }}</span>
-            tutte le autoradio hanno l’immagine auto corrispondente e tutti i titoli sono tradotti.
+            tutte le autoradio hanno l’immagine auto corrispondente e titoli e descrizioni sono tradotti.
         </section>
 
         <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
@@ -273,7 +275,7 @@ const verifyCatalog = () => {
                     <div class="rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
                         <h3 class="text-sm font-medium">Aggiornamenti database</h3>
                         <p class="mt-2 text-xs leading-5 text-muted-foreground">
-                            Utilizza questo comando dopo aver pubblicato una versione che contiene nuove migrazioni.
+                            Dopo aver caricato i file aggiornati, applica le migrazioni e importa i cataloghi di titoli e descrizioni. Non serve SSH.
                         </p>
                         <p v-if="migrationForm.errors.database" class="mt-3 text-xs text-destructive">
                             {{ migrationForm.errors.database }}

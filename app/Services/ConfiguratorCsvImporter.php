@@ -102,7 +102,7 @@ class ConfiguratorCsvImporter
             'variants' => 0,
         ];
         $existingTranslations = ConfiguratorProduct::query()
-            ->get(['handle', 'title', 'title_it', 'title_en'])
+            ->get(['handle', 'title', 'title_it', 'title_en', 'body_html', 'body_html_it', 'body_html_en'])
             ->keyBy('handle');
 
         DB::transaction(function () use ($grouped, &$stats, $replaceExistingDataset, $existingTranslations): void {
@@ -123,10 +123,13 @@ class ConfiguratorCsvImporter
 
                 $previous = $existingTranslations->get($handle);
                 $titleChanged = ! $previous || $previous->title !== $product['product']['title'];
+                $descriptionChanged = ! $previous || $previous->body_html !== $product['product']['body_html'];
                 $productData = [
                     ...$product['product'],
                     'title_it' => $titleChanged ? null : $previous->title_it,
                     'title_en' => $titleChanged ? null : $previous->title_en,
+                    'body_html_it' => $descriptionChanged ? null : $previous->body_html_it,
+                    'body_html_en' => $descriptionChanged ? null : $previous->body_html_en,
                 ];
 
                 $configProduct = ConfiguratorProduct::updateOrCreate(

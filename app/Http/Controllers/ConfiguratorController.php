@@ -382,7 +382,7 @@ class ConfiguratorController extends Controller
                 'handle' => $product->handle,
                 'category' => $product->category,
                 'title' => $product->localizedTitle(),
-                'bodyHtml' => $this->sanitizeProductHtml($product->body_html),
+                'bodyHtml' => $this->sanitizeProductHtml($product->localizedDescription()),
                 'images' => $gallery,
                 'features' => $features,
                 'variants' => $product->variants

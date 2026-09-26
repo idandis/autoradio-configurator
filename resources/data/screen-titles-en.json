@@ -1,7 +1,7 @@
 {
     "radio-android-12-3-para-nissan-gt-r-r35-2007-2015": {
-        "source": "Radio Android 12,3” para Nissan GT-R R35 2007-2015",
-        "translation": "12.3” Android Car Stereo for Nissan GT-R R35 2007-2015"
+        "source": "Radio Android para Nissan GT-R R35 2007-2015",
+        "translation": "Android Car Stereo for Nissan GT-R R35 2007-2015"
     },
     "10-25-carplay-android-13-radio-para-audi-a4-a5-b8-s4-s5-2009-2016": {
         "source": "10.25\" CarPlay Android 13 Radio para Audi A4 A5 B8 S4 S5 2009-2016",
@@ -1614,5 +1614,25 @@
     "android-16-9-2din-toyota-lexus-prado-gx470-2002-2009": {
         "source": "Android 16 9” 2DIN Toyota/Lexus Prado/GX470 2002-2009",
         "translation": "Android 16 9” 2DIN for Toyota/Lexus Prado/GX470 2002-2009"
+    },
+    "pantalla-9-android-para-nissan-march-micra-k12-2002-2010": {
+        "source": "Pantalla 9″ Android para Nissan March/Micra K12 2002-2010",
+        "translation": "9″ Android Screen for Nissan March/Micra K12 2002-2010"
+    },
+    "pantalla-android-9-para-nissan-leaf-2009-2016": {
+        "source": "Pantalla Android 9″ para Nissan Leaf 2009-2016",
+        "translation": "9″ Android Screen for Nissan Leaf 2009-2016"
+    },
+    "radio-android-10-1-con-carplay-para-citroen-dispatch-1995-2016-peugeot-expert-1995-2016-y-nissan-interstar-2002-07-2010-12": {
+        "source": "Radio Android 10,1” con CarPlay para Citroën Jumpy 1995-2016, Peugeot Expert 1995-2016 y Nissan Interstar 2002/07-2010/12",
+        "translation": "10.1” Android Car Stereo with CarPlay for Citroën Jumpy 1995-2016, Peugeot Expert 1995-2016 and Nissan Interstar 2002/07-2010/12"
+    },
+    "radio-android-9-4g-para-nissan-micra-2010-2017": {
+        "source": "Radio Android 9″ 4G para Nissan Micra 2010-2017",
+        "translation": "9″ 4G Android Car Stereo for Nissan Micra 2010-2017"
+    },
+    "radio-android-9-para-nissan-nv200-2009-2018": {
+        "source": "Radio Android 9” para Nissan NV200 2009-2018",
+        "translation": "9” Android Car Stereo for Nissan NV200 2009-2018"
     }
 }
