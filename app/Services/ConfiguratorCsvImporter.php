@@ -101,11 +101,15 @@ class ConfiguratorCsvImporter
             'speaker_products' => 0,
             'variants' => 0,
         ];
+        $hasDescriptionTranslations = Schema::hasColumns('configurator_products', ['body_html', 'body_html_it', 'body_html_en']);
         $existingTranslations = ConfiguratorProduct::query()
-            ->get(['handle', 'title', 'title_it', 'title_en', 'body_html', 'body_html_it', 'body_html_en'])
+            ->get(array_merge(
+                ['handle', 'title', 'title_it', 'title_en'],
+                $hasDescriptionTranslations ? ['body_html', 'body_html_it', 'body_html_en'] : [],
+            ))
             ->keyBy('handle');
 
-        DB::transaction(function () use ($grouped, &$stats, $replaceExistingDataset, $existingTranslations): void {
+        DB::transaction(function () use ($grouped, &$stats, $replaceExistingDataset, $existingTranslations, $hasDescriptionTranslations): void {
             if ($replaceExistingDataset) {
                 DB::table('configurator_variants')->delete();
                 DB::table('configurator_products')->delete();
@@ -123,13 +127,16 @@ class ConfiguratorCsvImporter
 
                 $previous = $existingTranslations->get($handle);
                 $titleChanged = ! $previous || $previous->title !== $product['product']['title'];
-                $descriptionChanged = ! $previous || $previous->body_html !== $product['product']['body_html'];
+                $descriptionChanged = $hasDescriptionTranslations
+                    && (! $previous || $previous->body_html !== $product['product']['body_html']);
                 $productData = [
                     ...$product['product'],
                     'title_it' => $titleChanged ? null : $previous->title_it,
                     'title_en' => $titleChanged ? null : $previous->title_en,
-                    'body_html_it' => $descriptionChanged ? null : $previous->body_html_it,
-                    'body_html_en' => $descriptionChanged ? null : $previous->body_html_en,
+                    ...($hasDescriptionTranslations ? [
+                        'body_html_it' => $descriptionChanged ? null : $previous->body_html_it,
+                        'body_html_en' => $descriptionChanged ? null : $previous->body_html_en,
+                    ] : []),
                 ];
 
                 $configProduct = ConfiguratorProduct::updateOrCreate(

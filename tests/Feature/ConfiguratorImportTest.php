@@ -120,6 +120,23 @@ CSV;
             'https://example.com/one.jpg',
             'https://example.com/two.jpg',
         ], $product->meta['gallery_images']);
+
+        $product->update([
+            'body_html_it' => '<p>Descrizione <strong>completa</strong></p>',
+            'body_html_en' => '<p>Complete <strong>description</strong></p>',
+        ]);
+        app(ConfiguratorCsvImporter::class)->import(
+            UploadedFile::fake()->createWithContent('catalog-unchanged.csv', $csv),
+        );
+        $this->assertSame('<p>Descrizione <strong>completa</strong></p>', ConfiguratorProduct::where('handle', 'test-screen')->value('body_html_it'));
+        $this->assertSame('<p>Complete <strong>description</strong></p>', ConfiguratorProduct::where('handle', 'test-screen')->value('body_html_en'));
+
+        app(ConfiguratorCsvImporter::class)->import(
+            UploadedFile::fake()->createWithContent('catalog-changed.csv', str_replace('Descripción <strong>completa</strong>', 'Descripción <strong>actualizada</strong>', $csv)),
+        );
+        $this->assertSame('<p>Descripción <strong>actualizada</strong></p>', ConfiguratorProduct::where('handle', 'test-screen')->value('body_html'));
+        $this->assertNull(ConfiguratorProduct::where('handle', 'test-screen')->value('body_html_it'));
+        $this->assertNull(ConfiguratorProduct::where('handle', 'test-screen')->value('body_html_en'));
     }
 
     public function test_second_variant_option_is_exposed_as_a_color_selector_without_duplicate_configurations(): void

@@ -8,6 +8,7 @@ use App\Services\VehicleImageGenerator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -36,15 +37,16 @@ class DashboardController extends Controller
             }
         }
 
+        $hasDescriptionTranslations = Schema::hasColumns('configurator_products', ['body_html', 'body_html_it', 'body_html_en']);
         $translationTasks = ConfiguratorProduct::query()
             ->whereIn('category', ['screen', 'camera', 'speaker'])
-            ->where(function ($query) {
+            ->where(function ($query) use ($hasDescriptionTranslations) {
                 $query->where(fn ($query) => $query
                 ->whereNull('title_it')
                 ->orWhere('title_it', '')
                 ->orWhereNull('title_en')
-                ->orWhere('title_en', ''))
-                ->orWhere(function ($query) {
+                ->orWhere('title_en', ''));
+                if ($hasDescriptionTranslations) $query->orWhere(function ($query) {
                     $query->whereNotNull('body_html')->where('body_html', '!=', '')
                         ->where(fn ($query) => $query->whereNull('body_html_it')->orWhere('body_html_it', '')
                             ->orWhereNull('body_html_en')->orWhere('body_html_en', ''));
@@ -52,9 +54,12 @@ class DashboardController extends Controller
             })
             ->orderBy('category')
             ->orderBy('handle')
-            ->get(['handle', 'category', 'title', 'title_it', 'title_en', 'body_html', 'body_html_it', 'body_html_en', 'brand', 'model', 'year_from', 'year_to']);
+            ->get(array_merge(
+                ['handle', 'category', 'title', 'title_it', 'title_en', 'brand', 'model', 'year_from', 'year_to'],
+                $hasDescriptionTranslations ? ['body_html', 'body_html_it', 'body_html_en'] : [],
+            ));
         $titleTranslationCount = $translationTasks->filter(fn ($product) => blank($product->title_it) || blank($product->title_en))->count();
-        $descriptionTranslationCount = $translationTasks->filter(fn ($product) => filled($product->body_html)
+        $descriptionTranslationCount = $translationTasks->filter(fn ($product) => $hasDescriptionTranslations && filled($product->body_html)
             && (blank($product->body_html_it) || blank($product->body_html_en)))->count();
         $imageTasks = $vehicleImageGenerator->missingVehicles();
         $vehicleDataIssues = $vehicleImageGenerator->unresolvedVehicleProducts();

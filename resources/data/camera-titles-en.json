@@ -442,5 +442,9 @@
     "camara-toyota-land-cruiser-prado-120-2002-2009": {
         "source": "Cámara Toyota Land Cruiser Prado 120 2002-2009",
         "translation": "Toyota Land Cruiser Prado 120 Camera 2002-2009"
+    },
+    "dash-camera": {
+        "source": "Redtiger F9 Cámara Dual para Auto 4K Wifi y GPS",
+        "translation": "Redtiger F9 Dual Dash Cam for Cars, 4K Wi-Fi and GPS"
     }
 }
