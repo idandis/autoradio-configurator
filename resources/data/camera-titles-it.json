@@ -446,5 +446,9 @@
     "dash-camera": {
         "source": "Redtiger F9 Cámara Dual para Auto 4K Wifi y GPS",
         "translation": "Redtiger F9 Dash Cam Doppia per Auto 4K con Wi-Fi e GPS"
+    },
+    "camara-ahd-1080p-para-renault-clio-5-2019-2022": {
+        "source": "Cámara AHD 1080P para Renault Clio 5 2019-2022",
+        "translation": "Telecamera AHD 1080P per Renault Clio 5 2019-2022"
     }
 }

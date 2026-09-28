@@ -2729,6 +2729,9 @@ const normalizeInstallationValue = (value: string) =>
         .trim();
 
 const installationCameras = computed(() => selectedCameras.value.filter((camera) => !camera.isDashcam));
+const installationCameraCount = computed(() =>
+    installationCameras.value.reduce((total, camera) => total + cartQuantity(`camera:${camera.key}`), 0),
+);
 const requiredInstallationCombination = computed(() => {
     if (selectedCameras.value.some((camera) => camera.isDashcam)) return null;
     const hasScreen = selectedScreens.value.length > 0;
@@ -2748,11 +2751,11 @@ const requiredInstallationCombination = computed(() => {
     }
 
     if (hasScreen && hasCamera360) return 'pantalla+camara 360';
-    if (hasScreen && installationCameras.value.length >= 2) return 'pantalla+2 camara';
+    if (hasScreen && installationCameraCount.value >= 2) return 'pantalla+2 camara';
     if (hasScreen && hasCamera) return 'pantalla+camara';
     if (hasScreen) return 'pantalla';
     if (hasCamera360) return 'camara 360';
-    if (installationCameras.value.length >= 2) return '2 camara';
+    if (installationCameraCount.value >= 2) return '2 camara';
     if (hasCamera) return 'camara';
 
     return null;
@@ -2773,7 +2776,7 @@ const zoneServiceMatchesSelection = (option: SimpleOption) => {
     if (selectedCameras.value.some((camera) => camera.isDashcam)) return false;
     const title = normalizeInstallationValue(option.sourceTitle ?? option.title);
     const hasScreen = selectedScreens.value.length > 0;
-    const hasCamera = selectedCameras.value.length > 0;
+    const hasCamera = installationCameraCount.value > 0;
     const hasSpeaker = selectedSpeakers.value.length > 0;
     const mentionsScreen = title.includes('pantalla');
     const mentionsCamera = title.includes('camara');
@@ -2788,8 +2791,8 @@ const zoneServiceMatchesSelection = (option: SimpleOption) => {
             (camera) => camera.productHandle === 'camara-360-para-radios-de-coche-android-con-vista-de-ave',
         );
         if (hasCamera360 !== title.includes('360')) return false;
-        if (selectedCameras.value.length >= 2 && !/2\s*camara|trasera\s+y\s+delantera/.test(title)) return false;
-        if (selectedCameras.value.length === 1 && /2\s*camara|trasera\s+y\s+delantera/.test(title)) return false;
+        if (installationCameraCount.value >= 2 && !/2\s*camara|trasera\s+y\s+delantera/.test(title)) return false;
+        if (installationCameraCount.value === 1 && /2\s*camara|trasera\s+y\s+delantera/.test(title)) return false;
     }
 
     if (hasSpeaker) {
