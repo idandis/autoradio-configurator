@@ -261,6 +261,8 @@ return [
         'email' => 'Email',
         'customs_taxes' => 'Dogane e imposte',
         'customs_taxes_placeholder' => 'Informazioni facoltative su dogane e imposte',
+        'additional_include' => 'Voce aggiuntiva in Include',
+        'additional_include_placeholder' => 'Scrivi una voce da aggiungere alla sezione Include del preventivo',
     ],
     'print' => [
         'document_title' => 'Preventivo AutoRadioCanario',

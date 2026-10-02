@@ -658,6 +658,7 @@ const restoreImportAmount = (value: unknown) => {
 };
 const customImportTotal = computed(() => selectedCustomProductKeys.value.length ? customImportAmount.value : 0);
 const selectedCustomProductKeys = ref<string[]>([]);
+const quoteAdditionalInclude = ref('');
 const customQuoteActive = computed(() => showCustomQuoteModal.value || selectedCustomProductKeys.value.length > 0);
 const customProducts = ref<CustomProduct[]>([...(props.customProducts ?? [])]);
 const customProductsLoaded = ref(customProducts.value.length > 0);
@@ -712,6 +713,7 @@ const loadCustomProducts = async () => {
     }
 };
 const startCustomQuote = async () => {
+    quoteAdditionalInclude.value = '';
     selectedBrand.value = null;
     selectedModel.value = null;
     selectedYear.value = null;
@@ -3733,7 +3735,12 @@ const generateQuote = async (withoutClientData = false) => {
     `).join('');
     const includedItems = items
         .filter((item) => item.price >= 0)
-        .map((item) => `<li>${escapeHtml(item.description)}</li>`)
+        .map((item) => `<li>${escapeHtml(item.description)}</li>`);
+    const additionalInclude = customQuoteActive.value ? quoteAdditionalInclude.value.trim() : '';
+    if (additionalInclude) {
+        includedItems.push(`<li>${escapeHtml(additionalInclude).replace(/\r\n?|\n/g, '<br>')}</li>`);
+    }
+    const includedItemsHtml = includedItems
         .join('');
     const checkoutLink = paymentLink
         ? `<div class="checkout"><strong>${escapeHtml(t('print.purchase_link'))}:</strong><br><a href="${escapeHtml(paymentLink)}">${escapeHtml(paymentLink)}</a><p class="purchase-authorization">${escapeHtml(t('print.purchase_authorization'))}</p></div>`
@@ -3895,7 +3902,7 @@ const generateQuote = async (withoutClientData = false) => {
     </table></div>
     <section class="notes">
         <strong>${escapeHtml(t('print.includes'))}:</strong>
-        <ul>${includedItems}</ul>
+        <ul>${includedItemsHtml}</ul>
         ${customsTaxes ? `
             <div class="customs-taxes">
                 <h3>${escapeHtml(t('quote_form.customs_taxes'))}</h3>
@@ -6379,6 +6386,16 @@ watch(
                             rows="4"
                             class="resize-y rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white"
                             :placeholder="t('quote_form.customs_taxes_placeholder')"
+                        ></textarea>
+                    </label>
+                    <label v-if="customQuoteActive" class="grid gap-2 text-sm text-neutral-300">
+                        {{ t('quote_form.additional_include') }}
+                        <textarea
+                            v-model="quoteAdditionalInclude"
+                            maxlength="1000"
+                            rows="3"
+                            class="resize-y rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white"
+                            :placeholder="t('quote_form.additional_include_placeholder')"
                         ></textarea>
                     </label>
                 </div>

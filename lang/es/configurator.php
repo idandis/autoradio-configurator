@@ -261,6 +261,8 @@ return [
         'email' => 'Correo electrónico',
         'customs_taxes' => 'Aduanas e impuestos',
         'customs_taxes_placeholder' => 'Información opcional sobre aduanas e impuestos',
+        'additional_include' => 'Elemento adicional en Incluye',
+        'additional_include_placeholder' => 'Escribe un elemento para añadir a la sección Incluye del presupuesto',
     ],
     'print' => [
         'document_title' => 'Presupuesto AutoRadioCanario',

@@ -276,6 +276,8 @@ return [
         'email' => 'Email',
         'customs_taxes' => 'Customs and taxes',
         'customs_taxes_placeholder' => 'Optional customs and tax information',
+        'additional_include' => 'Additional item under Includes',
+        'additional_include_placeholder' => 'Enter an item to add to the quote’s Includes section',
     ],
     'print' => [
         'document_title' => 'AutoRadioCanario Quote',

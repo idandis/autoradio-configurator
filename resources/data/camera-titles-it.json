@@ -24,8 +24,8 @@
         "translation": "Telecamera AHD 1080P universale 2.8mm visione stellare"
     },
     "camara-dashcam-dasaita-170-1080p-vision-nocturna-y-resistente-al-agua-para-coche": {
-        "source": "Cámara Dashcam Dasaita 170° 1080P, Visión Nocturna y Resistente al Agua para Coche",
-        "translation": "Dashcam Dasaita 170° 1080P con visione notturna e resistente all’acqua per auto"
+        "source": "Cámara Dasaita AHD 1080p Delantera o Trasera",
+        "translation": "Telecamera Dasaita AHD 1080p anteriore o posteriore"
     },
     "camara-dashcam-dual-4k-1080p-con-wifi-gps-y-vigilancia-24h": {
         "source": "Cámara Dashcam Dual 4K + 1080P con WiFi, GPS y Vigilancia 24H",
@@ -450,5 +450,13 @@
     "camara-ahd-1080p-para-renault-clio-5-2019-2022": {
         "source": "Cámara AHD 1080P para Renault Clio 5 2019-2022",
         "translation": "Telecamera AHD 1080P per Renault Clio 5 2019-2022"
+    },
+    "camara-ahd-170-para-opel-insignia-2008-2019": {
+        "source": "Cámara AHD 170° para Opel Insignia 2008-2019",
+        "translation": "Telecamera AHD 170° per Opel Insignia 2008-2019"
+    },
+    "camara-tercera-luz-freno-para-fiat-ducato-2006-2026": {
+        "source": "Cámara Tercera Luz Freno para Fiat Ducato 2006-2026",
+        "translation": "Telecamera Terza Luce Freno per Fiat Ducato 2006-2026"
     }
 }

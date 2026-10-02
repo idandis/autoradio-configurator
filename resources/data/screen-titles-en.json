@@ -948,8 +948,8 @@
         "translation": "Dasaita 9\\\" QLED Car Radio for Toyota Land Cruiser 2016-2018"
     },
     "dasaita-autoradio-10-2-qled-para-toyota-land-cruiser-2008-2015-copia-1": {
-        "source": "Autoradio Android 13 9\" 1DIN Honda CRV 2007-2011",
-        "translation": "Android 13 car radio 9\\\" 1DIN Honda CRV 2007-2011"
+        "source": "Autoradio Android 13 9\" 1DIN Honda CRV 2007-2012",
+        "translation": "Android 13 9\" 1DIN Car Stereo for Honda CRV 2007-2012"
     },
     "dasaita-usb-dvr-on-dash-camera-con-wifi-integrado-camara-de-salpicadero-de-1-47-1080p-hd-con-grabacion-en-bucle-grabador-de-conduccion-para-coche-con-tarjeta-sd-de-32-gb-gran-angular-de-170-sensor-g-monitor-de-aparcamiento-y-vision-nocturna": {
         "source": "Dasaita USB DVR On-Dash Camera con WiFi integrado, cámara de salpicadero de 1.47\" 1080P HD con grabación en bucle, grabador de conducción para coche con tarjeta SD de 32 GB, gran angular de 170°, sensor G, monitor de aparcamiento y visión nocturna.",
@@ -1638,5 +1638,17 @@
     "pantalla-9-renault-clio-5-captur-2-2020-2024": {
         "source": "Pantalla 9” Renault Clio 5 Captur 2 2020-2024",
         "translation": "9” Screen for Renault Clio 5 and Captur 2 2020-2024"
+    },
+    "pantalla-android-9-para-opel-insignia-2009-2013": {
+        "source": "Pantalla Android 9” para Opel Insignia 2009-2013",
+        "translation": "Android 9″ Screen for Opel Insignia 2009-2013"
+    },
+    "pantalla-android-9-para-renault-megane-ii-2002-2009": {
+        "source": "Pantalla Android 9″ para Renault Mégane II 2002-2009",
+        "translation": "Android 9″ Screen for Renault Mégane II 2002-2009"
+    },
+    "pantalla-android-9-qled-4g-dsp-atoto": {
+        "source": "Pantalla Universal Android 9″ QLED 4G DSP ATOTO",
+        "translation": "Universal Android 9″ QLED 4G DSP ATOTO Screen"
     }
 }
