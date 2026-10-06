@@ -1,5 +1,19 @@
 # Caricamento Aruba post-importazione
 
+## Aggiornamento per le tre descrizioni ancora segnalate
+
+Carica questi cinque file, poi premi **Aggiorna database**:
+
+- `app/Console/Commands/TranslateConfiguratorProductDescriptions.php`
+- `resources/data/camera-descriptions-it.json`
+- `resources/data/camera-descriptions-en.json`
+- `resources/data/screen-descriptions-it.json`
+- `resources/data/screen-descriptions-en.json`
+
+Le traduzioni erano già presenti. Il confronto ora tollera spazi e righe vuote ai bordi del sorgente, mantenendo invariato l’HTML spagnolo. Cambiamenti alle specifiche continuano a impedire l’importazione di traduzioni obsolete. I tre prodotti non esistono nel database locale; nessun originale locale è stato modificato.
+
+Verifiche aggiornate: sei traduzioni, tag e numeri validati; sei test mirati superati, 59 asserzioni, inclusa la scomparsa delle attività di traduzione dalla Dashboard. Nessuna nuova immagine richiesta. Il file di test non serve su Aruba.
+
 Carica questi file mantenendo gli stessi percorsi nella cartella del progetto Laravel:
 
 - `resources/data/camera-titles-it.json`

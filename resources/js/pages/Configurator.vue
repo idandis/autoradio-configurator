@@ -4655,6 +4655,7 @@ watch(
                                     "
                                 >
                                     <div v-if="requiresDashboardChoice(vehicle) && !selectedDashboardVariant(vehicle)" class="lg:col-span-2">
+                                        <h3 class="mb-3 break-words text-center text-xl font-semibold text-white">{{ vehicle.title }}</h3>
                                         <h3 class="mb-5 text-center text-xl font-semibold text-white">{{ t('screen.original_radio_question') }}</h3>
                                         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                                             <button

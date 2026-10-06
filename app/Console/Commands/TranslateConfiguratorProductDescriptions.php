@@ -50,7 +50,9 @@ class TranslateConfiguratorProductDescriptions extends Command
             foreach ($categoryProducts->chunk(5) as $batch) {
                 $pending = $batch->filter(function ($product) use (&$catalog, $target, &$translated) {
                     $entry = $catalog[$product->handle] ?? null;
-                    if (is_array($entry) && ($entry['source'] ?? null) === $product->body_html && filled($entry['translation'] ?? null)) {
+                    if (is_array($entry) && is_string($entry['source'] ?? null)
+                        && trim($entry['source']) === trim($product->body_html)
+                        && filled($entry['translation'] ?? null)) {
                         $product->update([$target => $entry['translation']]);
                         $translated++;
                         return false;
