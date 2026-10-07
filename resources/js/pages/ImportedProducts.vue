@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Head, router } from '@inertiajs/vue3';
+import { Head, router, useForm } from '@inertiajs/vue3';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { reactive, ref } from 'vue';
 
 const props = defineProps<{
@@ -22,6 +23,7 @@ const props = defineProps<{
             year_to: number | null;
             price_min: string | null;
             variants_count: number;
+            variants: Array<{ id: number; title: string | null; sku: string | null; price: string | null }>;
             image_url: string | null;
         }>;
         links: Array<{
@@ -44,6 +46,28 @@ const editingTitles = ref<number | null>(null);
 const titleItDraft = ref('');
 const titleEnDraft = ref('');
 const savingTitles = ref(false);
+const variantProduct = ref<(typeof props.products.data)[number] | null>(null);
+const variantsOpen = ref(false);
+const variantForm = useForm({ variants: [] as Array<{ id: number; price: string }> });
+const variantError = (i: number) => {
+    const errors = variantForm.errors as Record<string, string>;
+    return errors[`variants.${i}.price`] ?? errors[`variants.${i}.id`];
+};
+
+const openVariants = (product: (typeof props.products.data)[number]) => {
+    variantProduct.value = product;
+    variantForm.clearErrors();
+    variantForm.variants = product.variants.map((v) => ({ id: v.id, price: v.price ?? '' }));
+    variantsOpen.value = true;
+};
+
+const saveVariants = () => {
+    if (!variantProduct.value) return;
+    variantForm.patch(`/imported-products/${variantProduct.value.id}/variants`, {
+        preserveScroll: true,
+        onSuccess: () => { variantsOpen.value = false; },
+    });
+};
 
 const startTitleEdit = (product: (typeof props.products.data)[number]) => {
     editingTitles.value = product.id;
@@ -257,7 +281,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                             </button>
                         </td>
                         <td class="px-6 py-4 align-top">
-                            {{ product.variants_count }}
+                            <button type="button" class="rounded-md border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium hover:border-primary hover:text-primary disabled:opacity-50" :disabled="!product.variants_count" @click="openVariants(product)">Varianti ({{ product.variants_count }})</button>
                         </td>
                         <td class="px-6 py-4 text-right align-top">
                             <button type="button" class="mr-2 rounded-md border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium transition hover:border-primary hover:text-primary" @click="startTitleEdit(product)">Traduci</button>
@@ -301,4 +325,34 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
             />
         </div>
     </section>
+    <Dialog v-model:open="variantsOpen">
+        <DialogContent class="sm:max-w-2xl" @interact-outside="variantForm.processing && $event.preventDefault()" @escape-key-down="variantForm.processing && $event.preventDefault()">
+            <DialogHeader>
+                <DialogTitle>Prezzi delle varianti</DialogTitle>
+                <DialogDescription>{{ variantProduct?.title }}</DialogDescription>
+            </DialogHeader>
+            <form class="grid min-w-0 gap-4" @submit.prevent="saveVariants">
+                <div class="max-h-[60vh] space-y-3 overflow-y-auto">
+                    <div v-for="(v, i) in variantForm.variants" :key="v.id" class="grid gap-2 rounded-lg border border-sidebar-border/70 p-3 sm:grid-cols-[minmax(0,1fr)_140px]">
+                        <div class="min-w-0">
+                            <label :for="`variant-price-${v.id}`" class="break-words font-medium">{{ variantProduct?.variants[i]?.title || `Variante ${v.id}` }}</label>
+                            <p v-if="variantProduct?.variants[i]?.sku" class="mt-1 break-all text-xs text-muted-foreground">SKU: {{ variantProduct.variants[i].sku }}</p>
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2">
+                                <input :id="`variant-price-${v.id}`" v-model="v.price" type="number" min="0" max="999999.99" step="0.01" required :disabled="variantForm.processing" class="w-full rounded-md border border-sidebar-border/70 bg-background px-2 py-1.5" />
+                                <span>€</span>
+                            </div>
+                            <p v-if="variantError(i)" class="mt-1 text-xs text-destructive">{{ variantError(i) }}</p>
+                        </div>
+                    </div>
+                </div>
+                <p v-if="variantForm.errors.variants" class="text-sm text-destructive">{{ variantForm.errors.variants }}</p>
+                <div class="flex justify-end gap-2">
+                    <button type="button" :disabled="variantForm.processing" class="rounded-md border px-4 py-2 text-sm" @click="variantsOpen = false">Annulla</button>
+                    <button type="submit" :disabled="variantForm.processing" class="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">{{ variantForm.processing ? 'Salvataggio…' : 'Salva prezzi' }}</button>
+                </div>
+            </form>
+        </DialogContent>
+    </Dialog>
 </template>

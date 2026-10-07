@@ -7,6 +7,7 @@ use App\Models\InstallationZoneProduct;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -38,6 +39,27 @@ class ImportedProductsController extends Controller
         return back()->with('status', 'Prezzo aggiornato.');
     }
 
+    public function updateVariants(Request $request, ConfiguratorProduct $product): RedirectResponse
+    {
+        $data = $request->validate([
+            'variants' => ['required', 'array', 'min:1'],
+            'variants.*.id' => ['required', 'integer', 'distinct', Rule::exists('configurator_variants', 'id')->where('configurator_product_id', $product->id)],
+            'variants.*.price' => ['required', 'numeric', 'min:0', 'max:999999.99'],
+        ]);
+
+        DB::transaction(function () use ($product, $data): void {
+            $product->newQuery()->whereKey($product->id)->lockForUpdate()->firstOrFail();
+            foreach ($data['variants'] as $variant) {
+                $product->variants()->whereKey($variant['id'])->update([
+                    'price' => number_format((float) $variant['price'], 2, '.', ''),
+                ]);
+            }
+            $product->update(['price_min' => $product->variants()->min('price')]);
+        });
+
+        return back()->with('status', 'Prezzi delle varianti aggiornati.');
+    }
+
     public function updateTitles(Request $request, ConfiguratorProduct $product): RedirectResponse
     {
         $validated = $request->validate([
@@ -59,6 +81,7 @@ class ImportedProductsController extends Controller
         $search = trim($request->string('search')->toString());
 
         $products = ConfiguratorProduct::query()
+            ->with('variants:id,configurator_product_id,title,sku,option_value,price')
             ->withCount('variants')
             ->whereIn('category', ['screen', 'camera', 'speaker'])
             ->when(in_array($category, ['screen', 'camera', 'speaker'], true), function ($query) use ($category) {
@@ -94,6 +117,12 @@ class ImportedProductsController extends Controller
                 'year_to' => $product->year_to,
                 'price_min' => $product->price_min,
                 'variants_count' => $product->variants_count,
+                'variants' => $product->variants->map(fn ($variant) => [
+                    'id' => $variant->id,
+                    'title' => $variant->title ?: $variant->option_value,
+                    'sku' => $variant->sku,
+                    'price' => $variant->price,
+                ]),
                 'image_url' => $product->image_url,
             ]);
 

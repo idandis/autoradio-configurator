@@ -15,6 +15,37 @@ class ItalianCheckoutTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_product_discount_only_reduces_the_selected_line_and_replaces_automatic_discounts(): void
+    {
+        $a = $this->variant('600.00');
+        $b = $a->product->variants()->create(['title' => 'Other', 'price' => '400.00']);
+        $service = app(ItalianCheckout::class);
+        $discount = $service->normalizeDiscount(['custom_discount' => [
+            'code' => 'RADIO10', 'type' => 'fixed', 'value' => 1,
+            'items' => [['type' => 'variant', 'id' => $a->id, 'code' => 'RADIO10', 'value' => 1000]],
+        ]], true);
+        $quote = $service->quote([
+            ['type' => 'variant', 'id' => $a->id, 'quantity' => 2],
+            ['type' => 'variant', 'id' => $b->id, 'quantity' => 1],
+        ], false, 'it', $discount, 2500);
+        $this->assertSame(160000, $quote['subtotal_amount']);
+        $this->assertSame(12000, $quote['discount_amount']);
+        $this->assertSame(150500, $quote['total_amount']);
+        $this->assertStringContainsString('RADIO10 (10,00%)', $quote['discount_label']);
+    }
+
+    public function test_product_discount_rejects_products_outside_the_quote(): void
+    {
+        $variant = $this->variant('600.00');
+        $service = app(ItalianCheckout::class);
+        $discount = $service->normalizeDiscount(['custom_discount' => [
+            'code' => 'RADIO10', 'type' => 'fixed', 'value' => 1,
+            'items' => [['type' => 'variant', 'id' => $variant->id + 100, 'code' => 'RADIO10', 'value' => 1000]],
+        ]], true);
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->quote([['type' => 'variant', 'id' => $variant->id, 'quantity' => 1]], false, 'it', $discount);
+    }
+
     public function test_old_checkout_links_redirect_to_language_neutral_urls(): void
     {
         $token = '363d7fd2-bfa9-4705-8ccf-ce4f7f551b29';

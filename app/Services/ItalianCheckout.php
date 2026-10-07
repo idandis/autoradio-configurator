@@ -75,10 +75,15 @@ class ItalianCheckout
     {
         $es = $locale === 'es';
         $discount = Validator::make($input, [
-            'custom_discount' => ['nullable', 'array:code,type,value'],
-            'custom_discount.code' => ['required_with:custom_discount', 'string', 'max:100'],
+            'custom_discount' => ['nullable', 'array:code,type,value,items'],
+            'custom_discount.code' => ['required_with:custom_discount', 'string', 'max:2000'],
             'custom_discount.type' => ['required_with:custom_discount', Rule::in(['percentage', 'fixed'])],
             'custom_discount.value' => ['required_with:custom_discount', 'integer', 'min:1', 'max:99999999'],
+            'custom_discount.items' => ['sometimes', 'array', 'min:1', 'max:100'],
+            'custom_discount.items.*.type' => ['required', Rule::in(['variant', 'product'])],
+            'custom_discount.items.*.id' => ['required', 'integer', 'min:1'],
+            'custom_discount.items.*.code' => ['required', 'string', 'max:100'],
+            'custom_discount.items.*.value' => ['required', 'integer', 'min:1', 'max:10000'],
         ])->validate()['custom_discount'] ?? null;
 
         if ($discount && ! $allowCustomAmounts) {
@@ -134,6 +139,8 @@ class ItalianCheckout
             }
             $importUnitAmount = (int) ($item['import_unit_amount'] ?? 0);
             $lines[] = [
+                'type' => $item['type'],
+                'id' => $item['id'],
                 'product_handle' => $product->handle,
                 'title' => $product->localizedTitle($locale),
                 'variant_title' => $variant?->option_value ?: $variant?->title,
@@ -149,7 +156,24 @@ class ItalianCheckout
         $subtotal = array_sum(array_column($lines, 'total_amount'));
         $importAmount += array_sum(array_column($lines, 'import_total_amount'));
         // Same automatic tiers already shown by the configurator, calculated in cents.
-        if ($customDiscount) {
+        if (! empty($customDiscount['items'])) {
+            $discount = 0;
+            $seen = [];
+            $labels = [];
+            foreach ($customDiscount['items'] as $entry) {
+                $key = $entry['type'].':'.$entry['id'];
+                $matches = array_filter($lines, fn ($line) => $line['type'] === $entry['type'] && $line['id'] === $entry['id']);
+                if (! $matches || isset($seen[$key])) {
+                    throw ValidationException::withMessages(['custom_discount' => 'Prodotto scontato non valido o duplicato.']);
+                }
+                $seen[$key] = true;
+                foreach ($matches as $line) {
+                    $discount += intdiv($line['total_amount'] * (int) $entry['value'] + 5000, 10000);
+                }
+                $labels[] = $entry['code'].' ('.number_format($entry['value'] / 100, 2, ',', '').'%)';
+            }
+            $label = implode(' + ', $labels);
+        } elseif ($customDiscount) {
             $discount = $customDiscount['type'] === 'percentage'
                 ? intdiv($subtotal * (int) $customDiscount['value'] + 5000, 10000)
                 : (int) $customDiscount['value'];

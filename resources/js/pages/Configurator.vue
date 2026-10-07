@@ -267,9 +267,9 @@ const customQuoteCopy = computed(() => ({
     en: { importUnit: 'Import cost per unit (€)', importTotal: 'Import costs', button: 'Custom quote', title: 'Custom quote', help: 'Add all the products you need, then create the quote when finished.', search: 'Search by product, variant or SKU…', selected: 'Added products', section: 'Added from the custom quote', empty: 'No products found', add: 'Add', added: 'Added', remove: 'Remove', cancel: 'Cancel', create: 'Create quote' },
 })[props.locale]);
 const adminDiscountCopy = computed(() => ({
-    es: { title: 'Descuento personalizado', help: 'El código debe existir en Shopify. El valor solo se usa para calcular este presupuesto.', code: 'Código Shopify', codePlaceholder: 'Ej. CLIENTE10', type: 'Tipo de descuento', percentage: 'Porcentaje', fixed: 'Importe fijo', value: 'Valor', special: 'Descuento especial' },
-    it: { title: 'Sconto personalizzato', help: 'Il codice deve essere già presente in Shopify. Il valore serve a calcolare questo preventivo.', code: 'Codice Shopify', codePlaceholder: 'Es. CLIENTE10', type: 'Tipo di sconto', percentage: 'Percentuale', fixed: 'Importo fisso', value: 'Valore', special: 'Sconto speciale' },
-    en: { title: 'Custom discount', help: 'The code must already exist in Shopify. The value is used to calculate this quote.', code: 'Shopify code', codePlaceholder: 'E.g. CLIENT10', type: 'Discount type', percentage: 'Percentage', fixed: 'Fixed amount', value: 'Value', special: 'Special discount' },
+    es: { title: 'Descuento personalizado', help: 'Código y porcentaje por producto. Se excluyen los descuentos automáticos. En Shopify el código debe tener el mismo porcentaje y los mismos productos permitidos; varios códigos deben poder combinarse.', code: 'Código Shopify', codePlaceholder: 'Ej. CLIENTE10', type: 'Tipo de descuento', percentage: 'Porcentaje', fixed: 'Importe fijo', value: 'Valor', special: 'Descuento especial' },
+    it: { title: 'Sconto personalizzato', help: 'Codice e percentuale per prodotto. Gli sconti automatici vengono esclusi. In Shopify il codice deve avere la stessa percentuale e gli stessi prodotti ammessi; più codici devono essere combinabili.', code: 'Codice Shopify', codePlaceholder: 'Es. CLIENTE10', type: 'Tipo di sconto', percentage: 'Percentuale', fixed: 'Importo fisso', value: 'Valore', special: 'Sconto speciale' },
+    en: { title: 'Custom discount', help: 'Code and percentage per product. Automatic discounts are excluded. In Shopify the code must have the same percentage and eligible products; multiple codes must be combinable.', code: 'Shopify code', codePlaceholder: 'E.g. CLIENT10', type: 'Discount type', percentage: 'Percentage', fixed: 'Fixed amount', value: 'Value', special: 'Special discount' },
 })[props.locale]);
 const paymentMethods = [
     { name: 'American Express', icon: 'americanexpress', color: '016FD0', fallback: 'AMEX' },
@@ -636,6 +636,7 @@ const selectedSpeakerKeys = ref<string[]>([]);
 const selectedInstallationKey = ref<string | null>(null);
 const showCustomQuoteModal = ref(false);
 const customProductSearch = ref('');
+const productDiscounts = ref<Record<string, { code: string; percentage: string }>>({});
 const quoteDiscountCode = ref('');
 const quoteDiscountType = ref<'percentage' | 'fixed'>('percentage');
 const quoteDiscountValue = ref('');
@@ -1895,6 +1896,13 @@ const restoreConfiguratorState = async () => {
             }, {})
             : {};
         restoreImportAmount(state.customImportAmount);
+        productDiscounts.value = {};
+        if (state.productDiscounts && typeof state.productDiscounts === 'object') {
+            Object.entries(state.productDiscounts).forEach(([key, raw]) => {
+                const d = raw as { code?: unknown; percentage?: unknown };
+                if (d && typeof d.code === 'string' && typeof d.percentage === 'string') productDiscounts.value[key] = { code: d.code, percentage: d.percentage };
+            });
+        }
         quoteDiscountCode.value = typeof state.quoteDiscountCode === 'string' ? state.quoteDiscountCode : '';
         quoteDiscountType.value = state.quoteDiscountType === 'fixed' ? 'fixed' : 'percentage';
         quoteDiscountValue.value = typeof state.quoteDiscountValue === 'string' ? state.quoteDiscountValue : '';
@@ -2110,6 +2118,7 @@ const persistConfiguratorState = () => {
                 selectedCustomProductKeys: selectedCustomProductKeys.value,
                 customImportAmount: customImportAmount.value,
                 cartQuantities: cartQuantities.value,
+                productDiscounts: productDiscounts.value,
                 quoteDiscountCode: quoteDiscountCode.value,
                 quoteDiscountType: quoteDiscountType.value,
                 quoteDiscountValue: quoteDiscountValue.value,
@@ -2145,6 +2154,7 @@ watch(
         selectedCustomProductKeys,
         customImportAmount,
         cartQuantities,
+        productDiscounts,
         quoteDiscountCode,
         quoteDiscountType,
         quoteDiscountValue,
@@ -3043,13 +3053,45 @@ const discountTiers: DiscountTier[] = [
     { code: 'Pro', threshold: 500, percentage: 3 },
     { code: 'Base', threshold: 300, percentage: 2 },
 ];
+const rawDiscountProducts = computed(() => [
+    ...selectedScreens.value.map((p) => ({ key: `screen:${p.id}`, type: 'variant' as const, id: p.id, title: `${vehicleForScreenVariant(p.id)?.title ?? t('screen.label')} — ${displayVariantTitle(p.title)}`, price: p.price })),
+    ...selectedCameras.value.map((p) => ({ key: `camera:${p.key}`, type: p.variantId ? 'variant' as const : 'product' as const, id: p.variantId ?? p.productId ?? 0, title: p.productTitle ?? p.title, price: p.price })),
+    ...selectedSpeakers.value.map((p) => ({ key: `speaker:${p.key}`, type: p.variantId ? 'variant' as const : 'product' as const, id: p.variantId ?? p.productId ?? 0, title: p.productTitle, price: p.price })),
+    ...selectedCustomProducts.value.filter((p) => p.category !== 'installation').map((p) => ({ key: `custom:${p.key}`, type: p.variantId ? 'variant' as const : 'product' as const, id: p.variantId ?? p.productId, title: [p.title, p.variantTitle].filter(Boolean).join(' — '), price: p.price })),
+]);
+const discountProducts = computed(() => {
+    const grouped = new Map<string, (typeof rawDiscountProducts.value)[number] & { quantity: number }>();
+    rawDiscountProducts.value.forEach((p) => {
+        const key = `${p.type}:${p.id}`;
+        const quantity = cartQuantity(p.key) + (grouped.get(key)?.quantity ?? 0);
+        grouped.set(key, { ...p, key, quantity });
+    });
+    return [...grouped.values()];
+});
+const setProductDiscount = (key: string, field: 'code' | 'percentage', value: string) => {
+    productDiscounts.value[key] = { ...(productDiscounts.value[key] ?? { code: '', percentage: '' }), [field]: value };
+    quoteDiscountCode.value = '';
+    quoteDiscountValue.value = '';
+};
+const selectedProductDiscounts = computed(() => discountProducts.value.flatMap((p) => {
+    const d = productDiscounts.value[p.key];
+    const percentage = Number.parseFloat(String(d?.percentage ?? '').replace(',', '.'));
+    if (!d?.code.trim() || !Number.isFinite(percentage) || percentage <= 0 || percentage > 100) return [];
+    const value = Math.round(percentage * 100);
+    const cents = Math.round(p.price * 100) * p.quantity;
+    return [{ ...p, code: d.code.trim(), percentage: value / 100, value, amount: Math.floor((cents * value + 5000) / 10000) / 100 }];
+}));
+const hasProductDiscounts = computed(() => selectedProductDiscounts.value.length > 0);
+const productDiscountAmount = computed(() => selectedProductDiscounts.value.reduce((sum, d) => sum + d.amount, 0));
 const activeDiscount = computed(
-    () => discountTiers.find((tier) => productsSubtotal.value >= tier.threshold) ?? null,
+    () => hasProductDiscounts.value ? null : discountTiers.find((tier) => productsSubtotal.value >= tier.threshold) ?? null,
 );
 const nextDiscount = computed(() => {
+    if (hasProductDiscounts.value) return null;
     return [...discountTiers].reverse().find((tier) => productsSubtotal.value < tier.threshold) ?? null;
 });
 const customDiscount = computed(() => {
+    if (hasProductDiscounts.value) return { code: [...new Set(selectedProductDiscounts.value.map((d) => d.code))].join(','), type: 'fixed' as const, value: productDiscountAmount.value };
     const code = quoteDiscountCode.value.trim();
     const value = Number.parseFloat(String(quoteDiscountValue.value).replace(',', '.'));
 
@@ -3117,6 +3159,7 @@ const discountAmount = computed(() => {
     return activeDiscount.value ? automaticDiscountAmount(activeDiscount.value) : 0;
 });
 const discountLabel = computed(() => {
+    if (hasProductDiscounts.value) return selectedProductDiscounts.value.map((d) => `${d.code} (${d.percentage}%)`).join(' + ');
     if (customDiscount.value) {
         const value = customDiscount.value.type === 'percentage'
             ? `${customDiscount.value.value}%`
@@ -3163,7 +3206,8 @@ const italianCheckoutItems = computed(() => {
 const italianCheckoutDiscount = computed(() => customDiscount.value ? {
     code: customDiscount.value.code,
     type: customDiscount.value.type,
-    value: Math.round(customDiscount.value.value * 100),
+    value: Math.max(1, Math.round(customDiscount.value.value * 100)),
+    ...(hasProductDiscounts.value ? { items: selectedProductDiscounts.value.map((d) => ({ type: d.type, id: d.id, code: d.code, value: d.value })) } : {}),
 } : null);
 
 const checkoutLineItems = computed(() => {
@@ -3716,7 +3760,14 @@ const generateQuote = async (withoutClientData = false) => {
         });
     }
 
-    if (effectiveDiscountCode.value && discountAmount.value > 0) {
+    if (hasProductDiscounts.value) {
+        selectedProductDiscounts.value.forEach((d) => items.push({
+            code: d.code,
+            description: `${d.title} — ${d.code} (${d.percentage}%)`,
+            quantity: 1,
+            price: -d.amount,
+        }));
+    } else if (effectiveDiscountCode.value && discountAmount.value > 0) {
         items.push({
             code: effectiveDiscountCode.value,
             description: discountLabel.value,
@@ -6316,41 +6367,20 @@ watch(
                     <fieldset class="grid gap-3 rounded-xl border border-amber-400/30 bg-amber-400/5 p-4">
                         <legend class="px-1 text-sm font-semibold text-amber-400">{{ adminDiscountCopy.title }}</legend>
                         <p class="text-xs text-neutral-400">{{ adminDiscountCopy.help }}</p>
-                        <label class="grid gap-2 text-sm text-neutral-300">
-                            {{ adminDiscountCopy.code }}
-                            <input
-                                v-model.trim="quoteDiscountCode"
-                                type="text"
-                                maxlength="255"
-                                autocomplete="off"
-                                class="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 uppercase text-white"
-                                :placeholder="adminDiscountCopy.codePlaceholder"
-                            />
-                        </label>
-                        <div class="grid gap-3 sm:grid-cols-2">
-                            <label class="grid gap-2 text-sm text-neutral-300">
-                                {{ adminDiscountCopy.type }}
-                                <select
-                                    v-model="quoteDiscountType"
-                                    class="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white"
-                                >
-                                    <option value="percentage">{{ adminDiscountCopy.percentage }}</option>
-                                    <option value="fixed">{{ adminDiscountCopy.fixed }}</option>
-                                </select>
-                            </label>
-                            <label class="grid gap-2 text-sm text-neutral-300">
-                                {{ adminDiscountCopy.value }} ({{ quoteDiscountType === 'percentage' ? '%' : '€' }})
-                                <input
-                                    v-model="quoteDiscountValue"
-                                    type="number"
-                                    min="0"
-                                    :max="quoteDiscountType === 'percentage' ? 100 : undefined"
-                                    step="0.01"
-                                    inputmode="decimal"
-                                    class="rounded-lg border border-neutral-700 bg-neutral-900 px-4 py-3 text-white"
-                                    placeholder="0"
-                                />
-                            </label>
+                        <div v-for="p in discountProducts" :key="p.key" class="grid gap-3 rounded-lg border border-neutral-700 p-3">
+                            <p class="text-sm font-semibold text-white">{{ p.title }}</p>
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <label class="grid gap-2 text-sm text-neutral-300">
+                                    {{ adminDiscountCopy.code }}
+                                    <input :value="productDiscounts[p.key]?.code ?? ''" type="text" maxlength="100" autocomplete="off" class="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white" :placeholder="adminDiscountCopy.codePlaceholder" @input="setProductDiscount(p.key, 'code', ($event.target as HTMLInputElement).value)" />
+                                </label>
+                                <label class="grid gap-2 text-sm text-neutral-300">
+                                    {{ adminDiscountCopy.percentage }} (%)
+                                    <input :value="productDiscounts[p.key]?.percentage ?? ''" type="number" min="0" max="100" step="0.01" class="rounded-lg border border-neutral-700 bg-neutral-900 px-3 py-2 text-white" placeholder="0" @input="setProductDiscount(p.key, 'percentage', ($event.target as HTMLInputElement).value)" />
+                                </label>
+                            </div>
+                            <p v-if="selectedProductDiscounts.find((d) => d.key === p.key)" class="text-sm text-emerald-300">−{{ euroFormatter.format(selectedProductDiscounts.find((d) => d.key === p.key)!.amount) }}</p>
+                            <button v-if="productDiscounts[p.key]" type="button" class="justify-self-start text-sm text-neutral-400 underline" @click="delete productDiscounts[p.key]">{{ funnelCopy.remove }}</button>
                         </div>
                     </fieldset>
                     <label class="grid gap-2 text-sm text-neutral-300">

@@ -1,5 +1,16 @@
 # Caricamento Aruba post-importazione
 
+## Audi Chorus — 7 ottobre 2026
+
+Carica soltanto questi file per il nuovo prodotto:
+
+- `resources/data/screen-titles-it.json`
+- `resources/data/screen-titles-en.json`
+- `resources/data/screen-descriptions-it.json`
+- `resources/data/screen-descriptions-en.json`
+
+Premi **Aggiorna database**. Titolo e descrizione Audi Chorus tradotti in IT/EN; HTML e numeri preservati, incluso il riferimento BMW presente nel testo spagnolo. Nessuna immagine richiesta e nessuno ZIP creato. Il prodotto non è nel database locale: i cataloghi sono pronti per il server. Nove test pertinenti superati.
+
 ## Aggiornamento Qashqai del 6 ottobre 2026
 
 Carica questi file e premi **Aggiorna database**:
