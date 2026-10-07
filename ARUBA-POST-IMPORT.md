@@ -1,5 +1,20 @@
 # Caricamento Aruba post-importazione
 
+## Aggiornamento Qashqai del 6 ottobre 2026
+
+Carica questi file e premi **Aggiorna database**:
+
+- `public/images/vehicles-dark/nissan-qashqai-2013-2022.webp`
+- `resources/data/camera-descriptions-it.json`
+- `resources/data/camera-descriptions-en.json`
+- `resources/data/screen-descriptions-it.json`
+- `resources/data/screen-descriptions-en.json`
+- `app/Console/Commands/TranslateConfiguratorProductDescriptions.php`
+
+I cataloghi contengono già le sei descrizioni richieste. I tre prodotti non sono presenti nel database locale; le 521 descrizioni locali risultano già tradotte. Nessun ZIP creato. JSON, tag HTML e numeri verificati; 13 test mirati superati (68 asserzioni).
+
+Immagine generata con lo strumento integrato imagegen: Nissan Qashqai J11, carrozzeria rappresentativa del facelift 2017, fotografia realistica, vista anteriore a tre quarti, auto intera centrata, ombra naturale, sfondo #121212, nessuna persona o scritta aggiunta. File WEBP 1536 × 1024. Il configuratore risolve lo stesso file per 2013, 2017 e 2022, riutilizzando una sola immagine.
+
 ## Aggiornamento per le tre descrizioni ancora segnalate
 
 Carica questi cinque file, poi premi **Aggiorna database**:
