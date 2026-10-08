@@ -1,5 +1,34 @@
 # Caricamento Aruba post-importazione
 
+## Volvo C30/S40/V50/C70 — 8 ottobre 2026
+
+Carica questi sette file mantenendo i percorsi, poi premi **Aggiorna database**:
+
+- `resources/data/screen-titles-it.json`
+- `resources/data/screen-titles-en.json`
+- `resources/data/screen-descriptions-it.json`
+- `resources/data/screen-descriptions-en.json`
+- `public/images/vehicles-dark/volvo-c30-2004-2012.webp`
+- `public/images/vehicles-dark/volvo-v50-2004-2012.webp`
+- `public/images/vehicles-dark/volvo-c70-2004-2012.webp`
+
+Titolo e HTML tradotti in IT/EN, inclusa l’avvertenza CD/AUX. Tag e numeri preservati. Prodotto assente nel database locale; cataloghi pronti per il server. Nessuna descrizione locale mancante. 16 test pertinenti superati (77 asserzioni); tre WEBP verificati e risolti dal configuratore. Nessuno ZIP. Questo promemoria non va caricato su Aruba.
+
+Immagini generate con imagegen integrato, una per carrozzeria. Prompt comune: “Photorealistic studio vehicle catalogue photograph. Correct distinct factory body shape and proportions. Silver metallic paint. Front three-quarter view, whole automobile centred with all wheels visible and comfortable margins, landscape. Uniform #121212 background and matching floor, natural soft contact shadow, soft studio lighting. No people, no text, blank license plate, no watermark. This is one individual car photograph, not a collage.” Soggetti: Volvo C30 three-door hatchback, first generation, representative 2008 model; Volvo V50 five-door estate wagon, representative 2008 model; Volvo C70 second-generation two-door convertible with retractable hardtop CLOSED, representative 2008 model.
+
+## SEAT Ibiza e Mitsubishi ASX — 8 ottobre 2026
+
+Carica questi file, mantenendo gli stessi percorsi:
+
+- `resources/data/camera-titles-it.json`
+- `resources/data/camera-titles-en.json`
+- `resources/data/camera-descriptions-it.json`
+- `resources/data/camera-descriptions-en.json`
+- `resources/data/screen-descriptions-it.json`
+- `resources/data/screen-descriptions-en.json`
+
+Poi premi **Aggiorna database**. Tradotti il titolo Ibiza e le due descrizioni in IT/EN; HTML e numeri preservati. Nessuna immagine richiesta, nessuno ZIP creato. I comandi di importazione locale non segnalano traduzioni mancanti. Questo documento è solo un promemoria e non va caricato sul server.
+
 ## Audi Chorus — 7 ottobre 2026
 
 Carica soltanto questi file per il nuovo prodotto:
