@@ -58,7 +58,7 @@ Route::prefix('checkout')->name('italian-checkout.')->middleware('throttle:30,1'
 Route::post('/stripe/webhook', StripeWebhookController::class)->name('stripe.webhook');
 
 Route::middleware('extra-eu')->group(function () {
-    Route::get('/', ConfiguratorController::class);
+    Route::get('/', [ConfiguratorController::class, 'home'])->name('home');
     Route::get('/home-beta', [ConfiguratorController::class, 'homeBeta'])->name('home.beta');
 
     Route::get('/configurator', ConfiguratorController::class)->name('configurator.show');

@@ -252,6 +252,7 @@ const headerCopy = computed(() => ({
         language: 'English',
     },
 })[props.locale]);
+const homeUrl = computed(() => props.locale === 'it' ? '/' : 'https://www.autoradiocanario.com/');
 const brandLogoUrl = computed(() => props.locale === 'it' ? '/images/logo-it.png' : '/images/logo.png');
 const headerContactUrl = computed(() => `/?form=autoradio&lang=${props.locale}`);
 const footerContact = computed(() => props.locale === 'it'
@@ -4313,7 +4314,7 @@ watch(
                         </svg>
                     </button>
 
-                    <a href="https://www.autoradiocanario.com/" aria-label="AutoradioCanario Home" class="col-start-2 shrink-0 justify-self-center lg:col-auto">
+                    <a :href="homeUrl" aria-label="AutoradioCanario Home" class="col-start-2 shrink-0 justify-self-center lg:col-auto">
                         <img
                             :src="brandLogoUrl"
                             alt="AutoradioCanario"
@@ -4322,7 +4323,7 @@ watch(
                     </a>
 
                     <nav class="hidden flex-1 items-center gap-8 pl-4 text-sm lg:flex">
-                        <a href="https://www.autoradiocanario.com/" class="border-b border-white pb-1 transition hover:text-amber-400">
+                        <a :href="homeUrl" class="border-b border-white pb-1 transition hover:text-amber-400">
                             {{ headerCopy.home }}
                         </a>
                         <a :href="headerContactUrl" class="transition hover:text-amber-400">
@@ -4375,7 +4376,7 @@ watch(
                     id="mobile-store-navigation"
                     class="grid gap-1 border-t border-neutral-800 pb-4 pt-3 text-sm lg:hidden"
                 >
-                    <a href="https://www.autoradiocanario.com/" class="rounded-lg px-3 py-3 hover:bg-white/5 hover:text-amber-400">
+                    <a :href="homeUrl" class="rounded-lg px-3 py-3 hover:bg-white/5 hover:text-amber-400">
                         {{ headerCopy.home }}
                     </a>
                     <a :href="headerContactUrl" class="rounded-lg px-3 py-3 hover:bg-white/5 hover:text-amber-400">

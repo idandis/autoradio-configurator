@@ -1,6 +1,6 @@
 Home beta Autoradio Italiano
 
-Anteprima: /home-beta. La home pubblica attuale rimane disponibile sul percorso /; la beta riutilizza header, logo e footer del configuratore e aggiunge WhatsApp in alto a destra.
+La nuova home è la prima pagina su autoradioitaliano.it e www.autoradioitaliano.it, sul percorso /. Logo e tasti Home rimandano a /. Il configuratore rimane su /configurator; /home-beta resta disponibile come anteprima. Header, logo e footer sono riutilizzati, con WhatsApp in alto a destra. I collegamenti ai preventivi condivisi e al modulo contatti restano funzionanti.
 
 Caricare i file dello ZIP nei medesimi percorsi relativi del progetto Laravel, sovrascrivendo le copie esistenti. Caricare anche tutta la cartella public/build generata. Se la directory pubblica Aruba è separata dalla radice Laravel, collocare public/build e public/images nella directory pubblica effettiva.
 

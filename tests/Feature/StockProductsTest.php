@@ -22,6 +22,18 @@ class StockProductsTest extends TestCase
         ]);
     }
 
+    public function test_italian_domain_opens_home_and_preserves_configurator_and_contact_links(): void
+    {
+        $this->withoutMiddleware(BlockOutsideEurope::class);
+        foreach (['autoradioitaliano.it', 'www.autoradioitaliano.it'] as $host) {
+            $this->get('https://'.$host.'/')->assertInertia(fn (Assert $page) => $page
+                ->component('Configurator')->where('homeBeta', true)->where('locale', 'it'));
+            $this->get('https://'.$host.'/configurator')->assertInertia(fn (Assert $page) => $page->missing('homeBeta'));
+            $this->get('https://'.$host.'/?form=autoradio')->assertInertia(fn (Assert $page) => $page->missing('homeBeta'));
+        }
+        $this->get('https://www.autoradiocanario.com/')->assertInertia(fn (Assert $page) => $page->missing('homeBeta'));
+    }
+
     public function test_admin_can_select_update_and_remove_existing_stock_products(): void
     {
         $product = $this->product();

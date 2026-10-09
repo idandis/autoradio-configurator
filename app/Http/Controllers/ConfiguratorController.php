@@ -70,6 +70,18 @@ class ConfiguratorController extends Controller
         return response()->json(['message' => 'ok']);
     }
 
+    public function home(Request $request, VehicleImageResolver $vehicleImageResolver): Response
+    {
+        $host = trim(explode(',', (string) $request->header('X-Forwarded-Host', $request->getHost()))[0]);
+        $host = mb_strtolower((string) preg_replace('/:\d+$/', '', $host));
+        if (in_array($host, ['autoradioitaliano.it', 'www.autoradioitaliano.it'], true)
+            && ! $request->hasAny(['form', 'c', 'summary'])) {
+            return $this->homeBeta($request, $vehicleImageResolver);
+        }
+
+        return $this($request, $vehicleImageResolver);
+    }
+
     public function homeBeta(Request $request, VehicleImageResolver $vehicleImageResolver): Response
     {
         app()->setLocale('it');
