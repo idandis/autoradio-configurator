@@ -524,5 +524,39 @@
         "year_from": 2012,
         "year_to": 2016,
         "image": "mini-paceman-r6x-2007-2019.webp"
+    },
+    "volkswagen-amarok-2h": {
+        "brand": "VOLKSWAGEN",
+        "model": "Amarok",
+        "aliases": [
+            "Amarok",
+            "Amarok 2H"
+        ],
+        "year_from": 2010,
+        "year_to": 2022,
+        "image": "volkswagen-amarok-2017-2025.webp"
+    },
+    "volkswagen-amarok-nf": {
+        "brand": "VOLKSWAGEN",
+        "model": "Amarok",
+        "aliases": [
+            "Amarok",
+            "Amarok NF"
+        ],
+        "year_from": 2023,
+        "year_to": 2025,
+        "image": "volkswagen-amarok-2023-2025.webp"
+    },
+    "man-van": {
+        "brand": "MAN",
+        "model": "Van",
+        "aliases": [
+            "Van",
+            "TGE",
+            "Van TGE"
+        ],
+        "year_from": 2017,
+        "year_to": 2025,
+        "image": "man-van-2017-2025.webp"
     }
 }

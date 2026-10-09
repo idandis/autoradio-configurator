@@ -11,6 +11,24 @@ class VehicleImageGeneratorTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_post_import_vehicle_images_cover_each_body_generation(): void
+    {
+        $resolver = app(\App\Services\VehicleImageResolver::class);
+        $files = $resolver->imageFilenames();
+        foreach (range(2017, 2025) as $year) {
+            $this->assertSame($year < 2023 ? 'volkswagen-amarok-2017-2025.webp' : 'volkswagen-amarok-2023-2025.webp',
+                $resolver->resolveFilename('VOLKSWAGEN', 'Amarok', $year, $files));
+            $this->assertSame('man-van-2017-2025.webp', $resolver->resolveFilename('MAN', 'Van', $year, $files));
+        }
+        foreach ([['VOLKSWAGEN', 'Amarok'], ['MAN', 'Van']] as [$brand, $model]) {
+            ConfiguratorProduct::create([
+                'handle' => strtolower($brand).'-image-test', 'category' => 'screen', 'title' => 'Radio',
+                'brand' => $brand, 'model' => $model, 'year_from' => 2017, 'year_to' => 2025,
+            ]);
+        }
+        $this->assertCount(0, app(VehicleImageGenerator::class)->missingVehicles());
+    }
+
     public function test_it_reports_each_missing_vehicle_from_a_multibrand_product(): void
     {
         ConfiguratorProduct::create([

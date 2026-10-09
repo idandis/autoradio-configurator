@@ -39,7 +39,7 @@ class DashboardController extends Controller
 
         $hasDescriptionTranslations = Schema::hasColumns('configurator_products', ['body_html', 'body_html_it', 'body_html_en']);
         $translationTasks = ConfiguratorProduct::query()
-            ->whereIn('category', ['screen', 'camera', 'speaker'])
+            ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])
             ->where(function ($query) use ($hasDescriptionTranslations) {
                 $query->where(fn ($query) => $query
                 ->whereNull('title_it')

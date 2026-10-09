@@ -50,7 +50,7 @@ class DatabaseMigrationController extends Controller
                 @set_time_limit(0);
             }
 
-            foreach (['screen', 'camera', 'speaker'] as $category) {
+            foreach (['screen', 'camera', 'speaker', 'accessory'] as $category) {
                 foreach (['it' => 'italiani', 'en' => 'inglesi'] as $locale => $label) {
                     if ($error = $this->importMissingDescriptions($category, $locale, $label)) {
                         return back()->withErrors(['database' => $error]);
@@ -65,13 +65,13 @@ class DatabaseMigrationController extends Controller
 
             $opcacheReset = function_exists('opcache_reset') && @opcache_reset();
             $translatedItalianTitles = ConfiguratorProduct::query()
-                ->whereIn('category', ['screen', 'camera', 'speaker'])->whereNotNull('title_it')->count();
+                ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])->whereNotNull('title_it')->count();
             $translatedEnglishTitles = ConfiguratorProduct::query()
-                ->whereIn('category', ['screen', 'camera', 'speaker'])->whereNotNull('title_en')->count();
+                ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])->whereNotNull('title_en')->count();
             $translatedItalianDescriptions = ConfiguratorProduct::query()
-                ->whereIn('category', ['screen', 'camera', 'speaker'])->whereNotNull('body_html_it')->count();
+                ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])->whereNotNull('body_html_it')->count();
             $translatedEnglishDescriptions = ConfiguratorProduct::query()
-                ->whereIn('category', ['screen', 'camera', 'speaker'])->whereNotNull('body_html_en')->count();
+                ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])->whereNotNull('body_html_en')->count();
             $status = 'Database e cache Laravel aggiornati correttamente.';
             $status .= " Titoli tradotti: {$translatedItalianTitles} italiani e {$translatedEnglishTitles} inglesi.";
             $status .= " Descrizioni tradotte: {$translatedItalianDescriptions} italiane e {$translatedEnglishDescriptions} inglesi.";
@@ -102,7 +102,7 @@ class DatabaseMigrationController extends Controller
     {
         $missing = ConfiguratorProduct::query()
             ->where('category', $category)
-            ->whereNull('title_'.$locale)
+            ->where(fn ($query) => $query->whereNull('title_'.$locale)->orWhere('title_'.$locale, ''))
             ->count();
 
         if ($missing === 0) {

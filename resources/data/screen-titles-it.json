@@ -1658,5 +1658,13 @@
     "autoradio-android-9-2-din-volvo-c30-s40-v50-c70-2004-2012": {
         "source": "Autoradio Android 9″ 2 DIN Volvo C30/S40/V50/C70 2004–2012",
         "translation": "Autoradio Android 9″ 2 DIN Volvo C30/S40/V50/C70 2004–2012"
+    },
+    "autoradio-9-2din-carplay-para-vw-amarok-2017-2021": {
+        "source": "Autoradio 9\" 2DIN CarPlay para VW Amarok 2017–2021",
+        "translation": "Autoradio 9\" 2DIN CarPlay per VW Amarok 2017–2021"
+    },
+    "pantalla-tesla-9-7-2-din-android-vw-amarok-crafter-2017-2035": {
+        "source": "Pantalla Tesla 9.7\" 2 DIN Android VW Amarok/Crafter 2017–2025",
+        "translation": "Schermo Tesla 9.7\" 2 DIN Android VW Amarok/Crafter 2017–2025"
     }
 }

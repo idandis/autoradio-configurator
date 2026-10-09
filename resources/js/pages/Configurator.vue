@@ -5,6 +5,7 @@ import MobileVehiclePicker from '@/components/MobileVehiclePicker.vue';
 import ConfiguratorProductCard from '@/components/ConfiguratorProductCard.vue';
 import CartProductTitle from '@/components/CartProductTitle.vue';
 import ProductDiscountEditor from '@/components/ProductDiscountEditor.vue';
+import HomeBetaContent from '@/components/HomeBetaContent.vue';
 
 type VariantChoice = {
     id: number;
@@ -155,6 +156,8 @@ type VehicleImageMapping = {
 
 const props = defineProps<{
     locale: 'es' | 'it' | 'en';
+    homeBeta?: boolean;
+    stockProducts?: Array<{ id: number; title: string; category: 'screen' | 'camera' | 'speaker' | 'accessory'; image: string | null; price: number | null }>;
     italianCheckoutEnabled?: boolean;
     italianCheckoutIsTest?: boolean;
     translations: TranslationTree;
@@ -2179,6 +2182,7 @@ onMounted(async () => {
     window.addEventListener('message', handlePrintPreviewNavigation);
     document.documentElement.lang = props.locale;
     void trackVisitorEntry();
+    if (props.homeBeta) return;
     const params = new URLSearchParams(window.location.search);
     const incomingBrand = resolveAvailableBrand(params.get('marca') ?? params.get('brand'));
     if (params.get('form') === 'autoradio') {
@@ -2202,6 +2206,9 @@ onMounted(async () => {
             openSteps.value = ['vehicle'];
             await nextTick();
         }
+    }
+    if (!sharedConfigurationRestored && ['specific', 'universal'].includes(params.get('mode') ?? '')) {
+        await setConfiguratorMode(params.get('mode') as 'specific' | 'universal');
     }
     configuratorStateHydrated = true;
     window.addEventListener('keydown', closeImageZoomOnEscape);
@@ -4176,7 +4183,7 @@ watch(
         @complete="completeMobileVehicle"
         @missing="missingMobileVehicle"
     />
-    <Head :title="t('page_title')" />
+    <Head :title="props.homeBeta ? 'Autoradio Italiano · Home beta' : t('page_title')" />
     <iframe v-if="quotePreviewHtml" ref="quotePreviewFrame" :srcdoc="quotePreviewHtml" :title="t('print.document_title')" class="fixed inset-0 z-[120] h-dvh w-full border-0 bg-white" />
     <Teleport to="body">
         <div v-if="quotePreviewHtml" ref="quotePrintDocument" class="quote-print-document" :lang="locale" />
@@ -4326,6 +4333,10 @@ watch(
                         </a>
                     </nav>
 
+                    <a v-if="props.homeBeta" :href="footerContact.whatsappUrl" aria-label="Contattaci su WhatsApp" class="col-start-3 justify-self-end rounded-full p-2 text-[#25d366] transition hover:bg-emerald-500/10 lg:order-last">
+                        <svg class="h-9 w-9 sm:h-11 sm:w-11" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.52 3.48A11.91 11.91 0 0 0 12.04 0C5.43 0 .05 5.38.05 11.99c0 2.11.55 4.17 1.6 5.99L0 24l6.16-1.62a12 12 0 0 0 5.87 1.5h.01c6.6 0 11.98-5.38 11.98-11.99 0-3.2-1.25-6.22-3.5-8.41ZM12.04 21.86a9.94 9.94 0 0 1-5.07-1.39l-.36-.21-3.65.96.97-3.56-.23-.37a9.9 9.9 0 0 1-1.52-5.3c0-5.5 4.47-9.98 9.98-9.98a9.9 9.9 0 0 1 7.05 2.93 9.9 9.9 0 0 1 2.91 7.06c0 5.5-4.48 9.98-9.98 9.98Zm5.48-7.47c-.3-.15-1.77-.87-2.05-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.65.07-.3-.15-1.26-.46-2.4-1.48-.89-.79-1.49-1.77-1.66-2.07-.17-.3-.02-.46.13-.61.14-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.07-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.49s1.07 2.89 1.22 3.09c.15.2 2.11 3.22 5.11 4.51.71.31 1.27.49 1.7.63.72.23 1.37.2 1.88.12.57-.08 1.77-.72 2.02-1.42.25-.7.25-1.3.17-1.42-.07-.12-.27-.2-.57-.35Z" /></svg>
+                    </a>
+
                     <div class="ml-auto hidden items-center gap-4 lg:flex">
                         <label class="sr-only" for="header-language">Language</label>
                         <select
@@ -4377,7 +4388,8 @@ watch(
             </div>
         </header>
 
-        <main v-if="configuratorMode === null" class="mx-auto flex min-h-[calc(100vh-12rem)] max-w-5xl items-center px-4 py-12 sm:px-6 lg:px-8">
+        <HomeBetaContent v-if="props.homeBeta" :products="props.stockProducts ?? []" @details="(product) => openProductDetails({ productId: product.id, category: product.category, key: product.id.toString() })" />
+        <main v-else-if="configuratorMode === null" class="mx-auto flex min-h-[calc(100vh-12rem)] max-w-5xl items-center px-4 py-12 sm:px-6 lg:px-8">
             <div class="w-full text-center">
                 <p class="text-xs font-semibold uppercase tracking-[0.24em] text-amber-400 sm:text-sm">{{ t('mode.eyebrow') }}</p>
                 <h1 class="mx-auto mt-3 max-w-3xl text-3xl font-semibold tracking-tight sm:text-5xl">{{ t('mode.title') }}</h1>

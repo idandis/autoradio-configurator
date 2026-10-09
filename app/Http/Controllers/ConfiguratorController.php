@@ -70,6 +70,16 @@ class ConfiguratorController extends Controller
         return response()->json(['message' => 'ok']);
     }
 
+    public function homeBeta(Request $request, VehicleImageResolver $vehicleImageResolver): Response
+    {
+        app()->setLocale('it');
+        $request->session()->put('locale', 'it');
+
+        return $this($request, $vehicleImageResolver)
+            ->with('homeBeta', true)
+            ->with('stockProducts', \App\Models\StockProduct::publicProducts());
+    }
+
     public function __invoke(Request $request, VehicleImageResolver $vehicleImageResolver): Response
     {
         $sharedConfiguration = $this->sharedConfiguration($request);

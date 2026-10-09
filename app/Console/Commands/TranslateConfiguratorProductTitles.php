@@ -32,7 +32,7 @@ class TranslateConfiguratorProductTitles extends Command
         $category = (string) $this->option('category');
         $query = ConfiguratorProduct::query()
             ->where('category', $category)
-            ->when(! $this->option('force'), fn ($query) => $query->whereNull($column))
+            ->when(! $this->option('force'), fn ($query) => $query->where(fn ($query) => $query->whereNull($column)->orWhere($column, '')))
             ->orderBy('id');
 
         $limit = max(0, (int) $this->option('limit'));

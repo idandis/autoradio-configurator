@@ -23,6 +23,7 @@ use App\Http\Controllers\QuoteNumberController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\SharedConfigurationController;
 use App\Http\Controllers\StripeWebhookController;
+use App\Http\Controllers\StockProductsController;
 use App\Http\Controllers\VisitorStatisticsController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
@@ -58,6 +59,7 @@ Route::post('/stripe/webhook', StripeWebhookController::class)->name('stripe.web
 
 Route::middleware('extra-eu')->group(function () {
     Route::get('/', ConfiguratorController::class);
+    Route::get('/home-beta', [ConfiguratorController::class, 'homeBeta'])->name('home.beta');
 
     Route::get('/configurator', ConfiguratorController::class)->name('configurator.show');
     Route::get('/configurator/catalog/specific-screens', [ConfiguratorController::class, 'specificScreens'])
@@ -117,6 +119,10 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         ->middleware('throttle:30,1')
         ->name('configurator.shared-configurations.store');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/dashboard/in-stock', [StockProductsController::class, 'index'])->name('stock-products.index');
+    Route::post('/dashboard/in-stock', [StockProductsController::class, 'store'])->name('stock-products.store');
+    Route::patch('/dashboard/in-stock/{stockProduct}', [StockProductsController::class, 'update'])->name('stock-products.update');
+    Route::delete('/dashboard/in-stock/{stockProduct}', [StockProductsController::class, 'destroy'])->name('stock-products.destroy');
     Route::get('/configurator/catalog/custom-products', [ConfiguratorController::class, 'customProducts'])
         ->name('configurator.catalog.custom-products');
     Route::post('/dashboard/database/migrate', DatabaseMigrationController::class)
