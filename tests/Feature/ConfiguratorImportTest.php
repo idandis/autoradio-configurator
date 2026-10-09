@@ -20,6 +20,34 @@ class ConfiguratorImportTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_accessory_import_is_available_in_products_and_custom_quotes(): void
+    {
+        $headers = (new \ReflectionClass(ConfiguratorCsvImporter::class))->getConstant('REQUIRED_HEADERS');
+        $row = array_replace(array_fill_keys($headers, ''), [
+            'Handle' => 'usb-hdmi', 'Title' => 'Adaptador USB–HDMI para autoradios Android compatibles',
+            'Type' => 'Accesorios', 'Variant ID' => '987654', 'Variant SKU' => 'USB-HDMI',
+            'Variant Price' => '49.00', 'Price / Italia' => '49.00', 'Price / spagna' => '49.00',
+        ]);
+        $csv = implode(',', $headers)."\n".implode(',', $row);
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->post(route('dashboard.import'), [
+                'catalog' => UploadedFile::fake()->createWithContent('accessory.csv', $csv),
+                'mode' => 'add',
+            ])->assertRedirect()->assertSessionHasNoErrors();
+
+        $product = ConfiguratorProduct::where('handle', 'usb-hdmi')->firstOrFail();
+        $this->assertSame('accessory', $product->category);
+        $this->get(route('imported-products.index', ['category' => 'accessory', 'search' => 'USB–HDMI']))
+            ->assertInertia(fn (Assert $page) => $page->component('ImportedProducts')
+                ->has('products.data', 1)->where('products.data.0.id', $product->id));
+        $this->get(route('configurator.catalog.custom-products'))
+            ->assertOk()->assertJsonFragment(['productId' => $product->id, 'category' => 'accessory', 'sku' => 'USB-HDMI']);
+        $quote = app(\App\Services\ItalianCheckout::class)->quote([
+            ['type' => 'variant', 'id' => $product->variants()->firstOrFail()->id, 'quantity' => 1],
+        ]);
+        $this->assertNotEmpty($quote);
+    }
+
     public function test_import_preserves_a_model_compatibility_list_longer_than_255_characters(): void
     {
         $models = implode(' | ', array_map(

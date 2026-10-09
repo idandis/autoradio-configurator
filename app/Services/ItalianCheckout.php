@@ -122,7 +122,7 @@ class ItalianCheckout
                 $productId = $item['id'];
             }
             $product = ConfiguratorProduct::query()->when($lock, fn ($q) => $q->lockForUpdate())->find($productId);
-            if (! $product || ! in_array($product->category, ['screen', 'camera', 'speaker'], true)) {
+            if (! $product || ! in_array($product->category, ['screen', 'camera', 'speaker', 'accessory'], true)) {
                 throw ValidationException::withMessages(['items' => $locale === 'es' ? 'Un artículo ya no está disponible. Vuelve al configurador y actualiza la selección.' : 'Un articolo non è più acquistabile. Torna al configuratore e aggiorna la selezione.']);
             }
             if ($item['type'] === 'product' && $product->variants()->exists()) {

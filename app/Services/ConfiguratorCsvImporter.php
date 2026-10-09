@@ -99,6 +99,7 @@ class ConfiguratorCsvImporter
             'screen_products' => 0,
             'camera_products' => 0,
             'speaker_products' => 0,
+            'accessory_products' => 0,
             'variants' => 0,
         ];
         $hasDescriptionTranslations = Schema::hasColumns('configurator_products', ['body_html', 'body_html_it', 'body_html_en']);
@@ -513,6 +514,12 @@ class ConfiguratorCsvImporter
 
         if (in_array($type, ['RADIO AM/FM', 'OEM'], true)) {
             return 'screen';
+        }
+
+        if (in_array($type, ['ACCESORIOS', 'ACCESORIO', 'ACCESSORI', 'ACCESSORIO', 'ACCESSORIES', 'ACCESSORY'], true)
+            || preg_match('/\b(accesorios?|accessorios?|accessories|accessory)\b/u', $needle)
+            || preg_match('/usb[\s–—-]*hdmi/u', $needle)) {
+            return 'accessory';
         }
 
         if (str_contains($needle, 'instalacion') || str_contains($needle, 'instalación')) {

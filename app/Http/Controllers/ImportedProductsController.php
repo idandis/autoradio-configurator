@@ -83,8 +83,8 @@ class ImportedProductsController extends Controller
         $products = ConfiguratorProduct::query()
             ->with('variants:id,configurator_product_id,title,sku,option_value,price')
             ->withCount('variants')
-            ->whereIn('category', ['screen', 'camera', 'speaker'])
-            ->when(in_array($category, ['screen', 'camera', 'speaker'], true), function ($query) use ($category) {
+            ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])
+            ->when(in_array($category, ['screen', 'camera', 'speaker', 'accessory'], true), function ($query) use ($category) {
                 $query->where('category', $category);
             })
             ->when($search !== '', function ($query) use ($search) {

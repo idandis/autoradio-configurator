@@ -89,7 +89,7 @@ class ConfiguratorController extends Controller
         $requiredCustomProducts = $requiredCustomKeys->isEmpty()
             ? collect()
             : ConfiguratorProduct::with('variants')
-                ->whereIn('category', ['screen', 'camera', 'speaker'])
+                ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])
                 ->where(function ($query) use ($requiredCustomProductIds, $requiredCustomVariantIds) {
                     $query->whereIn('id', $requiredCustomProductIds)
                         ->orWhereHas('variants', fn ($variants) => $variants->whereIn('id', $requiredCustomVariantIds));
@@ -243,7 +243,7 @@ class ConfiguratorController extends Controller
     public function customProducts(): JsonResponse
     {
         $products = ConfiguratorProduct::with('variants')
-            ->whereIn('category', ['screen', 'camera', 'speaker'])
+            ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])
             ->orderBy('category')
             ->orderBy('title')
             ->get();

@@ -114,7 +114,7 @@ type ProductDetails = {
 
 type ProductDetailsView = {
     productId: number;
-    category: 'screen' | 'camera' | 'speaker';
+    category: 'screen' | 'camera' | 'speaker' | 'accessory';
     key: string;
     details: ProductDetails | null;
     variantId: number | null;
