@@ -34,6 +34,21 @@ class StockProductsTest extends TestCase
         $this->get('https://www.autoradiocanario.com/')->assertInertia(fn (Assert $page) => $page->missing('homeBeta'));
     }
 
+    public function test_first_stock_save_initializes_the_missing_table(): void
+    {
+        $product = $this->product();
+        \Illuminate\Support\Facades\Schema::drop('stock_products');
+        \Illuminate\Support\Facades\DB::table('migrations')
+            ->where('migration', '2026_10_10_120000_create_stock_products_table')->delete();
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->getJson(route('stock-products.index'))->assertOk()
+            ->assertJsonPath('ready', false)->assertJsonPath('products.0.handle', $product->handle);
+        $this->postJson(route('stock-products.store'), ['product_handle' => $product->handle, 'quantity' => 2])
+            ->assertOk()->assertJsonPath('saved', true);
+        $this->assertDatabaseHas('stock_products', ['product_handle' => $product->handle, 'quantity' => 2]);
+        $this->getJson(route('stock-products.index'))->assertJsonPath('ready', true);
+    }
+
     public function test_admin_can_select_update_and_remove_existing_stock_products(): void
     {
         $product = $this->product();

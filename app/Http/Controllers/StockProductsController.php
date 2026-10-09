@@ -7,6 +7,7 @@ use App\Models\StockProduct;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Validation\Rule;
 
 class StockProductsController extends Controller
@@ -38,6 +39,15 @@ class StockProductsController extends Controller
             'product_handle' => ['required', 'string', Rule::exists('configurator_products', 'handle')->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])],
             'quantity' => ['required', 'integer', 'min:0', 'max:9999'],
         ]);
+        if (! Schema::hasTable('stock_products')) {
+            Artisan::call('migrate', [
+                '--path' => 'database/migrations/2026_10_10_120000_create_stock_products_table.php',
+                '--force' => true,
+                '--no-interaction' => true,
+            ]);
+            abort_unless(Schema::hasTable('stock_products'), 503, 'Gestione In stock non disponibile. Premi Aggiorna database dalla Dashboard e riprova.');
+        }
+
         StockProduct::updateOrCreate(['product_handle' => $data['product_handle']], ['quantity' => $data['quantity']]);
 
         return response()->json(['saved' => true]);

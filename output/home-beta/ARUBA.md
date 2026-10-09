@@ -22,7 +22,7 @@ File applicativi:
 - `public/images/home-beta/per-marca.webp`
 - `public/build/manifest.json` e tutti i file di `public/build/assets/` inclusi nello ZIP.
 
-Dopo il caricamento, premere “Aggiorna database” in Dashboard per creare la tabella stock_products e pulire le cache. Aprire la sezione In stock in Dashboard: cercare per titolo, SKU o handle; scegliere un prodotto del catalogo; inserire quantità e salvare. Le schede compaiono subito nella beta. Una quantità zero nasconde la scheda; rimuovere la selezione non elimina il prodotto dal catalogo. Le selezioni seguono l’handle e si conservano nei reimport; i prodotti assenti dal catalogo non vengono mostrati.
+Dopo il caricamento, premere “Aggiorna database” in Dashboard per aggiornare il database e pulire le cache. La tabella stock_products, se non ancora inizializzata, viene creata anche al primo salvataggio di un prodotto. Aprire la sezione In stock in Dashboard: cercare per titolo, SKU o handle; scegliere un prodotto del catalogo; inserire quantità e salvare. Le schede compaiono subito nella beta. Una quantità zero nasconde la scheda; rimuovere la selezione non elimina il prodotto dal catalogo. Le selezioni seguono l’handle e si conservano nei reimport; i prodotti assenti dal catalogo non vengono mostrati.
 
 La tabella In stock locale è inizialmente vuota: nessun prodotto è stato dichiarato disponibile arbitrariamente. L’anteprima mobile con quattro schede usa soltanto una copia temporanea del database per la verifica visiva.
 

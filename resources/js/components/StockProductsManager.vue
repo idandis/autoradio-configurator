@@ -25,11 +25,14 @@ const load = async () => {
     try {
         const { data } = await axios.get('/dashboard/in-stock', { params: { search: query.value } });
         if (n !== seq) return;
+        if (typeof data?.ready !== 'boolean' || !Array.isArray(data.stock) || !Array.isArray(data.products)) {
+            throw new Error('Risposta non valida. Ricarica la Dashboard e accedi nuovamente se richiesto.');
+        }
         stock.value = data.stock;
         products.value = data.products;
         ready.value = data.ready;
-    } catch {
-        if (n === seq) error.value = 'Impossibile caricare i prodotti. Riprova.';
+    } catch (e: any) {
+        if (n === seq) error.value = e.response ? 'Impossibile caricare i prodotti. Riprova.' : e.message;
     } finally {
         if (n === seq) loading.value = false;
     }
@@ -45,12 +48,15 @@ const save = async (action: () => Promise<unknown>, message: string) => {
         selected.value = '';
         await load();
     } catch (e: any) {
-        error.value = Object.values(e.response?.data?.errors ?? {}).flat().join(' ') || 'Salvataggio non riuscito. Riprova.';
+        error.value = Object.values(e.response?.data?.errors ?? {}).flat().join(' ') || e.response?.data?.message || e.message || 'Salvataggio non riuscito. Riprova.';
     } finally {
         busy.value = false;
     }
 };
-const add = () => save(() => axios.post('/dashboard/in-stock', { product_handle: selected.value, quantity: quantity.value }), 'Prodotto aggiunto alla selezione della home.');
+const add = () => save(async () => {
+    const { data } = await axios.post('/dashboard/in-stock', { product_handle: selected.value, quantity: quantity.value });
+    if (data?.saved !== true) throw new Error('Salvataggio non confermato. Ricarica la Dashboard e riprova.');
+}, 'Prodotto aggiunto alla selezione della home.');
 const update = (p: Stock, event: Event) => {
     const n = Number((event.target as HTMLInputElement).value);
     if (n === p.quantity) return;
@@ -63,9 +69,9 @@ onBeforeUnmount(() => { clearTimeout(timer); seq++; });
 
 <template>
     <section class="rounded-xl border border-emerald-500/30 bg-card p-5 sm:p-6" aria-labelledby="stock-manager-title">
-        <div class="flex flex-wrap items-start justify-between gap-4"><div><h2 id="stock-manager-title" class="flex items-center gap-2 text-lg font-semibold"><PackageCheck class="text-emerald-400" :size="22" />In stock</h2><p class="mt-1 text-sm text-muted-foreground">{{ total }} prodotti nella home · Seleziona i prodotti del catalogo disponibili in pronta consegna.</p></div><div class="flex items-center gap-3"><a href="/home-beta" class="text-sm font-medium text-emerald-400 hover:underline">Anteprima home beta ↗</a><button type="button" class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50" :disabled="!ready" :aria-expanded="open" aria-controls="stock-product-picker" @click="open = !open"><Plus :size="17" />Aggiungi prodotto</button></div></div>
+        <div class="flex flex-wrap items-start justify-between gap-4"><div><h2 id="stock-manager-title" class="flex items-center gap-2 text-lg font-semibold"><PackageCheck class="text-emerald-400" :size="22" />In stock</h2><p class="mt-1 text-sm text-muted-foreground">{{ total }} prodotti nella home · Seleziona i prodotti del catalogo disponibili in pronta consegna.</p></div><div class="flex items-center gap-3"><a href="/home-beta" class="text-sm font-medium text-emerald-400 hover:underline">Anteprima home beta ↗</a><button type="button" class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50" :disabled="loading || busy" :aria-expanded="open" aria-controls="stock-product-picker" @click="open = !open"><Plus :size="17" />Aggiungi prodotto</button></div></div>
         <p v-if="error" role="alert" class="mt-4 text-sm text-red-400">{{ error }}</p><p v-if="saved" role="status" class="mt-4 text-sm text-emerald-400">{{ saved }}</p>
-        <p v-if="!ready && !loading" class="mt-4 text-sm text-amber-400">Premi “Aggiorna database” per attivare la gestione In stock.</p>
+        <p v-if="!ready && !loading" class="mt-4 text-sm text-amber-400">La selezione In stock verrà attivata al primo salvataggio.</p>
         <div v-if="open" id="stock-product-picker" class="mt-5 rounded-lg border border-sidebar-border/70 p-4">
             <label for="stock-search" class="text-sm font-medium">Cerca nel catalogo</label><div class="relative mt-2"><Search class="absolute left-3 top-3 text-muted-foreground" :size="17" /><input id="stock-search" v-model="query" type="search" class="w-full rounded-lg border border-sidebar-border bg-background py-2.5 pl-10 pr-3 text-sm" placeholder="Titolo, SKU o handle" /></div>
             <p v-if="loading" role="status" class="mt-3 text-sm text-muted-foreground">Caricamento…</p>
