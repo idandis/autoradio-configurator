@@ -175,6 +175,8 @@ defineExpose({ open });
         <dialog ref="dialog" class="vehicle-picker" aria-modal="true" aria-labelledby="vehicle-picker-title" @cancel.prevent="close()">
             <div v-if="opened" class="picker-layout">
                 <header>
+                    <img v-if="step > 0 && draft.brand && brandImage?.(draft.brand)" :src="brandImage(draft.brand) ?? undefined" :alt="`Logo ${draft.brand}`" class="mx-auto mb-4 h-16 w-28 object-contain" />
+                    <div v-if="step === 2" class="mb-4 text-center"><p class="text-sm font-medium text-neutral-300">{{ draft.brand }}</p><p class="mt-1 text-lg font-semibold">{{ displayModel(draft.model) }}</p></div>
                     <p class="mb-2 text-sm text-amber-400">{{ step + 1 }} / 3</p>
                     <h2 id="vehicle-picker-title" ref="heading" tabindex="-1" class="text-2xl font-bold outline-none">{{ copy.titles[step] }}</h2>
                     <input v-if="step < 2" v-model="query" type="search" :aria-label="step === 0 ? copy.brand : copy.model" :placeholder="`${step === 0 ? copy.brand : copy.model}…`" class="mt-5 w-full rounded-lg border border-amber-400 bg-neutral-900 p-3 text-white" @input="active = 0" @keydown.down.prevent="list?.focus()" />
