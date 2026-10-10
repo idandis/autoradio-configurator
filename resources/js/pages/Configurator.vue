@@ -2288,18 +2288,20 @@ const selectedVehicleImageUrl = computed(() => {
     return filename ? `/images/vehicles-dark/${encodeURIComponent(filename)}` : null;
 });
 
-const selectedBrandImageUrl = computed(() => {
-    if (selectedBrand.value === null) {
+const brandImageUrl = (brand: string | null) => {
+    if (brand === null) {
         return null;
     }
 
-    const brandSlug = slugifyVehiclePart(selectedBrand.value);
+    const brandSlug = slugifyVehiclePart(brand);
     const filename = props.brandImages.find(
         (image) => slugifyVehiclePart(image.replace(/\.[^.]+$/, '')) === brandSlug,
     );
 
     return filename ? `/images/brands/${encodeURIComponent(filename)}` : null;
-});
+};
+const selectedBrandImageUrl = computed(() => brandImageUrl(selectedBrand.value));
+const failedBrandLogos = ref<string[]>([]);
 
 watch(selectedVehicleImageUrl, () => {
     failedVehicleImage.value = null;
@@ -4401,7 +4403,10 @@ watch(
             <h1 class="mt-6 text-3xl font-bold sm:text-4xl">Scegli la marca della tua auto</h1>
             <p class="mt-4 text-neutral-400">Seleziona prima la marca, poi il modello e l’anno per trovare l’autoradio compatibile.</p>
             <nav aria-label="Marche auto" class="mt-9 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-                <a v-for="brand in brands" :key="brand" :href="`/configurator?lang=it&mode=specific&marca=${encodeURIComponent(brand)}`" class="flex min-h-24 items-center justify-center rounded-xl border border-neutral-700 bg-neutral-900 p-5 text-center text-lg font-semibold transition hover:border-emerald-400 hover:text-emerald-400">{{ brand }}</a>
+                <a v-for="brand in brands" :key="brand" :href="`/configurator?lang=it&mode=specific&marca=${encodeURIComponent(brand)}`" class="flex min-h-40 flex-col items-center justify-center gap-4 rounded-xl border border-neutral-700 bg-neutral-900 p-5 text-center text-base font-semibold transition hover:border-emerald-400 hover:text-emerald-400">
+                    <img v-if="brandImageUrl(brand) && !failedBrandLogos.includes(brand)" :src="brandImageUrl(brand) ?? undefined" :alt="`Logo ${brand}`" class="h-16 w-24 object-contain" loading="lazy" @error="failedBrandLogos.push(brand)" />
+                    <span>{{ brand }}</span>
+                </a>
             </nav>
             <p v-if="!brands.length" class="mt-9 text-neutral-400">Non ci sono ancora marche disponibili. <a href="/contatti" class="text-emerald-400 underline">Contattaci per la tua auto.</a></p>
         </main>

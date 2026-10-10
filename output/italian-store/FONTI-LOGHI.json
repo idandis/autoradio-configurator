@@ -1,0 +1,122 @@
+[
+  {
+    "name": "Chrysler",
+    "slug": "chrysler",
+    "image": {
+      "source": "https://www.carlogos.org/car-logos/chrysler-logo-2009-640.png",
+      "thumb": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/thumb/chrysler.png",
+      "optimized": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/chrysler.png",
+      "original": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/original/chrysler.png",
+      "localThumb": "./thumb/chrysler.png",
+      "localOptimized": "./optimized/chrysler.png",
+      "localOriginal": "./original/chrysler.png"
+    },
+    "saved": "public/images/brands/CHRYSLER.png",
+    "downloaded": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/chrysler.png"
+  },
+  {
+    "name": "Dodge",
+    "slug": "dodge",
+    "image": {
+      "source": "https://www.carlogos.org/car-logos/dodge-logo-2010-640.png",
+      "thumb": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/thumb/dodge.png",
+      "optimized": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/dodge.png",
+      "original": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/original/dodge.png",
+      "localThumb": "./thumb/dodge.png",
+      "localOptimized": "./optimized/dodge.png",
+      "localOriginal": "./original/dodge.png"
+    },
+    "saved": "public/images/brands/DODGE.png",
+    "downloaded": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/dodge.png"
+  },
+  {
+    "name": "Infiniti",
+    "slug": "infiniti",
+    "image": {
+      "source": "https://www.carlogos.org/logo/Infiniti-logo-1989-2560x1440.png",
+      "thumb": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/thumb/infiniti.png",
+      "optimized": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/infiniti.png",
+      "original": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/original/infiniti.png",
+      "localThumb": "./thumb/infiniti.png",
+      "localOptimized": "./optimized/infiniti.png",
+      "localOriginal": "./original/infiniti.png"
+    },
+    "saved": "public/images/brands/INFINITI.png",
+    "downloaded": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/infiniti.png"
+  },
+  {
+    "name": "Lada",
+    "slug": "lada",
+    "image": {
+      "source": "https://www.carlogos.org/logo/Lada-logo-silver-640x248.jpg",
+      "thumb": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/thumb/lada.png",
+      "optimized": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/lada.png",
+      "original": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/original/lada.jpg",
+      "localThumb": "./thumb/lada.png",
+      "localOptimized": "./optimized/lada.png",
+      "localOriginal": "./original/lada.jpg"
+    },
+    "saved": "public/images/brands/LADA.png",
+    "downloaded": "https://raw.githubusercontent.com/vehiclespecs/brand-logos/main/lada-logo.svg"
+  },
+  {
+    "name": "Lancia",
+    "slug": "lancia",
+    "image": {
+      "source": "https://www.carlogos.org/logo/Lancia-logo-2007-1920x1080.png",
+      "thumb": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/thumb/lancia.png",
+      "optimized": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/lancia.png",
+      "original": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/original/lancia.png",
+      "localThumb": "./thumb/lancia.png",
+      "localOptimized": "./optimized/lancia.png",
+      "localOriginal": "./original/lancia.png"
+    },
+    "saved": "public/images/brands/LANCIA.png",
+    "downloaded": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/lancia.png"
+  },
+  {
+    "name": "MG",
+    "slug": "mg",
+    "image": {
+      "source": "https://www.carlogos.org/logo/MG-logo-red-2010-1920x1080.png",
+      "thumb": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/thumb/mg.png",
+      "optimized": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/mg.png",
+      "original": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/original/mg.png",
+      "localThumb": "./thumb/mg.png",
+      "localOptimized": "./optimized/mg.png",
+      "localOriginal": "./original/mg.png"
+    },
+    "saved": "public/images/brands/MG.png",
+    "downloaded": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/mg.png"
+  },
+  {
+    "name": "Mini",
+    "slug": "mini",
+    "image": {
+      "source": "https://www.carlogos.org/logo/Mini-logo-2001-1920x1080.png",
+      "thumb": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/thumb/mini.png",
+      "optimized": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/mini.png",
+      "original": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/original/mini.png",
+      "localThumb": "./thumb/mini.png",
+      "localOptimized": "./optimized/mini.png",
+      "localOriginal": "./original/mini.png"
+    },
+    "saved": "public/images/brands/MINI.png",
+    "downloaded": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/mini.png"
+  },
+  {
+    "name": "Rover",
+    "slug": "rover",
+    "image": {
+      "source": "https://www.carlogos.org/logo/Rover-logo-2003-3840x2160.png",
+      "thumb": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/thumb/rover.png",
+      "optimized": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/rover.png",
+      "original": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/original/rover.png",
+      "localThumb": "./thumb/rover.png",
+      "localOptimized": "./optimized/rover.png",
+      "localOriginal": "./original/rover.png"
+    },
+    "saved": "public/images/brands/ROVER.png",
+    "downloaded": "https://raw.githubusercontent.com/filippofilip95/car-logos-dataset/master/logos/optimized/rover.png"
+  }
+]
