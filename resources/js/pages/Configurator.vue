@@ -1530,13 +1530,16 @@ const useLowestSpecificVariantBudget = () => {
     customerBudget.value = lowestSpecificVariantPrice.value.toFixed(2);
 };
 
-const displayedScreenVehicles = computed(() =>
-    isUniversalMode.value
+const displayedScreenVehicles = computed(() => {
+    const screens = isUniversalMode.value
         ? selectedUniversalDin.value === null
             ? []
             : affordableUniversalScreens.value.filter((screen) => screen.din === selectedUniversalDin.value)
-        : affordableSpecificScreens.value,
-);
+        : affordableSpecificScreens.value;
+    return props.stockSelection?.category === 'screen'
+        ? screens.filter((screen) => screen.id === props.stockSelection!.id)
+        : screens;
+});
 
 const displayedScreenOptionCount = computed(() => displayedScreenVehicles.value.length);
 
@@ -2220,7 +2223,7 @@ onMounted(async () => {
             selectedSpeakerCategory.value = speaker?.categories[0] ?? '';
             if (speaker && selectedSpeakerCategory.value) selectedSpeakerSizeByCategory.value[selectedSpeakerCategory.value] = speaker.sizes[0] ?? '';
         }
-        openSteps.value = ['vehicle', 'screen', 'camera', 'dashcam', 'speaker', 'installation'];
+        openSteps.value = ['vehicle', 'screen'];
     }
     const sharedConfigurationRestored = !stock && await restoreSharedConfiguration();
     if (!stock && !sharedConfigurationRestored) {
