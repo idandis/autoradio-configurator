@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
+import DescriptionEditor from '@/components/DescriptionEditor.vue';
 
 const props = defineProps<{
     filters: {
@@ -15,6 +16,9 @@ const props = defineProps<{
             title: string;
             title_it: string | null;
             title_en: string | null;
+            body_html: string;
+            body_html_it: string;
+            body_html_en: string;
             category: string;
             subtype: string | null;
             brand: string | null;
@@ -52,6 +56,30 @@ const variantForm = useForm({ variants: [] as Array<{ id: number; price: string 
 const variantError = (i: number) => {
     const errors = variantForm.errors as Record<string, string>;
     return errors[`variants.${i}.price`] ?? errors[`variants.${i}.id`];
+};
+
+const descriptionProduct = ref<(typeof props.products.data)[number] | null>(null);
+const descriptionOpen = ref(false);
+const descriptionLocale = ref<'it' | 'en'>('it');
+const descriptionForm = useForm({ body_html_it: '', body_html_en: '' });
+const descriptionDraft = computed({
+    get: () => descriptionLocale.value === 'it' ? descriptionForm.body_html_it : descriptionForm.body_html_en,
+    set: (value: string) => { if (descriptionLocale.value === 'it') descriptionForm.body_html_it = value; else descriptionForm.body_html_en = value; },
+});
+const openDescription = (product: (typeof props.products.data)[number]) => {
+    descriptionProduct.value = product;
+    descriptionLocale.value = 'it';
+    descriptionForm.clearErrors();
+    descriptionForm.body_html_it = product.body_html_it || '';
+    descriptionForm.body_html_en = product.body_html_en || '';
+    descriptionOpen.value = true;
+};
+const saveDescription = () => {
+    if (!descriptionProduct.value || descriptionForm.processing) return;
+    descriptionForm.patch(`/imported-products/${descriptionProduct.value.id}/description`, {
+        preserveScroll: true,
+        onSuccess: () => { descriptionOpen.value = false; },
+    });
 };
 
 const openVariants = (product: (typeof props.products.data)[number]) => {
@@ -226,6 +254,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                 <thead class="bg-muted/40 text-left text-muted-foreground">
                     <tr>
                         <th class="px-6 py-3 font-medium">Prodotto</th>
+                        <th class="px-6 py-3 font-medium">Descrizione</th>
                         <th class="px-6 py-3 font-medium">Categoria</th>
                         <th class="px-6 py-3 font-medium">Veicolo</th>
                         <th class="px-6 py-3 font-medium">Prezzo base</th>
@@ -259,6 +288,9 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                                     </p>
                                 </div>
                             </div>
+                        </td>
+                        <td class="px-6 py-4 align-top">
+                            <button type="button" class="rounded-md border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium hover:border-primary hover:text-primary" :aria-label="`Modifica descrizione ${product.title}`" @click="openDescription(product)">Modifica</button>
                         </td>
                         <td class="px-6 py-4 align-top">
                             <div class="space-y-1">
@@ -298,7 +330,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                         </td>
                     </tr>
                     <tr v-if="props.products.data.length === 0">
-                        <td colspan="6" class="px-6 py-10 text-center text-muted-foreground">
+                        <td colspan="7" class="px-6 py-10 text-center text-muted-foreground">
                             Nessun prodotto trovato con i filtri correnti.
                         </td>
                     </tr>
@@ -327,6 +359,19 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
             />
         </div>
     </section>
+    <Dialog v-model:open="descriptionOpen">
+        <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-3xl" @interact-outside="descriptionForm.processing && $event.preventDefault()" @escape-key-down="descriptionForm.processing && $event.preventDefault()">
+            <DialogHeader><DialogTitle>Modifica descrizione</DialogTitle><DialogDescription>{{ descriptionProduct?.title }}</DialogDescription></DialogHeader>
+            <form class="grid min-w-0 gap-4" @submit.prevent="saveDescription">
+                <label class="grid gap-1 text-sm">Lingua<select v-model="descriptionLocale" class="rounded-lg border border-sidebar-border/70 bg-background p-2" :disabled="descriptionForm.processing"><option value="it">Italiano</option><option value="en">Inglese</option></select></label>
+                <DescriptionEditor :key="descriptionLocale" v-model="descriptionDraft" :label="descriptionLocale === 'it' ? 'Descrizione italiana' : 'Descrizione inglese'" />
+                <p v-for="(error, key) in descriptionForm.errors" :key="key" role="alert" class="text-sm text-red-400">{{ error }}</p>
+                <details v-if="descriptionProduct?.body_html" class="rounded-lg border border-sidebar-border/70 p-3"><summary class="cursor-pointer text-sm">Descrizione originale spagnola</summary><div class="mt-3 max-h-48 overflow-y-auto text-sm" v-html="descriptionProduct.body_html" /></details>
+                <p class="text-xs text-muted-foreground">La descrizione vuota usa l’originale spagnolo. Le modifiche vengono conservate nei reimport se l’originale non cambia.</p>
+                <div class="flex justify-end gap-2"><button type="button" class="rounded-lg border px-4 py-2 text-sm" :disabled="descriptionForm.processing" @click="descriptionOpen = false">Annulla</button><button type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50" :disabled="descriptionForm.processing">{{ descriptionForm.processing ? 'Salvataggio…' : 'Salva descrizione' }}</button></div>
+            </form>
+        </DialogContent>
+    </Dialog>
     <Dialog v-model:open="variantsOpen">
         <DialogContent class="sm:max-w-2xl" @interact-outside="variantForm.processing && $event.preventDefault()" @escape-key-down="variantForm.processing && $event.preventDefault()">
             <DialogHeader>

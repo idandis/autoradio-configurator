@@ -12,6 +12,40 @@ class ImportedProductsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_admin_can_edit_descriptions_without_changing_the_spanish_original(): void
+    {
+        $product = ConfiguratorProduct::create([
+            'handle' => 'description-editor', 'category' => 'accessory', 'title' => 'Adaptador',
+            'body_html' => '<p>Descripción original</p>', 'body_html_en' => '<p>English original</p>',
+        ]);
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->patch(route('imported-products.description', $product), [
+                'body_html_it' => '<p onclick="alert(1)">Nuovo <strong>testo</strong></p><a href="javascript:alert(1)">Link</a>',
+                'body_html' => '<p>Changed original</p>',
+            ])->assertRedirect()->assertSessionHas('status', 'Descrizione aggiornata.');
+        $fresh = $product->fresh();
+        $this->assertSame('<p>Descripción original</p>', $fresh->body_html);
+        $this->assertSame('<p>English original</p>', $fresh->body_html_en);
+        $this->assertStringContainsString('<strong>testo</strong>', $fresh->body_html_it);
+        $this->assertStringNotContainsString('onclick', $fresh->body_html_it);
+        $this->assertStringNotContainsString('javascript:', $fresh->body_html_it);
+        $this->patch(route('imported-products.description', $product), ['body_html_it' => null])->assertRedirect();
+        $this->assertNull($product->fresh()->body_html_it);
+        $this->get(route('imported-products.index'))->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->where('products.data.0.body_html', '<p>Descripción original</p>')
+            ->where('products.data.0.body_html_en', '<p>English original</p>'));
+    }
+
+    public function test_description_editor_rejects_invalid_input_and_non_admins(): void
+    {
+        $product = ConfiguratorProduct::create(['handle' => 'protected-description', 'category' => 'screen', 'title' => 'Radio']);
+        $this->actingAs(User::factory()->create(['is_admin' => false]))
+            ->patchJson(route('imported-products.description', $product), ['body_html_it' => 'Changed'])->assertForbidden();
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->patch(route('imported-products.description', $product), ['body_html_it' => ['invalid']])
+            ->assertRedirect()->assertSessionHasErrors('body_html_it');
+    }
+
     public function test_admin_can_set_variant_prices_and_refresh_the_minimum(): void
     {
         $product = ConfiguratorProduct::create(['handle' => 'prices', 'category' => 'screen', 'title' => 'Radio', 'price_min' => 100]);

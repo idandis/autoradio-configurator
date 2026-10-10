@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\ConfiguratorProduct;
 use App\Models\InstallationZoneProduct;
+use App\Services\ProductHtml;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -75,6 +76,20 @@ class ImportedProductsController extends Controller
         return back()->with('status', 'Traduzioni del titolo aggiornate.');
     }
 
+    public function updateDescription(Request $request, ConfiguratorProduct $product): RedirectResponse
+    {
+        $data = $request->validate([
+            'body_html_it' => ['sometimes', 'nullable', 'string', 'max:200000'],
+            'body_html_en' => ['sometimes', 'nullable', 'string', 'max:200000'],
+        ]);
+        foreach ($data as $key => $html) {
+            $data[$key] = filled($html) ? ProductHtml::sanitize($html) : null;
+        }
+        $product->update($data);
+
+        return back()->with('status', 'Descrizione aggiornata.');
+    }
+
     public function __invoke(Request $request): Response
     {
         $category = $request->string('category')->toString();
@@ -109,6 +124,9 @@ class ImportedProductsController extends Controller
                 'title' => $product->title,
                 'title_it' => $product->title_it,
                 'title_en' => $product->title_en,
+                'body_html' => ProductHtml::sanitize($product->body_html),
+                'body_html_it' => ProductHtml::sanitize($product->body_html_it),
+                'body_html_en' => ProductHtml::sanitize($product->body_html_en),
                 'category' => $product->category,
                 'subtype' => $product->subtype,
                 'brand' => $product->brand,

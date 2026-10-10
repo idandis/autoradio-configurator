@@ -20,6 +20,29 @@ class ConfiguratorImportTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_post_import_reports_exclude_accessories(): void
+    {
+        ConfiguratorProduct::create([
+            'handle' => 'accessory-without-translations', 'category' => 'accessory',
+            'title' => 'Adaptador', 'body_html' => '<p>Descripción</p>',
+        ]);
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
+                ->where('postImportTasks.translationCount', 0)
+                ->where('postImportTasks.titleTranslationCount', 0)
+                ->where('postImportTasks.descriptionTranslationCount', 0)
+                ->where('postImportTasks.imageCount', 0)
+                ->where('postImportTasks.vehicleDataIssueCount', 0)
+                ->where('postImportTasks.prompt', fn ($prompt) => ! str_contains($prompt, 'accessory-without-translations')));
+        ConfiguratorProduct::create([
+            'handle' => 'screen-without-translations', 'category' => 'screen', 'title' => 'Radio',
+        ]);
+        $this->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
+            ->where('postImportTasks.translationCount', 1)
+            ->where('postImportTasks.prompt', fn ($prompt) => str_contains($prompt, 'screen-without-translations')
+                && ! str_contains($prompt, 'accessory-without-translations')));
+    }
+
     public function test_accessory_import_is_available_in_products_and_custom_quotes(): void
     {
         $headers = (new \ReflectionClass(ConfiguratorCsvImporter::class))->getConstant('REQUIRED_HEADERS');

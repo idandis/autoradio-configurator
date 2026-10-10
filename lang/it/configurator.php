@@ -65,7 +65,7 @@ return [
         'brand_not_found' => 'Non trovo la mia marca',
         'year_not_found' => 'Non trovo il mio anno',
         'model_not_found' => 'Non trovo il mio modello',
-        'form_title' => 'Cerchiamo la tua autoradio ideale', 'form_description' => 'Compila il modulo e ti ricontatteremo con una soluzione compatibile.', 'first_name' => 'Nome', 'last_name' => 'Cognome', 'email' => 'Email', 'phone' => 'Telefono', 'province' => 'Provincia di residenza', 'year' => 'Anno di immatricolazione', 'comment' => 'Commento sul veicolo (facoltativo)', 'photo' => 'Foto dell’autoradio attuale', 'upload_photo' => 'Carica foto dell’autoradio (facoltativo)', 'form_submit' => 'Invia richiesta', 'form_sending' => 'Invio in corso…', 'form_success' => 'Richiesta inviata. Ti contatteremo presto!', 'form_error' => 'Invio non riuscito. Riprova.', 'form_required' => 'Compila tutti i campi obbligatori.',
+        'form_title' => 'Cerchiamo la tua autoradio ideale', 'form_description' => 'Compila il modulo e ti ricontatteremo con una soluzione compatibile.', 'first_name' => 'Nome', 'last_name' => 'Cognome', 'email' => 'Email', 'phone' => 'Telefono', 'province' => 'Provincia di residenza', 'year' => 'Anno di immatricolazione', 'comment' => 'Messaggio', 'photo' => 'Foto dell’autoradio attuale', 'upload_photo' => 'Carica foto', 'form_submit' => 'Invia richiesta', 'form_sending' => 'Invio in corso…', 'form_success' => 'Richiesta inviata. Ti contatteremo presto!', 'form_error' => 'Invio non riuscito. Riprova.', 'form_required' => 'Compila tutti i campi obbligatori.',
         'missing_year' => 'Non trovi l\'anno della tua auto? Scrivici e lo cercheremo per te.',
         'image_unavailable' => 'Immagine non disponibile',
         'zoom' => 'Ingrandisci immagine veicolo',

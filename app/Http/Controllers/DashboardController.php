@@ -39,7 +39,7 @@ class DashboardController extends Controller
 
         $hasDescriptionTranslations = Schema::hasColumns('configurator_products', ['body_html', 'body_html_it', 'body_html_en']);
         $translationTasks = ConfiguratorProduct::query()
-            ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])
+            ->whereIn('category', ['screen', 'camera', 'speaker'])
             ->where(function ($query) use ($hasDescriptionTranslations) {
                 $query->where(fn ($query) => $query
                 ->whereNull('title_it')
@@ -164,7 +164,7 @@ class DashboardController extends Controller
         }
 
         $lines[] = '';
-        $lines[] = 'Per la prima traduzione massiva traduci tutte le descrizioni presenti nel database, non solo quelle dell’ultimo import; prepara i cataloghi JSON italiano e inglese. Verifica anche che gli import successivi salvino la descrizione originale e conservino le traduzioni se il testo sorgente non cambia. Alla fine verifica JSON e immagini, esegui i controlli pertinenti e indicami esattamente quali file devo caricare su Aruba. Dopo il caricamento premerò “Aggiorna database” per importare titoli e descrizioni tradotti senza SSH; le attività completate dovranno sparire dalla Dashboard.';
+        $lines[] = 'Per la prima traduzione massiva traduci tutte le descrizioni di schermi, camere e altoparlanti presenti nel database, non solo quelle dell’ultimo import; prepara i cataloghi JSON italiano e inglese. Verifica anche che gli import successivi salvino la descrizione originale e conservino le traduzioni se il testo sorgente non cambia. Alla fine verifica JSON e immagini, esegui i controlli pertinenti e indicami esattamente quali file devo caricare su Aruba. Dopo il caricamento premerò “Aggiorna database” per importare titoli e descrizioni tradotti senza SSH; le attività completate dovranno sparire dalla Dashboard.';
 
         return implode("\n", $lines);
     }
