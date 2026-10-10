@@ -4,7 +4,7 @@ import { Menu, X, ShoppingCart } from '@lucide/vue';
 defineProps<{ cartCount?: number }>();
 const emit = defineEmits<{ cart: [] }>();
 const open = ref(false);
-const links = [{ href: '/', label: 'Home' }, { href: '/marche', label: 'Autoradio per la tua auto' }, { href: '/chi-siamo', label: 'Chi siamo' }, { href: '/contatti', label: 'Contattaci' }];
+const links = [{ href: '/', label: 'Home' }, { href: '/chi-siamo', label: 'Chi siamo' }, { href: '/contatti', label: 'Contattaci' }];
 </script>
 
 <template>

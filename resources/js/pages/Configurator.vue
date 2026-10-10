@@ -4403,8 +4403,8 @@ watch(
             <h1 class="mt-6 text-3xl font-bold sm:text-4xl">Scegli la marca della tua auto</h1>
             <p class="mt-4 text-neutral-400">Seleziona prima la marca, poi il modello e l’anno per trovare l’autoradio compatibile.</p>
             <nav aria-label="Marche auto" class="mt-9 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-                <a v-for="brand in brands" :key="brand" :href="`/configurator?lang=it&mode=specific&marca=${encodeURIComponent(brand)}`" class="flex min-h-40 flex-col items-center justify-center gap-4 rounded-xl border border-neutral-700 bg-neutral-900 p-5 text-center text-base font-semibold transition hover:border-emerald-400 hover:text-emerald-400">
-                    <img v-if="brandImageUrl(brand) && !failedBrandLogos.includes(brand)" :src="brandImageUrl(brand) ?? undefined" :alt="`Logo ${brand}`" class="h-16 w-24 object-contain" loading="lazy" @error="failedBrandLogos.push(brand)" />
+                <a v-for="brand in brands" :key="brand" :href="`/configurator?lang=it&mode=specific&marca=${encodeURIComponent(brand)}`" class="flex min-h-44 flex-col items-center justify-center gap-2 px-2 py-4 text-center text-xs font-medium transition hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-emerald-400">
+                    <img v-if="brandImageUrl(brand) && !failedBrandLogos.includes(brand)" :src="brandImageUrl(brand) ?? undefined" :alt="`Logo ${brand}`" class="h-28 w-full max-w-44 object-contain" loading="lazy" @error="failedBrandLogos.push(brand)" />
                     <span>{{ brand }}</span>
                 </a>
             </nav>
