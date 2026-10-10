@@ -675,6 +675,7 @@ const customQuoteActive = computed(() => showCustomQuoteModal.value || selectedC
 const customProducts = ref<CustomProduct[]>([...(props.customProducts ?? [])]);
 const customProductsLoaded = ref(customProducts.value.length > 0);
 const customProductsLoading = ref(false);
+const promotionRadioId = ref<number | null>(props.stockSelection?.category === 'screen' ? props.stockSelection.id : null);
 const stockChoiceKey = ref(props.stockChoices?.find((choice) => choice.variantId === props.stockSelection?.variantId)?.key ?? props.stockChoices?.[0]?.key ?? '');
 const stockChoice = computed(() => props.stockChoices?.find((product) => product.key === stockChoiceKey.value));
 const stockNeedsChoices = computed(() => props.stockSelection?.category === 'accessory'
@@ -1344,9 +1345,13 @@ const closeCameraVariantPicker = () => { cameraVariantPicker.value = null; };
 const returnToConfigurator = async () => {
     variantPickerVehicle.value = null;
     showCart.value = false;
-    openSteps.value = [];
+    openSteps.value = promotionRadioId.value ? ['screen'] : [];
     await nextTick();
     window.requestAnimationFrame(() => {
+        if (promotionRadioId.value) {
+            document.getElementById(`screen-product-${promotionRadioId.value}`)?.scrollIntoView({ behavior: 'auto', block: 'center' });
+            return;
+        }
         document.getElementById(isUniversalMode.value ? 'screen-step-content' : 'mobile-vehicle-marker')
             ?.scrollIntoView({ behavior: 'auto', block: 'start' });
     });
@@ -1382,10 +1387,7 @@ const handleCartHistoryBack = () => {
         quotePreviewHtml.value = '';
         return;
     }
-    if (showCart.value) {
-        showCart.value = false;
-        variantPickerVehicle.value = null;
-    }
+    if (showCart.value) void returnToConfigurator();
 };
 const handlePrintPreviewNavigation = (event: MessageEvent) => {
     if (event.origin !== window.location.origin) return;
@@ -1538,8 +1540,8 @@ const displayedScreenVehicles = computed(() => {
             ? []
             : affordableUniversalScreens.value.filter((screen) => screen.din === selectedUniversalDin.value)
         : affordableSpecificScreens.value;
-    return props.stockSelection?.category === 'screen'
-        ? screens.filter((screen) => screen.id === props.stockSelection!.id)
+    return promotionRadioId.value !== null
+        ? screens.filter((screen) => screen.id === promotionRadioId.value)
         : screens;
 });
 
@@ -1841,6 +1843,10 @@ const restoreConfiguratorState = async () => {
         selectedScreenVariantIds.value = Array.isArray(state.selectedScreenVariantIds)
             ? state.selectedScreenVariantIds.filter((id: unknown) => typeof id === 'number' && availableVariantIds.has(id))
             : [];
+        promotionRadioId.value = typeof state.promotionRadioId === 'number'
+            && allScreenVehicles.value.some((vehicle) => vehicle.id === state.promotionRadioId
+                && vehicle.variants.flatMap(screenVariantChoices).some((choice) => selectedScreenVariantIds.value.includes(choice.id)))
+            ? state.promotionRadioId : null;
         if (configuratorMode.value === null) {
             const universalVariantIds = new Set(
                 universalScreens.value.flatMap((vehicle) =>
@@ -2121,6 +2127,7 @@ const persistConfiguratorState = () => {
                 selectedYear: selectedYear.value,
                 customerBudget: customerBudget.value,
                 selectedScreenVariantIds: selectedScreenVariantIds.value,
+                promotionRadioId: promotionRadioId.value,
                 selectedCameraKeys: selectedCameraKeys.value,
                 selectedCameraVariantIds: selectedCameraVariantIds.value,
                 selectedSpeakerCategory: selectedSpeakerCategory.value,
@@ -2165,6 +2172,7 @@ watch(
         selectedCustomProductKeys,
         customImportAmount,
         cartQuantities,
+        promotionRadioId,
         productDiscounts,
         quoteDiscountCode,
         quoteDiscountType,
@@ -2181,6 +2189,17 @@ watch(
     persistConfiguratorState,
     { deep: true },
 );
+
+watch(selectedScreenVariantIds, () => {
+    if (!configuratorStateHydrated || promotionRadioId.value === null) return;
+    const radio = allScreenVehicles.value.find((vehicle) => vehicle.id === promotionRadioId.value);
+    if (radio?.variants.flatMap(screenVariantChoices).some((choice) => selectedScreenVariantIds.value.includes(choice.id))) return;
+    promotionRadioId.value = null;
+    const url = new URL(window.location.href);
+    url.searchParams.delete('stock');
+    window.history.replaceState(window.history.state, '', url);
+    persistConfiguratorState();
+});
 
 onMounted(async () => {
     updateVehicleViewport();
@@ -2250,6 +2269,7 @@ onMounted(async () => {
         await setConfiguratorMode(params.get('mode') as 'specific' | 'universal');
     }
     configuratorStateHydrated = true;
+    if (promotionRadioId.value) openSteps.value = ['screen'];
     if (stock) persistConfiguratorState();
     if (!stock && !sharedConfigurationRestored && params.get('pick') === 'brand') {
         await setConfiguratorMode('specific');
@@ -2265,9 +2285,9 @@ onMounted(async () => {
         await observeQuoteTotals();
         updateMobileQuoteTotals();
 
-        if (stock) {
+        if (stock || promotionRadioId.value) {
             await nextTick();
-            const card = document.getElementById(stockNeedsChoices.value ? 'stock-product-choice' : `screen-product-${stock.id}`);
+            const card = document.getElementById(stockNeedsChoices.value ? 'stock-product-choice' : `screen-product-${promotionRadioId.value ?? stock?.id}`);
             card?.scrollIntoView({ block: 'center', behavior: 'auto' });
         }
 
