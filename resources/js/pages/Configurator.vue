@@ -160,7 +160,7 @@ type VehicleImageMapping = {
 const props = defineProps<{
     locale: 'es' | 'it' | 'en';
     homeBeta?: boolean;
-    promotionProducts?: Array<{ id: number; discountPercent: number }>;
+    promotionProducts?: Array<{ id: number; discountPercent: number; discountVariantId: number | null }>;
     stockProducts?: Array<{ id: number; title: string; category: 'screen' | 'camera' | 'speaker' | 'accessory'; image: string | null; price: number | null; discountPercent: number }>;
     italianCheckoutEnabled?: boolean;
     italianCheckoutIsTest?: boolean;
@@ -3152,15 +3152,15 @@ const discountProducts = computed(() => {
     });
     return [...grouped.values()];
 });
-const promotionForProduct = (id: number | null | undefined) => props.promotionProducts?.find((p) => p.id === id);
-const hasPromotions = computed(() => discountProducts.value.some((p) => promotionForProduct(p.productId)));
+const promotionForProduct = (id: number | null | undefined, variantId?: number | null) => props.promotionProducts?.find((p) => p.id === id && (p.discountVariantId == null || p.discountVariantId === variantId));
+const hasPromotions = computed(() => discountProducts.value.some((p) => promotionForProduct(p.productId, p.type === 'variant' ? p.id : null)));
 const setProductDiscount = (key: string, field: 'code' | 'percentage', value: string) => {
     productDiscounts.value[key] = { ...(productDiscounts.value[key] ?? { code: '', percentage: '' }), [field]: value };
     quoteDiscountCode.value = '';
     quoteDiscountValue.value = '';
 };
 const selectedProductDiscounts = computed(() => discountProducts.value.flatMap((p) => {
-    const promotion = promotionForProduct(p.productId);
+    const promotion = promotionForProduct(p.productId, p.type === 'variant' ? p.id : null);
     const d = hasPromotions.value
         ? (promotion && promotion.discountPercent > 0 ? { code: 'Offerta', percentage: String(promotion.discountPercent) } : null)
         : productDiscounts.value[p.key];
@@ -4499,7 +4499,7 @@ watch(
                 <img v-if="stockChoice.image" :src="stockChoice.image" :alt="stockChoice.title" class="h-48 w-full object-contain" />
                 <h2 class="mt-4 text-xl font-semibold">{{ stockChoice.title }}</h2>
                 <label class="mt-4 block text-sm">Variante<select v-model="stockChoiceKey" class="mt-2 block w-full rounded-lg border border-neutral-600 bg-neutral-900 p-3"><option v-for="choice in props.stockChoices" :key="choice.key" :value="choice.key">{{ choice.variantTitle || choice.title }} · {{ euroFormatter.format(choice.price) }}</option></select></label>
-                <p class="mt-3 text-lg"><PromotionPrice :price="stockChoice.price" :percentage="promotionForProduct(stockChoice.productId)?.discountPercent" :locale="props.locale" /></p>
+                <p class="mt-3 text-lg"><PromotionPrice :price="stockChoice.price" :percentage="promotionForProduct(stockChoice.productId, stockChoice.variantId)?.discountPercent" :locale="props.locale" /></p>
                 <button type="button" class="mt-4 rounded-lg bg-emerald-600 px-5 py-3 font-semibold" @click="addStockChoice">Aggiungi al carrello</button>
             </section>
             <div class="mb-8">
@@ -4877,7 +4877,7 @@ watch(
                                             <div class="flex items-start justify-between gap-3">
                                                 <div class="min-w-0">
                                                     <p class="truncate font-semibold text-white">{{ displayVariantTitle(singleScreenChoice(vehicle)!.title) }}</p>
-                                                    <p class="mt-1 text-lg font-bold text-amber-400"><PromotionPrice :price="singleScreenChoice(vehicle)!.price" :percentage="promotionForProduct(vehicle.id)?.discountPercent" :locale="props.locale" /></p>
+                                                    <p class="mt-1 text-lg font-bold text-amber-400"><PromotionPrice :price="singleScreenChoice(vehicle)!.price" :percentage="promotionForProduct(vehicle.id, singleScreenChoice(vehicle)!.id)?.discountPercent" :locale="props.locale" /></p>
                                                 </div>
                                                 <div v-if="isScreenChoiceSelected(singleScreenChoice(vehicle)!)" class="flex shrink-0 items-center gap-1.5">
                                                     <input type="number" min="1" inputmode="numeric" class="h-11 w-14 rounded-lg border border-neutral-600 bg-black px-1 text-center text-lg font-bold text-white outline-none focus:border-emerald-400" :value="cartQuantity(`screen:${singleScreenChoice(vehicle)!.id}`)" @change="setCartQuantityFromInput(`screen:${singleScreenChoice(vehicle)!.id}`, $event)" />
@@ -4897,7 +4897,7 @@ watch(
                                             <p class="text-xs font-semibold uppercase tracking-wider text-emerald-400">{{ funnelCopy.selected }}</p>
                                             <div v-for="choice in selectedScreensForVehicle(vehicle)" :key="choice.id" class="mt-2 flex items-center justify-between gap-3">
                                                 <span class="min-w-0 truncate font-semibold text-white">{{ displayVariantTitle(choice.title) }}</span>
-                                                <span class="shrink-0 font-bold text-emerald-300"><PromotionPrice :price="choice.price" :percentage="promotionForProduct(vehicle.id)?.discountPercent" :locale="props.locale" /> × {{ cartQuantity(`screen:${choice.id}`) }}</span>
+                                                <span class="shrink-0 font-bold text-emerald-300"><PromotionPrice :price="choice.price" :percentage="promotionForProduct(vehicle.id, choice.id)?.discountPercent" :locale="props.locale" /> × {{ cartQuantity(`screen:${choice.id}`) }}</span>
                                             </div>
                                             <button type="button" class="mt-4 w-full rounded-lg border border-emerald-400 px-4 py-2.5 font-semibold text-emerald-300 transition hover:bg-emerald-400 hover:text-black" @click="openVariantPicker(vehicle)">
                                                 {{ funnelCopy.change }}
@@ -4915,7 +4915,7 @@ watch(
                                             >
                                                 <button type="button" class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left" @click="toggleScreenChoiceInCart(choice)">
                                                     <span class="min-w-0 truncate text-sm font-semibold text-white">{{ displayVariantTitle(choice.title) }}</span>
-                                                    <span class="shrink-0 whitespace-nowrap text-sm font-bold" :class="isScreenChoiceSelected(choice) ? 'text-emerald-300' : 'text-amber-400'"><PromotionPrice :price="choice.price" :percentage="promotionForProduct(vehicle.id)?.discountPercent" :locale="props.locale" /></span>
+                                                    <span class="shrink-0 whitespace-nowrap text-sm font-bold" :class="isScreenChoiceSelected(choice) ? 'text-emerald-300' : 'text-amber-400'"><PromotionPrice :price="choice.price" :percentage="promotionForProduct(vehicle.id, choice.id)?.discountPercent" :locale="props.locale" /></span>
                                                 </button>
                                                 <div v-if="isScreenChoiceSelected(choice)" class="flex shrink-0 items-center gap-1">
                                                     <button type="button" class="h-7 w-7 rounded border border-neutral-600 bg-black text-sm" @click="setCartQuantity(`screen:${choice.id}`, cartQuantity(`screen:${choice.id}`) - 1)">−</button>
@@ -5002,7 +5002,7 @@ watch(
                                     :details-aria-label="productDetailsAriaLabel(camera.productTitle ?? camera.title)"
                                     :image-unavailable-label="t('vehicle.image_unavailable')"
                                     :promotion-price="camera.price * cartQuantity(`camera:${camera.key}`)"
-                                    :promotion-percent="promotionForProduct(camera.productId)?.discountPercent"
+                                    :promotion-percent="promotionForProduct(camera.productId, camera.variantId)?.discountPercent"
                                     :price-label="`${(camera.price * cartQuantity(`camera:${camera.key}`)).toFixed(2)} €`"
                                     :primary-label="camera.variants && camera.variants.length > 1
                                         ? (selectedCameraKeys.includes(camera.key) ? funnelCopy.change : funnelCopy.choose)
@@ -5056,7 +5056,7 @@ watch(
                                     :details-aria-label="productDetailsAriaLabel(camera.productTitle ?? camera.title)"
                                     :image-unavailable-label="t('vehicle.image_unavailable')"
                                     :promotion-price="camera.price * cartQuantity(`camera:${camera.key}`)"
-                                    :promotion-percent="promotionForProduct(camera.productId)?.discountPercent"
+                                    :promotion-percent="promotionForProduct(camera.productId, camera.variantId)?.discountPercent"
                                     :price-label="`${(camera.price * cartQuantity(`camera:${camera.key}`)).toFixed(2)} €`"
                                     :primary-label="camera.variants && camera.variants.length > 1 ? (selectedCameraKeys.includes(camera.key) ? funnelCopy.change : funnelCopy.choose) : (selectedCameraKeys.includes(camera.key) ? funnelCopy.remove : funnelCopy.add)"
                                     :selected="selectedCameraKeys.includes(camera.key)"
@@ -5152,7 +5152,7 @@ watch(
                                     :details-aria-label="productDetailsAriaLabel(speaker.productTitle)"
                                     :image-unavailable-label="t('vehicle.image_unavailable')"
                                     :promotion-price="speaker.price * cartQuantity(`speaker:${speaker.key}`)"
-                                    :promotion-percent="promotionForProduct(speaker.productId)?.discountPercent"
+                                    :promotion-percent="promotionForProduct(speaker.productId, speaker.variantId)?.discountPercent"
                                     :price-label="`${(speaker.price * cartQuantity(`speaker:${speaker.key}`)).toFixed(2)} €`"
                                     :primary-label="selectedSpeakerKeys.includes(speaker.key) ? funnelCopy.remove : funnelCopy.add"
                                     :selected="selectedSpeakerKeys.includes(speaker.key)"
@@ -6115,7 +6115,7 @@ watch(
                                     <span v-if="choice.color" class="text-sm text-neutral-400">· {{ choice.color }}</span>
                                     <span v-if="isRecommendedScreenVariant(variantPickerVehicle, variant)" class="rounded bg-emerald-400 px-2 py-1 text-[10px] font-black uppercase text-black">{{ t('screen.recommended') }}</span>
                                 </div>
-                                <p class="mt-1 text-lg font-bold text-amber-400"><PromotionPrice :price="choice.price" :percentage="promotionForProduct(variantPickerVehicle.id)?.discountPercent" :locale="props.locale" /></p>
+                                <p class="mt-1 text-lg font-bold text-amber-400"><PromotionPrice :price="choice.price" :percentage="promotionForProduct(variantPickerVehicle.id, choice.id)?.discountPercent" :locale="props.locale" /></p>
                             </div>
                             <button
                                 type="button"

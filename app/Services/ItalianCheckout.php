@@ -144,6 +144,7 @@ class ItalianCheckout
                 'type' => $item['type'],
                 'id' => $item['id'],
                 'product_handle' => $product->handle,
+                'variant_key' => $variant ? StockProduct::variantKey($variant) : null,
                 'title' => $product->localizedTitle($locale),
                 'variant_title' => $variant?->option_value ?: $variant?->title,
                 'sku' => $variant?->sku,
@@ -160,12 +161,14 @@ class ItalianCheckout
         $promotions = $locale === 'it' && Schema::hasTable('stock_products')
             ? StockProduct::where('quantity', '>', 0)->whereIn('product_handle', array_column($lines, 'product_handle'))->get()->keyBy('product_handle')
             : collect();
+        $promotions = $promotions->filter(fn ($promotion) => collect($lines)->contains(fn ($line) => $line['product_handle'] === $promotion->product_handle && $promotion->appliesTo($line['variant_key'])));
         // Same automatic tiers already shown by the configurator, calculated in cents.
         if ($promotions->isNotEmpty()) {
             $discount = 0;
             $labels = [];
             foreach ($lines as $line) {
-                $percentage = (int) ($promotions->get($line['product_handle'])?->discount_percent ?? 0);
+                $promotion = $promotions->get($line['product_handle']);
+                $percentage = $promotion?->appliesTo($line['variant_key']) ? (int) $promotion->discount_percent : 0;
                 $discount += intdiv($line['total_amount'] * $percentage + 50, 100);
                 if ($percentage > 0) $labels[] = ($locale === 'es' ? 'Oferta ' : 'Offerta ').$percentage.'%';
             }

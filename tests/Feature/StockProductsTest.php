@@ -22,6 +22,31 @@ class StockProductsTest extends TestCase
         ]);
     }
 
+    public function test_offer_targets_one_variant_and_survives_catalog_reimport(): void
+    {
+        $product = $this->product();
+        $v = $product->variants()->create(['title' => '8GB', 'sku' => 'RADIO-8GB', 'price' => 399]);
+        $other = $this->product('other')->variants()->create(['title' => '4GB', 'price' => 199]);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->postJson(route('stock-products.store'), [
+            'product_handle' => $product->handle, 'quantity' => 2, 'discount_percent' => 30, 'discount_variant_id' => $v->id,
+        ])->assertOk();
+        $stock = StockProduct::firstOrFail();
+        $this->assertSame($v->id, StockProduct::publicProducts()->first()['discountVariantId']);
+        $this->assertSame(399.0, StockProduct::publicProducts()->first()['price']);
+        $this->patchJson(route('stock-products.update', $stock), ['discount_variant_id' => $other->id])->assertUnprocessable();
+        $v->delete();
+        $this->assertSame(-1, StockProduct::publicProducts()->first()['discountVariantId']);
+        $v = $product->variants()->create(['title' => '8GB nuova', 'sku' => 'RADIO-8GB', 'price' => 429]);
+        $this->assertSame($v->id, StockProduct::publicProducts()->first()['discountVariantId']);
+        $this->getJson(route('stock-products.index'))->assertJsonPath('stock.0.discountVariantId', $v->id);
+        $this->withoutMiddleware(BlockOutsideEurope::class)->get('/configurator?lang=it&stock='.$product->id)
+            ->assertInertia(fn (Assert $page) => $page->where('stockSelection.variantId', $v->id)
+                ->where('promotionProducts.0.discountVariantId', $v->id));
+        $this->patchJson(route('stock-products.update', $stock), ['discount_variant_id' => null])->assertOk();
+        $this->assertNull($stock->fresh()->discount_variant_key);
+    }
+
     public function test_discount_save_upgrades_existing_stock_table(): void
     {
         $product = $this->product();

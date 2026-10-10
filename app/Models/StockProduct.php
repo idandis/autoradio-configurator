@@ -9,9 +9,25 @@ use Illuminate\Support\Facades\Schema;
 
 class StockProduct extends Model
 {
-    protected $fillable = ['product_handle', 'quantity', 'discount_percent'];
+    protected $fillable = ['product_handle', 'quantity', 'discount_percent', 'discount_variant_key'];
 
     protected $casts = ['quantity' => 'integer', 'discount_percent' => 'integer'];
+
+    public static function variantKey(ConfiguratorVariant $variant): string
+    {
+        return filled($variant->shopify_variant_id) ? 'shopify:'.$variant->shopify_variant_id
+            : (filled($variant->sku) ? 'sku:'.$variant->sku : 'title:'.hash('sha256', $variant->option_value ?: $variant->title));
+    }
+
+    public function discountVariant(): ?ConfiguratorVariant
+    {
+        return $this->discount_variant_key ? $this->product?->variants->first(fn ($v) => static::variantKey($v) === $this->discount_variant_key) : null;
+    }
+
+    public function appliesTo(?string $variantKey): bool
+    {
+        return ! $this->discount_variant_key || $this->discount_variant_key === $variantKey;
+    }
 
     public function product(): BelongsTo
     {
@@ -30,10 +46,13 @@ class StockProduct extends Model
                 'id' => $stock->product->id,
                 'handle' => $stock->product_handle,
                 'discountPercent' => $stock->discount_percent ?? 0,
+                'discountVariantId' => $stock->discount_variant_key ? ($stock->discountVariant()?->id ?? -1) : null,
+                'variantTitle' => $stock->discountVariant()?->option_value ?: $stock->discountVariant()?->title,
                 'title' => $stock->product->localizedTitle('it'),
                 'category' => $stock->product->category,
                 'image' => $stock->product->image_url ?: $stock->product->variants->first(fn ($v) => filled($v->image_url))?->image_url,
-                'price' => $stock->product->price_min !== null ? (float) $stock->product->price_min : null,
+                'price' => $stock->discount_variant_key ? ($stock->discountVariant()?->price !== null ? (float) $stock->discountVariant()->price : null)
+                    : ($stock->product->price_min !== null ? (float) $stock->product->price_min : null),
             ]);
     }
 }

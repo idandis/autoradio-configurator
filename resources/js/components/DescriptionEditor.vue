@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue';
+import { ref, watch } from 'vue';
 
 const props = defineProps<{ modelValue: string; label: string }>();
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>();
@@ -18,8 +18,7 @@ const paste = (event: ClipboardEvent) => {
     document.execCommand('insertText', false, event.clipboardData?.getData('text/plain') ?? '');
     update();
 };
-onMounted(sync);
-watch(() => props.modelValue, sync);
+watch([editor, () => props.modelValue], sync, { flush: 'post' });
 </script>
 
 <template>

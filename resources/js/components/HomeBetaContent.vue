@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import PromotionPrice from '@/components/PromotionPrice.vue';
 import { Bluetooth, ChevronRight, Headphones, Music2, Navigation, PackageCheck, Search, ShieldCheck, Truck, Wrench } from '@lucide/vue';
 
-type Product = { id: number; title: string; category: 'screen' | 'camera' | 'speaker' | 'accessory'; image: string | null; price: number | null; discountPercent: number };
+type Product = { id: number; title: string; category: 'screen' | 'camera' | 'speaker' | 'accessory'; image: string | null; price: number | null; discountPercent: number; variantTitle?: string | null };
 const props = defineProps<{ products: Product[] }>();
 const emit = defineEmits<{ select: [product: Product] }>();
 const all = ref(false);
@@ -53,7 +53,8 @@ const benefits = [
                         <span class="home-stock-badge"><PackageCheck :size="25" /><span class="home-copy-full">PRONTA CONSEGNA</span><span class="home-copy-short">RAPIDA</span><Truck :size="26" class="home-truck" /></span>
                         <div class="home-product-image"><span v-if="product.discountPercent > 0" class="home-discount-badge">-{{ product.discountPercent }}%</span><img v-if="product.image" :src="product.image" :alt="product.title" loading="lazy" /><PackageCheck v-else :size="68" class="text-neutral-600" /></div>
                         <div class="home-product-title"><h3 :title="product.title">{{ product.title }}</h3><ChevronRight :size="23" /></div>
-                        <p v-if="product.price !== null" class="home-product-price"><span v-if="!product.discountPercent">Da </span><PromotionPrice :price="product.price" :percentage="product.discountPercent" /></p>
+                        <p v-if="product.variantTitle" class="home-product-price">{{ product.variantTitle }}</p>
+                        <p v-if="product.price !== null" class="home-product-price"><span v-if="!product.discountPercent && !product.variantTitle">Da </span><PromotionPrice :price="product.price" :percentage="product.discountPercent" /></p>
                         <div class="home-product-rule"><span></span></div>
                     </button>
                 </div>

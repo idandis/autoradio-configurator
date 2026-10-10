@@ -15,6 +15,22 @@ class ItalianCheckoutTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_offer_only_discounts_the_selected_variant(): void
+    {
+        $v = $this->variant('200.00');
+        $other = $v->product->variants()->create(['title' => 'Other', 'sku' => 'OTHER', 'price' => 100]);
+        \App\Models\StockProduct::create([
+            'product_handle' => $v->product->handle, 'quantity' => 2, 'discount_percent' => 30,
+            'discount_variant_key' => \App\Models\StockProduct::variantKey($v),
+        ]);
+        $service = app(ItalianCheckout::class);
+        $this->assertSame(12000, $service->quote([
+            ['type' => 'variant', 'id' => $v->id, 'quantity' => 2],
+            ['type' => 'variant', 'id' => $other->id, 'quantity' => 1],
+        ])['discount_amount']);
+        $this->assertSame(0, $service->quote([['type' => 'variant', 'id' => $other->id, 'quantity' => 1]])['discount_amount']);
+    }
+
     public function test_offer_discount_comes_only_from_database_and_replaces_other_rules(): void
     {
         $variant = $this->variant('600.00');

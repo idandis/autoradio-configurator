@@ -115,7 +115,7 @@ class ConfiguratorController extends Controller
                 : ($variants->first(fn ($variant) => preg_match('/\b8[\s_-]*core\b|\bocta[\s_-]*core\b/iu', ($variant->option_value ?? '').' '.$variant->title) === 1) ?? $variants->first());
             $stockSelection = [
                 'id' => $stockProduct->id, 'handle' => $stockProduct->handle, 'category' => $stockProduct->category,
-                'variantId' => $preferredVariant?->id,
+                'variantId' => $stockProduct->stock->first()?->discountVariant()?->id ?? $preferredVariant?->id,
                 'brand' => $vehicle['brand'] ?? null, 'model' => $vehicle['model'] ?? null, 'year' => $year,
                 'mode' => $vehicle && $year !== null ? 'specific' : 'universal',
                 'din' => preg_replace('/\s+/u', '', mb_strtoupper((string) ($stockProduct->meta['din'] ?? ''))) ?: null,
@@ -245,7 +245,7 @@ class ConfiguratorController extends Controller
             'translations' => trans('configurator'),
             'sharedConfiguration' => $sharedConfiguration,
             'stockSelection' => $stockSelection,
-            'promotionProducts' => app()->getLocale() === 'it' ? \App\Models\StockProduct::publicProducts()->map(fn ($p) => ['id' => $p['id'], 'discountPercent' => $p['discountPercent']]) : [],
+            'promotionProducts' => app()->getLocale() === 'it' ? \App\Models\StockProduct::publicProducts()->map(fn ($p) => ['id' => $p['id'], 'discountPercent' => $p['discountPercent'], 'discountVariantId' => $p['discountVariantId']]) : [],
             'stockChoices' => $stockProduct ? $this->customProductOptions(collect([$stockProduct])) : [],
             'customProducts' => $this->customProductOptions($requiredCustomProducts)
                 ->filter(fn (array $product) => $requiredCustomKeys->contains($product['key']))
