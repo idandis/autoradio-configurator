@@ -13,6 +13,41 @@ class ConfiguratorProductDescriptionTranslationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_dashboard_imports_juke_and_i20_descriptions_and_preserves_originals(): void
+    {
+        Http::preventStrayRequests();
+        config(['services.openai.api_key' => null]);
+        $handles = ['2', 'autoradio-android-13-qled-9-con-carplay-y-android-auto-para-hyundai-i20-2014-2018-navegador-gps-wifi-control-volante-4gb-ram-128gb-rom'];
+        $catalogs = [];
+        foreach (['it', 'en'] as $locale) {
+            $catalogs[$locale] = json_decode(file_get_contents(resource_path("data/screen-descriptions-{$locale}.json")), true);
+        }
+        foreach ($handles as $handle) {
+            ConfiguratorProduct::create([
+                'handle' => $handle, 'category' => 'screen', 'title' => 'Original title',
+                'title_it' => 'Titolo esistente', 'title_en' => 'Existing title', 'body_html' => $catalogs['it'][$handle]['source'],
+            ]);
+        }
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->post(route('dashboard.database.migrate'))->assertRedirect()->assertSessionHasNoErrors();
+        foreach ($handles as $handle) {
+            $product = ConfiguratorProduct::where('handle', $handle)->firstOrFail();
+            $this->assertSame($catalogs['it'][$handle]['source'], $product->body_html);
+            $this->assertSame('Original title', $product->title);
+            $this->assertSame('Titolo esistente', $product->title_it);
+            foreach (['it', 'en'] as $locale) {
+                $translation = $catalogs[$locale][$handle]['translation'];
+                $this->assertSame($translation, $product->{'body_html_'.$locale});
+                preg_match_all('/<[^>]*>/', $product->body_html, $sourceTags);
+                preg_match_all('/<[^>]*>/', $translation, $translatedTags);
+                $this->assertSame($sourceTags[0], $translatedTags[0]);
+            }
+        }
+        $this->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
+            ->where('postImportTasks.translationCount', 0)
+            ->where('postImportTasks.descriptionTranslationCount', 0));
+    }
+
     public function test_dashboard_update_imports_accessory_translations_without_external_requests(): void
     {
         Http::preventStrayRequests();
@@ -26,8 +61,8 @@ class ConfiguratorProductDescriptionTranslationTest extends TestCase
         ]);
         $this->actingAs(User::factory()->create(['is_admin' => true]))
             ->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
-                ->where('postImportTasks.translationCount', 1)
-                ->where('postImportTasks.descriptionTranslationCount', 1));
+                ->where('postImportTasks.translationCount', 0)
+                ->where('postImportTasks.descriptionTranslationCount', 0));
         $this->post(route('dashboard.database.migrate'))->assertRedirect()->assertSessionHasNoErrors();
         $product->refresh();
         $this->assertSame($titles[$handle]['source'], $product->title);

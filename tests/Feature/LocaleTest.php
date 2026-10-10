@@ -10,6 +10,21 @@ class LocaleTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_store_brand_depends_on_domain_in_every_language(): void
+    {
+        $this->withoutMiddleware(\App\Http\Middleware\BlockOutsideEurope::class);
+        foreach (['es', 'it', 'en'] as $locale) {
+            foreach (['autoradiocanario.com', 'www.autoradiocanario.com', 'config.autoradiocanario.com'] as $host) {
+                $this->get('https://'.$host.'/configurator?lang='.$locale)
+                    ->assertInertia(fn (Assert $page) => $page->where('locale', $locale)->where('storeBrand', 'canario'));
+            }
+            $this->get('https://www.autoradioitaliano.it/configurator?lang='.$locale)
+                ->assertInertia(fn (Assert $page) => $page->where('locale', $locale)->where('storeBrand', 'italiano'));
+        }
+        $this->withHeaders(['X-Forwarded-Host' => 'config.autoradiocanario.com'])
+            ->get('/configurator?lang=it')->assertInertia(fn (Assert $page) => $page->where('storeBrand', 'canario'));
+    }
+
     public function test_supported_language_is_saved_in_session(): void
     {
         $this->get('/?lang=it')

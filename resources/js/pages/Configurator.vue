@@ -226,13 +226,14 @@ const truncateStepTitle = (title: string, maximumLength = 38) =>
         : title;
 
 const storefrontUrl = (path: string) => {
-    if (props.locale === 'it') return path === '/cart' ? '/configurator?lang=it&cart=1' : path;
+    if (isItalianStore.value) return path === '/cart' ? '/configurator?lang=it&cart=1' : path;
     const localePrefix = props.locale === 'es' ? '' : `/${props.locale}`;
 
     return `https://www.autoradiocanario.com${localePrefix}${path}`;
 };
 
 const page = usePage();
+const isItalianStore = computed(() => page.props.storeBrand ? page.props.storeBrand === 'italiano' : props.locale === 'it');
 const isAdmin = computed(() => Boolean(page.props.auth?.user?.is_admin));
 const mobileHeaderOpen = ref(false);
 const currentYear = new Date().getFullYear();
@@ -259,10 +260,12 @@ const headerCopy = computed(() => ({
         language: 'English',
     },
 })[props.locale]);
-const homeUrl = computed(() => props.locale === 'it' ? '/' : 'https://www.autoradiocanario.com/');
-const brandLogoUrl = computed(() => props.locale === 'it' ? '/images/logo-it.png' : '/images/logo.png');
-const headerContactUrl = computed(() => `/?form=autoradio&lang=${props.locale}`);
-const footerContact = computed(() => props.locale === 'it'
+const homeUrl = computed(() => isItalianStore.value ? '/' : 'https://www.autoradiocanario.com/');
+const brandLogoUrl = computed(() => isItalianStore.value ? '/images/logo-it.png' : '/images/logo.png');
+const headerContactUrl = computed(() => isItalianStore.value
+    ? `/?form=autoradio&lang=${props.locale}`
+    : 'https://www.autoradiocanario.com/policies/contact-information');
+const footerContact = computed(() => isItalianStore.value
     ? {
         email: 'info@autoradioitaliano.it',
         phone: '+39 351 434 6911',
@@ -3902,7 +3905,7 @@ const generateQuote = async (withoutClientData = false) => {
         .page { width: 100%; min-height: 268mm; display: flex; flex-direction: column; }
         .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
         .brand { display: flex; align-items: center; gap: 10px; }
-        .brand img { width: ${props.locale === 'it' ? '106px' : '95px'}; height: ${props.locale === 'it' ? '77px' : '68px'}; object-fit: ${props.locale === 'it' ? 'cover' : 'contain'}; background: #121212; }
+        .brand img { width: ${isItalianStore.value ? '106px' : '95px'}; height: ${isItalianStore.value ? '77px' : '68px'}; object-fit: ${isItalianStore.value ? 'cover' : 'contain'}; background: #121212; }
         .brand-name { font-size: 22px; font-weight: 800; letter-spacing: .4px; }
         .tagline { margin-top: 5px; font-size: 7px; letter-spacing: 2px; }
         .quote-title { text-align: right; }
@@ -3954,7 +3957,7 @@ const generateQuote = async (withoutClientData = false) => {
             .screen-actions button.back { background: #334fb4; }
             .page { min-height: 0; gap: 0; background: #fff; overflow: hidden; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.12); }
             .header { flex-direction: column; gap: 12px; padding: 14px; }
-            .brand img { width: ${props.locale === 'it' ? '78px' : '70px'}; height: ${props.locale === 'it' ? '58px' : '52px'}; }
+            .brand img { width: ${isItalianStore.value ? '78px' : '70px'}; height: ${isItalianStore.value ? '58px' : '52px'}; }
             .brand-name { font-size: 18px; }
             .quote-title { width: 100%; text-align: left; border-top: 1px solid #ddd; padding-top: 10px; }
             .quote-title h1 { margin: 0 0 5px; font-size: 21px; }
@@ -4002,7 +4005,7 @@ const generateQuote = async (withoutClientData = false) => {
         <div class="brand">
             <img src="${window.location.origin}${brandLogoUrl.value}" alt="AutoRadioCanario">
             <div>
-                <div class="brand-name">${props.locale === 'it' ? 'AUTORADIOITALIANO' : 'AUTORADIOCANARIO'}</div>
+                <div class="brand-name">${isItalianStore.value ? 'AUTORADIOITALIANO' : 'AUTORADIOCANARIO'}</div>
                 <div class="tagline">${escapeHtml(t('print.tagline'))}</div>
             </div>
         </div>
@@ -4026,7 +4029,7 @@ const generateQuote = async (withoutClientData = false) => {
         </div>
         <div class="issuer">
             <h2>${escapeHtml(t('print.issued_by'))}:</h2>
-            <p><strong>${props.locale === 'it' ? 'AUTORADIOITALIANO' : 'AUTORADIOCANARIO'}</strong></p>
+            <p><strong>${isItalianStore.value ? 'AUTORADIOITALIANO' : 'AUTORADIOCANARIO'}</strong></p>
             <p>Avenida Mencey 49</p>
             <p>35120 Mogán (Las Palmas)</p>
             <p>${escapeHtml(footerContact.value.email)}</p>
@@ -4060,7 +4063,7 @@ const generateQuote = async (withoutClientData = false) => {
         <div class="total-row"><div>${escapeHtml(t('quote.online_total'))}</div><div class="amount">${euroFormatter.value.format(onlineTotal.value)}</div></div>
     </section>
     <p class="shipping-notice">${escapeHtml(t('quote.home_delivery'))}</p>
-    <footer><span>${escapeHtml(footerContact.value.email.toLocaleUpperCase())}</span> <span>${props.locale === 'it' ? 'AUTORADIOITALIANO.IT' : 'WWW.AUTORADIOCANARIO.COM'}</span> <span>TEL./WHATSAPP: ${escapeHtml(footerContact.value.phone)}</span></footer>
+    <footer><span>${escapeHtml(footerContact.value.email.toLocaleUpperCase())}</span> <span>${isItalianStore.value ? 'AUTORADIOITALIANO.IT' : 'WWW.AUTORADIOCANARIO.COM'}</span> <span>TEL./WHATSAPP: ${escapeHtml(footerContact.value.phone)}</span></footer>
 </main>
 </body>
 </html>`;
@@ -4341,7 +4344,7 @@ watch(
     </main>
 
     <div v-else class="min-h-screen w-full max-w-full overflow-x-clip bg-[#121212] text-white">
-        <ItalianStoreHeader v-if="props.locale === 'it'" :cart-count="cartItemCount" @cart="props.homeBeta ? router.visit('/configurator?lang=it&cart=1') : showCart = true" />
+        <ItalianStoreHeader v-if="isItalianStore" :cart-count="cartItemCount" @cart="props.homeBeta ? router.visit('/configurator?lang=it&cart=1') : showCart = true" />
         <header v-else class="border-b border-neutral-800 bg-[#121212]">
             <div class="bg-[#334fb4] text-white">
                 <div class="mx-auto grid h-12 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
@@ -4399,7 +4402,7 @@ watch(
                         <img
                             :src="brandLogoUrl"
                             alt="AutoradioCanario"
-                            :class="props.locale === 'it' ? 'h-[90px] w-36 object-cover' : 'h-16 w-24 object-contain'"
+                            :class="isItalianStore ? 'h-[90px] w-36 object-cover' : 'h-16 w-24 object-contain'"
                         />
                     </a>
 
@@ -4439,7 +4442,7 @@ watch(
                             </svg>
                         </button>
                         <a v-else
-                            :href="checkoutUrl || storefrontUrl('/cart')"
+                            :href="storefrontUrl('/cart')"
                             :aria-label="t('actions.checkout')"
                             class="rounded-md p-2 transition hover:bg-white/10 hover:text-amber-400"
                         >
@@ -5656,7 +5659,7 @@ watch(
                                     v-else
                                     :src="brandLogoUrl"
                                     alt=""
-                                    :class="props.locale === 'it' ? 'h-full max-h-32 w-44 max-w-full object-cover opacity-80' : 'h-full w-full object-contain p-6 opacity-80'"
+                                    :class="isItalianStore ? 'h-full max-h-32 w-44 max-w-full object-cover opacity-80' : 'h-full w-full object-contain p-6 opacity-80'"
                                 />
                             </div>
                         </div>
@@ -5664,7 +5667,7 @@ watch(
                             <img
                                 :src="brandLogoUrl"
                                 alt=""
-                                :class="props.locale === 'it' ? 'h-full max-h-32 w-44 max-w-full object-cover opacity-80' : 'h-full w-full object-contain p-6 opacity-80'"
+                                :class="isItalianStore ? 'h-full max-h-32 w-44 max-w-full object-cover opacity-80' : 'h-full w-full object-contain p-6 opacity-80'"
                             />
                         </div>
                     </div>
@@ -5908,7 +5911,7 @@ watch(
                             <span>
                                 {{ t('checkout_consent.checkbox') }}
                                 <a
-                                    :href="props.locale === 'it' ? '/termini-del-servizio' : 'https://www.autoradiocanario.com/policies/terms-of-service'"
+                                    :href="isItalianStore ? '/termini-del-servizio' : 'https://www.autoradiocanario.com/policies/terms-of-service'"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     class="ml-1 text-neutral-300 underline underline-offset-2 hover:text-white"
@@ -5968,7 +5971,7 @@ watch(
                 </div>
             </div>
         </div>
-        <ItalianStoreFooter v-if="props.locale === 'it'" />
+        <ItalianStoreFooter v-if="isItalianStore" />
         <footer v-else class="w-full max-w-full overflow-x-hidden border-t border-neutral-800 bg-[#121212] text-white">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="flex flex-col items-center py-14 text-center sm:py-16">
@@ -6288,7 +6291,7 @@ watch(
                         <p v-if="italianCheckoutError" role="alert" class="text-center text-sm text-red-400">{{ italianCheckoutError }}</p>
                         <label v-if="!usesItalianCheckout" ref="cartCheckoutConsentSection" class="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-700 px-4 py-4 text-sm leading-6 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 ring-2 ring-amber-400' : 'bg-[#121212]'">
                         <input v-model="checkoutConsentAccepted" type="checkbox" class="mt-1 h-4 w-4 shrink-0 accent-amber-400" />
-                        <span>{{ t('checkout_consent.checkbox') }} <a :href="props.locale === 'it' ? '/termini-del-servizio' : 'https://www.autoradiocanario.com/policies/terms-of-service'" target="_blank" rel="noopener noreferrer" class="block text-neutral-300 underline">{{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}</a></span>
+                        <span>{{ t('checkout_consent.checkbox') }} <a :href="isItalianStore ? '/termini-del-servizio' : 'https://www.autoradiocanario.com/policies/terms-of-service'" target="_blank" rel="noopener noreferrer" class="block text-neutral-300 underline">{{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}</a></span>
                     </label>
 
 
