@@ -108,8 +108,14 @@ class ConfiguratorController extends Controller
                 ->first(fn ($entry) => mb_strtolower(trim($entry['model'])) !== 'universal');
             $year = $stockProduct->year_from !== null && $stockProduct->year_to !== null
                 ? max($stockProduct->year_from, min((int) date('Y'), $stockProduct->year_to)) : null;
+            $variants = $stockProduct->variants
+                ->filter(fn ($variant) => $stockProduct->category !== 'screen' || filled($variant->option_value) || $stockProduct->variants->count() === 1)
+                ->sortBy('price')->values();
+            $preferredVariant = $variants->count() === 1 ? $variants->first()
+                : ($variants->first(fn ($variant) => preg_match('/\b8[\s_-]*core\b|\bocta[\s_-]*core\b/iu', ($variant->option_value ?? '').' '.$variant->title) === 1) ?? $variants->first());
             $stockSelection = [
                 'id' => $stockProduct->id, 'handle' => $stockProduct->handle, 'category' => $stockProduct->category,
+                'variantId' => $preferredVariant?->id,
                 'brand' => $vehicle['brand'] ?? null, 'model' => $vehicle['model'] ?? null, 'year' => $year,
                 'mode' => $vehicle && $year !== null ? 'specific' : 'universal',
                 'din' => preg_replace('/\s+/u', '', mb_strtoupper((string) ($stockProduct->meta['din'] ?? ''))) ?: null,
@@ -554,12 +560,12 @@ class ConfiguratorController extends Controller
                 'image' => $product->image_url,
                 'originalDashboardImages' => $product->meta['original_dashboard_images'] ?? [],
                 'variants' => $product->variants
-                    ->filter(fn ($variant) => filled($variant->option_value))
+                    ->filter(fn ($variant) => filled($variant->option_value) || $product->variants->count() === 1)
                     ->groupBy(fn ($variant) => mb_strtolower(trim((string) $variant->option_value)))
                     ->map(function ($matchingVariants) use ($product) {
                         $choices = $matchingVariants->map(fn ($variant) => [
                             'id' => $variant->id,
-                            'title' => $variant->option_value,
+                            'title' => $variant->option_value ?: $variant->title,
                             'color' => filled($variant->meta['option2'] ?? null)
                                 ? trim((string) $variant->meta['option2'])
                                 : null,

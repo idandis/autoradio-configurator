@@ -178,7 +178,7 @@ const props = defineProps<{
     installationZones: InstallationZone[];
     vehicleImageMappings: VehicleImageMapping[];
     brandImages: string[];
-    stockSelection?: { id: number; handle: string; category: string; brand: string | null; model: string | null; year: number | null; mode: 'specific' | 'universal'; din: string | null } | null;
+    stockSelection?: { id: number; handle: string; category: string; variantId: number | null; brand: string | null; model: string | null; year: number | null; mode: 'specific' | 'universal'; din: string | null } | null;
     stockChoices?: CustomProduct[];
     sharedConfiguration: SharedConfigurationPayload | null;
 }>();
@@ -673,7 +673,7 @@ const customQuoteActive = computed(() => showCustomQuoteModal.value || selectedC
 const customProducts = ref<CustomProduct[]>([...(props.customProducts ?? [])]);
 const customProductsLoaded = ref(customProducts.value.length > 0);
 const customProductsLoading = ref(false);
-const stockChoiceKey = ref(props.stockChoices?.[0]?.key ?? '');
+const stockChoiceKey = ref(props.stockChoices?.find((choice) => choice.variantId === props.stockSelection?.variantId)?.key ?? props.stockChoices?.[0]?.key ?? '');
 const stockChoice = computed(() => props.stockChoices?.find((product) => product.key === stockChoiceKey.value));
 const stockNeedsChoices = computed(() => props.stockSelection?.category === 'accessory'
     || (props.stockSelection?.category === 'screen' && props.stockSelection.mode === 'universal' && !props.stockSelection.din));
@@ -2198,14 +2198,29 @@ onMounted(async () => {
             screens: [], cameras: [], speakers: [], customProducts: [],
             installation: null, postalCode: null, serviceZone: null, precheck: null,
         });
-        openSteps.value = [stock.category === 'screen' ? 'screen' : stock.category === 'camera' ? 'camera' : stock.category === 'speaker' ? 'speaker' : 'vehicle'];
-        if (stock.category === 'camera') await loadCameras();
+        await loadCameras();
+        await loadSpeakers();
+        if (stock.category === 'screen') {
+            const screen = allScreenVehicles.value.find((vehicle) => vehicle.id === stock.id);
+            const choice = screen?.variants.flatMap(screenVariantChoices).find((variant) => variant.id === stock.variantId);
+            if (screen && choice) {
+                if (choice.dashboardVariant && requiresDashboardChoice(screen)) selectedDashboardVariants.value[screen.id] = choice.dashboardVariant;
+                toggleScreenChoiceInCart(choice);
+            }
+        }
+        if (stock.category === 'camera') {
+            const camera = cameraOptions.value.find((option) => option.productId === stock.id);
+            if (camera) {
+                if (stock.variantId) selectedCameraVariantIds.value[camera.key] = stock.variantId;
+                selectedCameraKeys.value = [camera.key];
+            }
+        }
         if (stock.category === 'speaker') {
-            await loadSpeakers();
             const speaker = speakerOptions.value.find((option) => option.productId === stock.id);
             selectedSpeakerCategory.value = speaker?.categories[0] ?? '';
             if (speaker && selectedSpeakerCategory.value) selectedSpeakerSizeByCategory.value[selectedSpeakerCategory.value] = speaker.sizes[0] ?? '';
         }
+        openSteps.value = ['vehicle', 'screen', 'camera', 'dashcam', 'speaker', 'installation'];
     }
     const sharedConfigurationRestored = !stock && await restoreSharedConfiguration();
     if (!stock && !sharedConfigurationRestored) {
@@ -2230,6 +2245,7 @@ onMounted(async () => {
         await setConfiguratorMode(params.get('mode') as 'specific' | 'universal');
     }
     configuratorStateHydrated = true;
+    if (stock) persistConfiguratorState();
     if (!stock && !sharedConfigurationRestored && params.get('pick') === 'brand') {
         await setConfiguratorMode('specific');
         await nextTick();
@@ -2246,9 +2262,7 @@ onMounted(async () => {
 
         if (stock) {
             await nextTick();
-            const screen = allScreenVehicles.value.find((vehicle) => vehicle.id === stock.id);
-            if (screen && window.innerWidth < 1024) openVariantPicker(screen);
-            document.getElementById(stock.category === 'screen' ? `screen-product-${stock.id}` : stock.category === 'camera' ? `product-camera-${stock.handle}` : stock.category === 'speaker' ? `product-speaker-${stock.handle}` : 'stock-product-choice')?.scrollIntoView({ block: 'start' });
+            document.getElementById(stockNeedsChoices.value ? 'stock-product-choice' : 'vehicle-brand')?.scrollIntoView({ block: 'start' });
         }
 
         if (sharedConfigurationRestored) {
@@ -4572,7 +4586,7 @@ watch(
                                 <path d="m5 15 7-7 7 7" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
                         </button>
-                        <div v-if="!mobileVehicleViewport && !customQuoteActive && isSpecificMode && openSteps.includes('vehicle')">
+                        <div v-if="(!mobileVehicleViewport || props.stockSelection) && !customQuoteActive && isSpecificMode && openSteps.includes('vehicle')">
 
                         <div
                             class="grid gap-4"

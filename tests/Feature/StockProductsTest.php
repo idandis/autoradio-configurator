@@ -60,9 +60,21 @@ class StockProductsTest extends TestCase
             ->component('Configurator')->where('stockSelection.brand', 'DODGE')
             ->where('stockSelection.model', 'Grand Caravan')->where('stockSelection.year', 2020)
             ->where('stockSelection.mode', 'specific')->where('vehicles.0.id', $product->id)
-            ->where('vehicles.0.variants.0.id', $variant->id)->missing('homeBeta'));
+            ->where('vehicles.0.variants.0.id', $variant->id)->where('stockSelection.variantId', $variant->id)->missing('homeBeta'));
         StockProduct::query()->update(['quantity' => 0]);
         $this->get('/configurator?stock='.$product->id)->assertNotFound();
+    }
+
+    public function test_stock_prefers_the_first_eight_core_variant_over_cheaper_four_core_variants(): void
+    {
+        $this->withoutMiddleware(BlockOutsideEurope::class);
+        $product = $this->product();
+        $product->variants()->create(['title' => '4 core 2GB 32GB', 'option_value' => '4 core 2GB 32GB', 'price' => 100]);
+        $eight = $product->variants()->create(['title' => '8-Core 4GB 64GB', 'option_value' => '8-Core 4GB 64GB', 'price' => 200]);
+        $product->variants()->create(['title' => '8 core 8GB 128GB', 'option_value' => '8 core 8GB 128GB', 'price' => 300]);
+        StockProduct::create(['product_handle' => $product->handle, 'quantity' => 1]);
+        $this->get('/configurator?stock='.$product->id)->assertInertia(fn (Assert $page) => $page
+            ->where('stockSelection.variantId', $eight->id));
     }
 
     public function test_admin_can_select_update_and_remove_existing_stock_products(): void
