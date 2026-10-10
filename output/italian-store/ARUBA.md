@@ -16,6 +16,7 @@ File applicativi e immagini:
 - `public/images/home-beta/per-modello.webp`
 - `public/images/home-beta/universali.webp`
 - `public/images/logo-it.png`
+- `public/images/foto-chi-siamo.webp`
 - `resources/data/italian-store-pages.json`
 - `resources/js/app.js`
 - `resources/js/components/HomeBetaContent.vue`

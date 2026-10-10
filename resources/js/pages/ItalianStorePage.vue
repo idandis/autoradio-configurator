@@ -13,7 +13,7 @@ defineProps<{ slug: string; page: { title: string; intro: string; sections: { ti
             <a href="/" class="text-sm text-emerald-400 hover:underline">← Home</a>
             <h1 class="mt-7 text-4xl font-bold tracking-tight sm:text-5xl">{{ page.title }}</h1>
             <p class="mt-6 text-lg leading-8 text-neutral-300">{{ page.intro }}</p>
-            <img v-if="slug === 'chi-siamo'" src="/images/home-beta/hero.webp" alt="Autoradio Android nell’abitacolo di un’auto" class="mt-9 aspect-[16/7] w-full rounded-2xl object-cover" />
+            <img v-if="slug === 'chi-siamo'" src="/images/foto-chi-siamo.webp" alt="I fondatori di Autoradio Italiano: Paolo, Iana e Iulia" width="1024" height="576" class="mt-9 h-auto w-full rounded-2xl" />
             <section v-for="section in page.sections" :key="section.title" class="mt-9 border-t border-neutral-800 pt-7">
                 <h2 class="text-xl font-semibold">{{ section.title }}</h2>
                 <p v-for="paragraph in section.paragraphs" :key="paragraph" class="mt-4 whitespace-pre-line text-base leading-7 text-neutral-300">{{ paragraph }}</p>
