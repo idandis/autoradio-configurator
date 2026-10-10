@@ -18,5 +18,5 @@ const discounted = computed(() => {
 </template>
 
 <style scoped>
-.promotion-price{display:inline-flex;align-items:baseline;gap:.5em;white-space:nowrap}.promotion-price del{color:#a3a3a3;font-size:.8em;font-weight:500;text-decoration-thickness:2px}.promotion-price strong{color:#facc15;font-weight:800}
+.promotion-price{display:inline-flex;align-items:baseline;gap:.5em;white-space:nowrap}.promotion-price del{color:#a3a3a3;font-size:1em;font-weight:inherit;text-decoration-thickness:1px}.promotion-price strong{color:#facc15;font-weight:800}
 </style>
