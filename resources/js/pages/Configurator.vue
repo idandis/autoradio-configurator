@@ -6,6 +6,8 @@ import ConfiguratorProductCard from '@/components/ConfiguratorProductCard.vue';
 import CartProductTitle from '@/components/CartProductTitle.vue';
 import ProductDiscountEditor from '@/components/ProductDiscountEditor.vue';
 import HomeBetaContent from '@/components/HomeBetaContent.vue';
+import ItalianStoreHeader from '@/components/ItalianStoreHeader.vue';
+import ItalianStoreFooter from '@/components/ItalianStoreFooter.vue';
 
 type VariantChoice = {
     id: number;
@@ -176,6 +178,7 @@ const props = defineProps<{
     installationZones: InstallationZone[];
     vehicleImageMappings: VehicleImageMapping[];
     brandImages: string[];
+    brandListing?: boolean;
     sharedConfiguration: SharedConfigurationPayload | null;
 }>();
 
@@ -220,6 +223,7 @@ const truncateStepTitle = (title: string, maximumLength = 38) =>
         : title;
 
 const storefrontUrl = (path: string) => {
+    if (props.locale === 'it') return path === '/cart' ? '/configurator?lang=it&cart=1' : path;
     const localePrefix = props.locale === 'es' ? '' : `/${props.locale}`;
 
     return `https://www.autoradiocanario.com${localePrefix}${path}`;
@@ -2183,7 +2187,7 @@ onMounted(async () => {
     window.addEventListener('message', handlePrintPreviewNavigation);
     document.documentElement.lang = props.locale;
     void trackVisitorEntry();
-    if (props.homeBeta) return;
+    if (props.homeBeta || props.brandListing) return;
     const params = new URLSearchParams(window.location.search);
     const incomingBrand = resolveAvailableBrand(params.get('marca') ?? params.get('brand'));
     if (params.get('form') === 'autoradio') {
@@ -2212,6 +2216,7 @@ onMounted(async () => {
         await setConfiguratorMode(params.get('mode') as 'specific' | 'universal');
     }
     configuratorStateHydrated = true;
+    if (params.get('cart') === '1') showCart.value = true;
     window.addEventListener('keydown', closeImageZoomOnEscape);
     window.addEventListener('scroll', updateMobileQuoteTotals, { passive: true });
     window.addEventListener('resize', updateMobileQuoteTotals);
@@ -4184,7 +4189,7 @@ watch(
         @complete="completeMobileVehicle"
         @missing="missingMobileVehicle"
     />
-    <Head :title="props.homeBeta ? 'Autoradio Italiano · Home beta' : t('page_title')" />
+    <Head :title="props.brandListing ? 'Marche auto · Autoradio Italiano' : props.homeBeta ? 'Autoradio Italiano · Home beta' : t('page_title')" />
     <iframe v-if="quotePreviewHtml" ref="quotePreviewFrame" :srcdoc="quotePreviewHtml" :title="t('print.document_title')" class="fixed inset-0 z-[120] h-dvh w-full border-0 bg-white" />
     <Teleport to="body">
         <div v-if="quotePreviewHtml" ref="quotePrintDocument" class="quote-print-document" :lang="locale" />
@@ -4261,7 +4266,8 @@ watch(
     </main>
 
     <div v-else class="min-h-screen w-full max-w-full overflow-x-clip bg-[#121212] text-white">
-        <header class="border-b border-neutral-800 bg-[#121212]">
+        <ItalianStoreHeader v-if="props.locale === 'it'" :cart-count="cartItemCount" @cart="props.homeBeta || props.brandListing ? router.visit('/configurator?lang=it&cart=1') : showCart = true" />
+        <header v-else class="border-b border-neutral-800 bg-[#121212]">
             <div class="bg-[#334fb4] text-white">
                 <div class="mx-auto grid h-12 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
                     <div class="hidden items-center gap-5 sm:flex">
@@ -4390,6 +4396,15 @@ watch(
         </header>
 
         <HomeBetaContent v-if="props.homeBeta" :products="props.stockProducts ?? []" @details="(product) => openProductDetails({ productId: product.id, category: product.category, key: product.id.toString() })" />
+        <main v-else-if="props.brandListing" class="mx-auto min-h-[60vh] max-w-7xl px-5 py-12 sm:px-8">
+            <a href="/" class="text-sm text-emerald-400 hover:underline">← Home</a>
+            <h1 class="mt-6 text-3xl font-bold sm:text-4xl">Scegli la marca della tua auto</h1>
+            <p class="mt-4 text-neutral-400">Seleziona prima la marca, poi il modello e l’anno per trovare l’autoradio compatibile.</p>
+            <nav aria-label="Marche auto" class="mt-9 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
+                <a v-for="brand in brands" :key="brand" :href="`/configurator?lang=it&mode=specific&marca=${encodeURIComponent(brand)}`" class="flex min-h-24 items-center justify-center rounded-xl border border-neutral-700 bg-neutral-900 p-5 text-center text-lg font-semibold transition hover:border-emerald-400 hover:text-emerald-400">{{ brand }}</a>
+            </nav>
+            <p v-if="!brands.length" class="mt-9 text-neutral-400">Non ci sono ancora marche disponibili. <a href="/contatti" class="text-emerald-400 underline">Contattaci per la tua auto.</a></p>
+        </main>
         <main v-else-if="configuratorMode === null" class="mx-auto flex min-h-[calc(100vh-12rem)] max-w-5xl items-center px-4 py-12 sm:px-6 lg:px-8">
             <div class="w-full text-center">
                 <p class="text-xs font-semibold uppercase tracking-[0.24em] text-amber-400 sm:text-sm">{{ t('mode.eyebrow') }}</p>
@@ -5831,7 +5846,7 @@ watch(
                             <span>
                                 {{ t('checkout_consent.checkbox') }}
                                 <a
-                                    href="https://www.autoradiocanario.com/policies/terms-of-service"
+                                    :href="props.locale === 'it' ? '/termini-del-servizio' : 'https://www.autoradiocanario.com/policies/terms-of-service'"
                                     target="_blank"
                                     rel="noopener noreferrer"
                                     class="ml-1 text-neutral-300 underline underline-offset-2 hover:text-white"
@@ -5891,7 +5906,8 @@ watch(
                 </div>
             </div>
         </div>
-        <footer class="w-full max-w-full overflow-x-hidden border-t border-neutral-800 bg-[#121212] text-white">
+        <ItalianStoreFooter v-if="props.locale === 'it'" />
+        <footer v-else class="w-full max-w-full overflow-x-hidden border-t border-neutral-800 bg-[#121212] text-white">
             <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
                 <div class="flex flex-col items-center py-14 text-center sm:py-16">
                     <h2 class="text-base font-medium">{{ headerCopy.contact }}</h2>
@@ -5989,12 +6005,6 @@ watch(
                         <a href="https://www.autoradiocanario.com/policies/contact-information" class="hover:text-white">Información de contacto</a>
                         <span>·</span>
                         <a href="https://www.autoradiocanario.com/policies/legal-notice" class="hover:text-white">Aviso legal</a>
-                        <span>·</span>
-                        <span class="text-neutral-600">
-                            {{ t('attribution') }}
-                            <a href="https://www.geonames.org/" target="_blank" rel="noopener noreferrer" class="underline hover:text-neutral-400">GeoNames</a>
-                            (CC BY 4.0)
-                        </span>
                     </div>
                 </div>
             </div>
@@ -6216,7 +6226,7 @@ watch(
                         <p v-if="italianCheckoutError" role="alert" class="text-center text-sm text-red-400">{{ italianCheckoutError }}</p>
                         <label v-if="!usesItalianCheckout" ref="cartCheckoutConsentSection" class="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-700 px-4 py-4 text-sm leading-6 text-neutral-400 transition" :class="checkoutConsentAttention ? 'bg-amber-400/15 ring-2 ring-amber-400' : 'bg-[#121212]'">
                         <input v-model="checkoutConsentAccepted" type="checkbox" class="mt-1 h-4 w-4 shrink-0 accent-amber-400" />
-                        <span>{{ t('checkout_consent.checkbox') }} <a href="https://www.autoradiocanario.com/policies/terms-of-service" target="_blank" rel="noopener noreferrer" class="block text-neutral-300 underline">{{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}</a></span>
+                        <span>{{ t('checkout_consent.checkbox') }} <a :href="props.locale === 'it' ? '/termini-del-servizio' : 'https://www.autoradiocanario.com/policies/terms-of-service'" target="_blank" rel="noopener noreferrer" class="block text-neutral-300 underline">{{ props.locale === 'es' ? 'Ver condiciones' : props.locale === 'it' ? 'Vedi condizioni' : 'View terms' }}</a></span>
                     </label>
 
 

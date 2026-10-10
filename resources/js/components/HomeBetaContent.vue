@@ -9,8 +9,8 @@ const all = ref(false);
 const products = computed(() => all.value ? props.products : props.products.slice(0, 4));
 const euro = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
 const paths = [
-    { title: 'Per marca', text: 'Scegli la tua auto', image: 'per-marca', href: '/configurator?lang=it&mode=specific&pick=brand' },
-    { title: 'Per modello', text: 'Trova la compatibilità', image: 'per-modello', href: '/configurator?lang=it&mode=specific&pick=model' },
+    { title: 'Per marca', text: 'Scegli la tua auto', image: 'per-marca', href: '/marche' },
+    { title: 'Per modello', text: 'Trova la compatibilità', image: 'per-modello', href: '/marche' },
     { title: 'Universali', text: 'Soluzioni per ogni auto', image: 'universali', href: '/configurator?lang=it&mode=universal' },
 ];
 const benefits = [

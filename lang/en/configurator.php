@@ -315,5 +315,4 @@ return [
         'title' => 'Find the perfect solution for your car',
         'description' => 'Select the make, year and model. We’ll show only screens, reversing cameras and services compatible with your vehicle.',
     ],
-    'attribution' => 'Postcode geographical data provided by',
 ];

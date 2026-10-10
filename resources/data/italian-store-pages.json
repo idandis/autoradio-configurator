@@ -1,0 +1,67 @@
+{
+    "chi-siamo": {
+        "title": "Chi siamo",
+        "intro": "La tua auto merita più di uno schermo qualsiasi. Ti aiutiamo a scegliere l’autoradio Android adatta, con un percorso chiaro e assistenza dedicata.",
+        "sections": [
+            {"title": "Il nostro lavoro", "paragraphs": ["Autoradio Italiano offre un servizio di ricerca, intermediazione e assistenza per l’acquisto presso fornitori esterni. Verifichiamo modello, anno e autoradio originale; quando necessario chiediamo una foto del cruscotto per controllare l’alloggiamento."]},
+            {"title": "Cosa ci distingue", "items": ["Controlliamo la compatibilità prima di gestire la richiesta.", "Ti seguiamo su WhatsApp prima, durante e dopo il percorso.", "Selezioniamo soluzioni per la tua auto e ti orientiamo sull’installazione."]},
+            {"title": "Come lavoriamo", "items": ["Inviaci modello, anno e una foto dell’autoradio attuale, preferibilmente dai sedili posteriori.", "Controlliamo la compatibilità e ti consigliamo una soluzione.", "Coordiniamo la richiesta con il fornitore e seguiamo la consegna.", "Ti assistiamo nella configurazione e, se necessario, ti orientiamo verso professionisti indipendenti."]},
+            {"title": "La nostra priorità", "paragraphs": ["Scegliere bene fin dall’inizio: uno schermo inadatto può creare problemi di ingombro, audio, telecamera o comandi al volante. Preferiamo verificare prima per aiutarti a ottenere il risultato desiderato."]}
+        ]
+    },
+    "privacy": {
+        "title": "Informativa sulla privacy",
+        "intro": "Questa informativa descrive il trattamento dei dati utilizzati per richieste, preventivi, ordini e assistenza di Autoradio Italiano.",
+        "sections": [
+            {"title": "Dati e finalità", "paragraphs": ["Trattiamo dati anagrafici, recapiti, indirizzi, informazioni sul veicolo, richieste e comunicazioni, oltre a dati tecnici come IP, browser e dispositivo. Servono a verificare la compatibilità, gestire il servizio, consegne e assistenza, adempiere agli obblighi di legge e prevenire abusi."]},
+            {"title": "Base giuridica e destinatari", "paragraphs": ["Il trattamento si basa sul contratto o sulle misure precontrattuali, sugli obblighi legali e sull’interesse legittimo alla sicurezza. Le comunicazioni commerciali richiedono consenso. Comunichiamo solo i dati necessari a fornitori, corrieri, installatori e servizi tecnici coinvolti. I pagamenti sono gestiti da fornitori esterni; non conserviamo i dati completi delle carte. Eventuali trasferimenti fuori dall’UE richiedono le garanzie previste dalla normativa."]},
+            {"title": "Conservazione e diritti", "paragraphs": ["Conserviamo i dati per il servizio e gli obblighi applicabili. Puoi chiedere accesso, rettifica, cancellazione, limitazione, opposizione, portabilità e revoca del consenso tramite il contatto italiano. Puoi presentare reclamo all’autorità competente."]},
+            {"title": "Titolare e contatti", "paragraphs": ["ESCUELASOFT, marchio registrato OEPM N0439887. Avenida Mencey 49, 35120 Mogán, Las Palmas, Spagna. Email: info@autoradioitaliano.it. Telefono: +39 351 434 6911."]}
+        ]
+    },
+    "resi-e-rimborsi": {
+        "title": "Resi e rimborsi",
+        "intro": "Per avviare un reso contattaci prima a info@autoradioitaliano.it: ti forniremo le istruzioni e il riferimento del fornitore incaricato.",
+        "sections": [
+            {"title": "Recesso", "paragraphs": ["Il cliente può esercitare il diritto di recesso entro 14 giorni di calendario dalla ricezione del prodotto, secondo la normativa applicabile. Autoradio Italiano presta un servizio di intermediazione e assistenza nell’acquisto presso fornitori esterni."]},
+            {"title": "Condizioni e restituzione", "paragraphs": ["Il prodotto deve essere in buono stato, senza danni o interventi oltre quanto necessario per verificarne natura, caratteristiche, funzionamento e compatibilità. Conserva, se possibile, imballaggio e accessori. Dopo l’autorizzazione, spediscilo al fornitore indicato nelle istruzioni. Le spese di restituzione sono a carico del cliente, salvo diversa previsione di legge o condizioni accettate dal fornitore."]},
+            {"title": "Rimborsi e problemi", "paragraphs": ["Dopo la ricezione e la verifica del fornitore, coordiniamo il rimborso dovuto oppure una sostituzione, se applicabile e accettata dal cliente. In caso di prodotto errato o non conforme, ti assistiamo nella gestione della segnalazione. Restano salvi i diritti inderogabili previsti dalla legge."]}
+        ]
+    },
+    "termini-del-servizio": {
+        "title": "Termini del servizio",
+        "intro": "Autoradio Italiano offre ricerca, intermediazione, coordinamento e assistenza per acquisire prodotti presso fornitori esterni.",
+        "sections": [
+            {"title": "Uso e dati della richiesta", "paragraphs": ["Usa il sito lecitamente e fornisci dati veritieri e completi. Prima della conferma puoi controllare articoli, importi e recapiti. Il trattamento dei dati è descritto nell’informativa sulla privacy."]},
+            {"title": "Incarico e prezzo", "paragraphs": ["Confermando e pagando, autorizzi la gestione dell’acquisto in tuo nome e per tuo conto. L’importo comprende prodotto e servizi di selezione, amministrazione, coordinamento logistico e supporto. Su richiesta può essere fornita documentazione separata. La conferma automatica attesta la ricezione, senza garantire disponibilità o accettazione del fornitore."]},
+            {"title": "Consegne e variazioni", "paragraphs": ["Tempi, trasporto, imposte e oneri d’importazione dipendono dall’operazione; quelli non inclusi espressamente sono a carico del cliente. Se non è possibile completarla, ti informiamo e gestiamo gli importi da rimborsare. Modifiche e cancellazioni dipendono anche dallo stato della richiesta."]},
+            {"title": "Installazione e garanzia", "paragraphs": ["Gli installatori sono professionisti indipendenti, scelti e pagati direttamente dal cliente; prezzi e lavori sono concordati con loro. Assistiamo nella gestione di garanzie e problemi con fornitori e produttori. Restano salvi i diritti inderogabili del consumatore."]}
+        ]
+    },
+    "spedizioni": {
+        "title": "Spedizioni",
+        "intro": "Coordiniamo la consegna con il fornitore e la modalità logistica prevista per la richiesta.",
+        "sections": [
+            {"title": "Gestione e tempi", "paragraphs": ["La verifica iniziale di dati, compatibilità e disponibilità richiede normalmente 1–2 giorni lavorativi. Il riferimento generale per la consegna è 10–20 giorni lavorativi: i tempi sono indicativi e dipendono da prodotto, fornitore, origine, destinazione, corriere e dogana. Per gli articoli in stock valgono le indicazioni comunicate per la singola richiesta."]},
+            {"title": "Costi e importazione", "paragraphs": ["Eventuali costi di trasporto noti sono comunicati prima della conferma. Gli invii internazionali possono comportare IVA, dazi e spese di sdoganamento. Gli oneri non espressamente inclusi sono a carico del cliente."]},
+            {"title": "Tracciamento e ricezione", "paragraphs": ["Comunichiamo il tracking quando disponibile e assistiamo in caso di ritardi. Fornisci un indirizzo completo e un telefono valido. Se il pacco è danneggiato, segnala l’anomalia al corriere, fotografa pacco e prodotto, conserva l’imballaggio e contattaci."]},
+            {"title": "Problemi e resi", "paragraphs": ["Se la spedizione non può essere completata, ti informiamo e coordiniamo un rimborso applicabile o un’alternativa da accettare. Resi e recesso seguono la pagina Resi e rimborsi, fatti salvi i diritti di legge."]}
+        ]
+    },
+    "contatti": {
+        "title": "Informazioni di contatto",
+        "intro": "Contatta Autoradio Italiano per compatibilità, preventivi, richieste e assistenza.",
+        "sections": [
+            {"title": "Assistenza italiana", "paragraphs": ["Email: info@autoradioitaliano.it", "Telefono e WhatsApp: +39 351 434 6911"]},
+            {"title": "Dati dell’attività", "paragraphs": ["ESCUELASOFT è un marchio registrato presso l’Oficina Española de Patentes y Marcas (OEPM), numero N0439887.", "Indirizzo: Avenida Mencey 49, 35120 Mogán, Las Palmas, Isole Canarie, Spagna."]}
+        ]
+    },
+    "note-legali": {
+        "title": "Note legali",
+        "intro": "Autoradio Italiano è il nome commerciale utilizzato per i servizi di intermediazione, gestione e coordinamento nell’acquisizione di prodotti multimediali per veicoli.",
+        "sections": [
+            {"title": "Titolare e recapiti", "paragraphs": ["ESCUELASOFT, marchio registrato OEPM N0439887. Avenida Mencey 49, 35120 Mogán, Las Palmas, Isole Canarie, Spagna.", "Email: info@autoradioitaliano.it. Telefono: +39 351 434 6911."]},
+            {"title": "Proprietà intellettuale", "paragraphs": ["I contenuti del sito sono protetti dalla normativa applicabile sulla proprietà intellettuale e industriale. Riproduzione, distribuzione e utilizzo richiedono l’autorizzazione del titolare. Marchi e modelli citati appartengono ai rispettivi proprietari."]}
+        ]
+    }
+}

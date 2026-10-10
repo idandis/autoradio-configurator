@@ -49,7 +49,7 @@ createInertiaApp({
                                 default: () => pageNode,
                             }),
                     });
-            } else if (!['Welcome', 'Configurator'].includes(name)) {
+            } else if (!['Welcome', 'Configurator', 'ItalianStorePage'].includes(name)) {
                 page.default.layout = AppLayout;
             }
         }

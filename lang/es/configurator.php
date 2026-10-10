@@ -300,5 +300,4 @@ return [
         'title' => 'Encuentra la solución perfecta para tu coche',
         'description' => 'Selecciona marca, año y modelo. Te mostraremos únicamente pantallas, cámaras traseras y servicios compatibles con tu vehículo.',
     ],
-    'attribution' => 'Datos geográficos de códigos postales proporcionados por',
 ];

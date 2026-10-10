@@ -300,5 +300,4 @@ return [
         'title' => 'Trova la soluzione perfetta per la tua auto',
         'description' => 'Seleziona marca, anno e modello. Ti mostreremo soltanto schermi, retrocamere e servizi compatibili con il tuo veicolo.',
     ],
-    'attribution' => 'Dati geografici CAP forniti da',
 ];

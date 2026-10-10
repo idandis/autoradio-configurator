@@ -18,7 +18,8 @@
         <h1>This area is not currently served</h1>
         <p>
             If you are interested in purchasing a car stereo from us, please email
-            <a href="mailto:info@autoradiocanario.com">info@autoradiocanario.com</a>.
+            @php($contactEmail = in_array(request()->getHost(), ['autoradioitaliano.it', 'www.autoradioitaliano.it'], true) ? 'info@autoradioitaliano.it' : 'info@autoradiocanario.com')
+            <a href="mailto:{{ $contactEmail }}">{{ $contactEmail }}</a>.
             We will do our best to assist you.
         </p>
     </main>

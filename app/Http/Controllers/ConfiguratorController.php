@@ -92,6 +92,14 @@ class ConfiguratorController extends Controller
             ->with('stockProducts', \App\Models\StockProduct::publicProducts());
     }
 
+    public function brandsListing(Request $request, VehicleImageResolver $vehicleImageResolver): Response
+    {
+        app()->setLocale('it');
+        $request->session()->put('locale', 'it');
+
+        return $this->__invoke($request, $vehicleImageResolver)->with('brandListing', true);
+    }
+
     public function __invoke(Request $request, VehicleImageResolver $vehicleImageResolver): Response
     {
         $sharedConfiguration = $this->sharedConfiguration($request);
