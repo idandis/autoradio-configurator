@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import PromotionPrice from '@/components/PromotionPrice.vue';
 import { Bluetooth, ChevronRight, Headphones, Music2, Navigation, PackageCheck, Search, ShieldCheck, Truck, Wrench } from '@lucide/vue';
 
 type Product = { id: number; title: string; category: 'screen' | 'camera' | 'speaker' | 'accessory'; image: string | null; price: number | null; discountPercent: number };
@@ -7,7 +8,6 @@ const props = defineProps<{ products: Product[] }>();
 const emit = defineEmits<{ select: [product: Product] }>();
 const all = ref(false);
 const products = computed(() => all.value ? props.products : props.products.slice(0, 4));
-const euro = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
 const paths = [
     { title: 'Per marca', text: 'Scegli la tua auto', short: 'Scegli l’auto', image: 'per-marca', href: '/configurator?lang=it&mode=specific&pick=brand' },
     { title: 'Universali', text: 'Soluzioni per ogni auto', short: 'Per ogni auto', image: 'universali', href: '/configurator?lang=it&mode=universal' },
@@ -53,7 +53,7 @@ const benefits = [
                         <span class="home-stock-badge"><PackageCheck :size="25" /><span class="home-copy-full">PRONTA CONSEGNA</span><span class="home-copy-short">RAPIDA</span><Truck :size="26" class="home-truck" /></span>
                         <div class="home-product-image"><span v-if="product.discountPercent > 0" class="home-discount-badge">-{{ product.discountPercent }}%</span><img v-if="product.image" :src="product.image" :alt="product.title" loading="lazy" /><PackageCheck v-else :size="68" class="text-neutral-600" /></div>
                         <div class="home-product-title"><h3 :title="product.title">{{ product.title }}</h3><ChevronRight :size="23" /></div>
-                        <p v-if="product.price !== null" class="home-product-price">Da {{ euro.format(product.price) }}</p>
+                        <p v-if="product.price !== null" class="home-product-price"><span v-if="!product.discountPercent">Da </span><PromotionPrice :price="product.price" :percentage="product.discountPercent" /></p>
                         <div class="home-product-rule"><span></span></div>
                     </button>
                 </div>
@@ -73,4 +73,5 @@ const benefits = [
 @media(min-width:768px) and (max-width:1023px){.home-benefit .home-copy-full{display:none}.home-benefit .home-copy-short{display:inline}}
 @media(prefers-reduced-motion:reduce){.home-path,.home-product,.home-cta{transition:none}.home-path:hover,.home-product:hover,.home-cta:hover{transform:none}}
 .home-product-image{position:relative}.home-discount-badge{position:absolute;top:8px;right:0;z-index:1;background:#facc15;color:#121212;font-size:18px;font-weight:800;line-height:1;padding:8px 10px;border-radius:7px;white-space:nowrap}
+@media(max-width:767px){.home-product-price{font-size:clamp(11px,3.5vw,15px)}}
 </style>

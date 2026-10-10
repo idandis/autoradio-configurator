@@ -4,6 +4,7 @@ import { Head, router, usePage } from '@inertiajs/vue3';
 import MobileVehiclePicker from '@/components/MobileVehiclePicker.vue';
 import ConfiguratorProductCard from '@/components/ConfiguratorProductCard.vue';
 import CartProductTitle from '@/components/CartProductTitle.vue';
+import PromotionPrice from '@/components/PromotionPrice.vue';
 import ProductDiscountEditor from '@/components/ProductDiscountEditor.vue';
 import HomeBetaContent from '@/components/HomeBetaContent.vue';
 import ItalianStoreHeader from '@/components/ItalianStoreHeader.vue';
@@ -159,6 +160,7 @@ type VehicleImageMapping = {
 const props = defineProps<{
     locale: 'es' | 'it' | 'en';
     homeBeta?: boolean;
+    promotionProducts?: Array<{ id: number; discountPercent: number }>;
     stockProducts?: Array<{ id: number; title: string; category: 'screen' | 'camera' | 'speaker' | 'accessory'; image: string | null; price: number | null; discountPercent: number }>;
     italianCheckoutEnabled?: boolean;
     italianCheckoutIsTest?: boolean;
@@ -3113,10 +3115,10 @@ const discountTiers: DiscountTier[] = [
     { code: 'Base', threshold: 300, percentage: 2 },
 ];
 const rawDiscountProducts = computed(() => [
-    ...selectedScreens.value.map((p) => ({ key: `screen:${p.id}`, type: 'variant' as const, id: p.id, title: `${vehicleForScreenVariant(p.id)?.title ?? t('screen.label')} — ${displayVariantTitle(p.title)}`, price: p.price })),
-    ...selectedCameras.value.map((p) => ({ key: `camera:${p.key}`, type: p.variantId ? 'variant' as const : 'product' as const, id: p.variantId ?? p.productId ?? 0, title: p.productTitle ?? p.title, price: p.price })),
-    ...selectedSpeakers.value.map((p) => ({ key: `speaker:${p.key}`, type: p.variantId ? 'variant' as const : 'product' as const, id: p.variantId ?? p.productId ?? 0, title: p.productTitle, price: p.price })),
-    ...selectedCustomProducts.value.filter((p) => p.category !== 'installation').map((p) => ({ key: `custom:${p.key}`, type: p.variantId ? 'variant' as const : 'product' as const, id: p.variantId ?? p.productId, title: [p.title, p.variantTitle].filter(Boolean).join(' — '), price: p.price })),
+    ...selectedScreens.value.map((p) => ({ key: `screen:${p.id}`, productId: vehicleForScreenVariant(p.id)?.id, type: 'variant' as const, id: p.id, title: `${vehicleForScreenVariant(p.id)?.title ?? t('screen.label')} — ${displayVariantTitle(p.title)}`, price: p.price })),
+    ...selectedCameras.value.map((p) => ({ key: `camera:${p.key}`, productId: p.productId, type: p.variantId ? 'variant' as const : 'product' as const, id: p.variantId ?? p.productId ?? 0, title: p.productTitle ?? p.title, price: p.price })),
+    ...selectedSpeakers.value.map((p) => ({ key: `speaker:${p.key}`, productId: p.productId, type: p.variantId ? 'variant' as const : 'product' as const, id: p.variantId ?? p.productId ?? 0, title: p.productTitle, price: p.price })),
+    ...selectedCustomProducts.value.filter((p) => p.category !== 'installation').map((p) => ({ key: `custom:${p.key}`, productId: p.productId, type: p.variantId ? 'variant' as const : 'product' as const, id: p.variantId ?? p.productId, title: [p.title, p.variantTitle].filter(Boolean).join(' — '), price: p.price })),
 ]);
 const discountProducts = computed(() => {
     const grouped = new Map<string, (typeof rawDiscountProducts.value)[number] & { quantity: number }>();
@@ -3127,13 +3129,18 @@ const discountProducts = computed(() => {
     });
     return [...grouped.values()];
 });
+const promotionForProduct = (id: number | null | undefined) => props.promotionProducts?.find((p) => p.id === id);
+const hasPromotions = computed(() => discountProducts.value.some((p) => promotionForProduct(p.productId)));
 const setProductDiscount = (key: string, field: 'code' | 'percentage', value: string) => {
     productDiscounts.value[key] = { ...(productDiscounts.value[key] ?? { code: '', percentage: '' }), [field]: value };
     quoteDiscountCode.value = '';
     quoteDiscountValue.value = '';
 };
 const selectedProductDiscounts = computed(() => discountProducts.value.flatMap((p) => {
-    const d = productDiscounts.value[p.key];
+    const promotion = promotionForProduct(p.productId);
+    const d = hasPromotions.value
+        ? (promotion && promotion.discountPercent > 0 ? { code: 'Offerta', percentage: String(promotion.discountPercent) } : null)
+        : productDiscounts.value[p.key];
     const percentage = Number.parseFloat(String(d?.percentage ?? '').replace(',', '.'));
     if (!d?.code.trim() || !Number.isFinite(percentage) || percentage <= 0 || percentage > 100) return [];
     const value = Math.round(percentage * 100);
@@ -3143,14 +3150,15 @@ const selectedProductDiscounts = computed(() => discountProducts.value.flatMap((
 const hasProductDiscounts = computed(() => selectedProductDiscounts.value.length > 0);
 const productDiscountAmount = computed(() => selectedProductDiscounts.value.reduce((sum, d) => sum + d.amount, 0));
 const activeDiscount = computed(
-    () => hasProductDiscounts.value ? null : discountTiers.find((tier) => productsSubtotal.value >= tier.threshold) ?? null,
+    () => hasPromotions.value || hasProductDiscounts.value ? null : discountTiers.find((tier) => productsSubtotal.value >= tier.threshold) ?? null,
 );
 const nextDiscount = computed(() => {
-    if (hasProductDiscounts.value) return null;
+    if (hasPromotions.value || hasProductDiscounts.value) return null;
     return [...discountTiers].reverse().find((tier) => productsSubtotal.value < tier.threshold) ?? null;
 });
 const customDiscount = computed(() => {
     if (hasProductDiscounts.value) return { code: [...new Set(selectedProductDiscounts.value.map((d) => d.code))].join(','), type: 'fixed' as const, value: productDiscountAmount.value };
+    if (hasPromotions.value) return null;
     const code = quoteDiscountCode.value.trim();
     const value = Number.parseFloat(String(quoteDiscountValue.value).replace(',', '.'));
 
@@ -3232,7 +3240,7 @@ const discountLabel = computed(() => {
 const onlineTotal = computed(() => productsSubtotal.value + customImportTotal.value - discountAmount.value);
 const estimatedTotal = computed(() => onlineTotal.value + installationCost.value);
 
-const usesItalianCheckout = computed(() => customQuoteActive.value);
+const usesItalianCheckout = computed(() => customQuoteActive.value || hasPromotions.value);
 const italianCheckoutLocale = computed(() => props.locale === 'es' ? 'es' : 'it');
 const localCheckoutCopy = computed(() => props.locale === 'es' ? {
     action: 'Ir al pago',
@@ -3262,7 +3270,7 @@ const italianCheckoutItems = computed(() => {
     }));
     return items;
 });
-const italianCheckoutDiscount = computed(() => customDiscount.value ? {
+const italianCheckoutDiscount = computed(() => !hasPromotions.value && customDiscount.value ? {
     code: customDiscount.value.code,
     type: customDiscount.value.type,
     value: Math.max(1, Math.round(customDiscount.value.value * 100)),
@@ -4468,6 +4476,7 @@ watch(
                 <img v-if="stockChoice.image" :src="stockChoice.image" :alt="stockChoice.title" class="h-48 w-full object-contain" />
                 <h2 class="mt-4 text-xl font-semibold">{{ stockChoice.title }}</h2>
                 <label class="mt-4 block text-sm">Variante<select v-model="stockChoiceKey" class="mt-2 block w-full rounded-lg border border-neutral-600 bg-neutral-900 p-3"><option v-for="choice in props.stockChoices" :key="choice.key" :value="choice.key">{{ choice.variantTitle || choice.title }} · {{ euroFormatter.format(choice.price) }}</option></select></label>
+                <p class="mt-3 text-lg"><PromotionPrice :price="stockChoice.price" :percentage="promotionForProduct(stockChoice.productId)?.discountPercent" :locale="props.locale" /></p>
                 <button type="button" class="mt-4 rounded-lg bg-emerald-600 px-5 py-3 font-semibold" @click="addStockChoice">Aggiungi al carrello</button>
             </section>
             <div class="mb-8">
@@ -4845,7 +4854,7 @@ watch(
                                             <div class="flex items-start justify-between gap-3">
                                                 <div class="min-w-0">
                                                     <p class="truncate font-semibold text-white">{{ displayVariantTitle(singleScreenChoice(vehicle)!.title) }}</p>
-                                                    <p class="mt-1 text-lg font-bold text-amber-400">{{ singleScreenChoice(vehicle)!.price.toFixed(2) }} €</p>
+                                                    <p class="mt-1 text-lg font-bold text-amber-400"><PromotionPrice :price="singleScreenChoice(vehicle)!.price" :percentage="promotionForProduct(vehicle.id)?.discountPercent" :locale="props.locale" /></p>
                                                 </div>
                                                 <div v-if="isScreenChoiceSelected(singleScreenChoice(vehicle)!)" class="flex shrink-0 items-center gap-1.5">
                                                     <input type="number" min="1" inputmode="numeric" class="h-11 w-14 rounded-lg border border-neutral-600 bg-black px-1 text-center text-lg font-bold text-white outline-none focus:border-emerald-400" :value="cartQuantity(`screen:${singleScreenChoice(vehicle)!.id}`)" @change="setCartQuantityFromInput(`screen:${singleScreenChoice(vehicle)!.id}`, $event)" />
@@ -4865,7 +4874,7 @@ watch(
                                             <p class="text-xs font-semibold uppercase tracking-wider text-emerald-400">{{ funnelCopy.selected }}</p>
                                             <div v-for="choice in selectedScreensForVehicle(vehicle)" :key="choice.id" class="mt-2 flex items-center justify-between gap-3">
                                                 <span class="min-w-0 truncate font-semibold text-white">{{ displayVariantTitle(choice.title) }}</span>
-                                                <span class="shrink-0 font-bold text-emerald-300">{{ choice.price.toFixed(2) }} € × {{ cartQuantity(`screen:${choice.id}`) }}</span>
+                                                <span class="shrink-0 font-bold text-emerald-300"><PromotionPrice :price="choice.price" :percentage="promotionForProduct(vehicle.id)?.discountPercent" :locale="props.locale" /> × {{ cartQuantity(`screen:${choice.id}`) }}</span>
                                             </div>
                                             <button type="button" class="mt-4 w-full rounded-lg border border-emerald-400 px-4 py-2.5 font-semibold text-emerald-300 transition hover:bg-emerald-400 hover:text-black" @click="openVariantPicker(vehicle)">
                                                 {{ funnelCopy.change }}
@@ -4883,7 +4892,7 @@ watch(
                                             >
                                                 <button type="button" class="flex min-w-0 flex-1 items-center justify-between gap-3 text-left" @click="toggleScreenChoiceInCart(choice)">
                                                     <span class="min-w-0 truncate text-sm font-semibold text-white">{{ displayVariantTitle(choice.title) }}</span>
-                                                    <span class="shrink-0 whitespace-nowrap text-sm font-bold" :class="isScreenChoiceSelected(choice) ? 'text-emerald-300' : 'text-amber-400'">{{ choice.price.toFixed(2) }} €</span>
+                                                    <span class="shrink-0 whitespace-nowrap text-sm font-bold" :class="isScreenChoiceSelected(choice) ? 'text-emerald-300' : 'text-amber-400'"><PromotionPrice :price="choice.price" :percentage="promotionForProduct(vehicle.id)?.discountPercent" :locale="props.locale" /></span>
                                                 </button>
                                                 <div v-if="isScreenChoiceSelected(choice)" class="flex shrink-0 items-center gap-1">
                                                     <button type="button" class="h-7 w-7 rounded border border-neutral-600 bg-black text-sm" @click="setCartQuantity(`screen:${choice.id}`, cartQuantity(`screen:${choice.id}`) - 1)">−</button>
@@ -4969,6 +4978,8 @@ watch(
                                     :details-label="t('screen.product_details')"
                                     :details-aria-label="productDetailsAriaLabel(camera.productTitle ?? camera.title)"
                                     :image-unavailable-label="t('vehicle.image_unavailable')"
+                                    :promotion-price="camera.price * cartQuantity(`camera:${camera.key}`)"
+                                    :promotion-percent="promotionForProduct(camera.productId)?.discountPercent"
                                     :price-label="`${(camera.price * cartQuantity(`camera:${camera.key}`)).toFixed(2)} €`"
                                     :primary-label="camera.variants && camera.variants.length > 1
                                         ? (selectedCameraKeys.includes(camera.key) ? funnelCopy.change : funnelCopy.choose)
@@ -5021,6 +5032,8 @@ watch(
                                     :details-label="t('screen.product_details')"
                                     :details-aria-label="productDetailsAriaLabel(camera.productTitle ?? camera.title)"
                                     :image-unavailable-label="t('vehicle.image_unavailable')"
+                                    :promotion-price="camera.price * cartQuantity(`camera:${camera.key}`)"
+                                    :promotion-percent="promotionForProduct(camera.productId)?.discountPercent"
                                     :price-label="`${(camera.price * cartQuantity(`camera:${camera.key}`)).toFixed(2)} €`"
                                     :primary-label="camera.variants && camera.variants.length > 1 ? (selectedCameraKeys.includes(camera.key) ? funnelCopy.change : funnelCopy.choose) : (selectedCameraKeys.includes(camera.key) ? funnelCopy.remove : funnelCopy.add)"
                                     :selected="selectedCameraKeys.includes(camera.key)"
@@ -5115,6 +5128,8 @@ watch(
                                     :details-label="t('screen.product_details')"
                                     :details-aria-label="productDetailsAriaLabel(speaker.productTitle)"
                                     :image-unavailable-label="t('vehicle.image_unavailable')"
+                                    :promotion-price="speaker.price * cartQuantity(`speaker:${speaker.key}`)"
+                                    :promotion-percent="promotionForProduct(speaker.productId)?.discountPercent"
                                     :price-label="`${(speaker.price * cartQuantity(`speaker:${speaker.key}`)).toFixed(2)} €`"
                                     :primary-label="selectedSpeakerKeys.includes(speaker.key) ? funnelCopy.remove : funnelCopy.add"
                                     :selected="selectedSpeakerKeys.includes(speaker.key)"
@@ -5688,7 +5703,7 @@ watch(
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
                                     {{ screen.price.toFixed(2) }} €
                                 </p>
-                                <div v-if="isAdmin" class="col-span-3 min-w-0"><ProductDiscountEditor :items="discountProducts.filter(p => p.key === `variant:${screen.id}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
+                                <div v-if="isAdmin && !hasPromotions" class="col-span-3 min-w-0"><ProductDiscountEditor :items="discountProducts.filter(p => p.key === `variant:${screen.id}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
                             </div>
 
                             <div
@@ -5712,7 +5727,7 @@ watch(
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
                                     {{ speaker.price.toFixed(2) }} €
                                 </p>
-                                <div v-if="isAdmin" class="col-span-3 min-w-0"><ProductDiscountEditor :items="discountProducts.filter(p => p.key === `${speaker.variantId ? 'variant' : 'product'}:${speaker.variantId ?? speaker.productId}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
+                                <div v-if="isAdmin && !hasPromotions" class="col-span-3 min-w-0"><ProductDiscountEditor :items="discountProducts.filter(p => p.key === `${speaker.variantId ? 'variant' : 'product'}:${speaker.variantId ?? speaker.productId}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
                             </div>
 
                             <div
@@ -5736,7 +5751,7 @@ watch(
                                 <p class="shrink-0 whitespace-nowrap font-semibold">
                                     {{ camera.price.toFixed(2) }} €
                                 </p>
-                                <div v-if="isAdmin" class="col-span-3 min-w-0"><ProductDiscountEditor :items="discountProducts.filter(p => p.key === `${camera.variantId ? 'variant' : 'product'}:${camera.variantId ?? camera.productId}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
+                                <div v-if="isAdmin && !hasPromotions" class="col-span-3 min-w-0"><ProductDiscountEditor :items="discountProducts.filter(p => p.key === `${camera.variantId ? 'variant' : 'product'}:${camera.variantId ?? camera.productId}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
                             </div>
 
                             <div
@@ -5755,7 +5770,7 @@ watch(
 
                                 </div>
                                 <p class="shrink-0 whitespace-nowrap font-semibold">{{ (product.price * cartQuantity(`custom:${product.key}`)).toFixed(2) }} €</p>
-                                <div v-if="isAdmin" class="col-span-3 min-w-0"><ProductDiscountEditor :items="discountProducts.filter(p => p.key === `${product.variantId ? 'variant' : 'product'}:${product.variantId ?? product.productId}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
+                                <div v-if="isAdmin && !hasPromotions" class="col-span-3 min-w-0"><ProductDiscountEditor :items="discountProducts.filter(p => p.key === `${product.variantId ? 'variant' : 'product'}:${product.variantId ?? product.productId}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
                             </div>
 
                             <div v-if="selectedInstallation" class="flex items-start justify-between gap-4">
@@ -6077,7 +6092,7 @@ watch(
                                     <span v-if="choice.color" class="text-sm text-neutral-400">· {{ choice.color }}</span>
                                     <span v-if="isRecommendedScreenVariant(variantPickerVehicle, variant)" class="rounded bg-emerald-400 px-2 py-1 text-[10px] font-black uppercase text-black">{{ t('screen.recommended') }}</span>
                                 </div>
-                                <p class="mt-1 text-lg font-bold text-amber-400">{{ choice.price.toFixed(2) }} €</p>
+                                <p class="mt-1 text-lg font-bold text-amber-400"><PromotionPrice :price="choice.price" :percentage="promotionForProduct(variantPickerVehicle.id)?.discountPercent" :locale="props.locale" /></p>
                             </div>
                             <button
                                 type="button"
@@ -6221,10 +6236,10 @@ watch(
                         <div class="min-w-0"><CartProductTitle :title="vehicleForScreenVariant(screen.id)?.title ?? ''" :fallback="cartVehicleTitle(t('screen.label'))" /><p class="truncate text-sm text-neutral-400">{{ displayVariantTitle(screen.title) }}</p><p class="mt-1 font-bold text-amber-400">{{ (screen.price * cartQuantity(`screen:${screen.id}`)).toFixed(2) }} €</p></div>
                         <button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white transition hover:border-red-400 hover:text-red-400" :aria-label="t('actions.remove_product')" @click="removeSelectedScreen(screen.id)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button>
                         <div class="flex items-center justify-end gap-2"><span class="mr-1 text-xs text-neutral-500">{{ funnelCopy.quantity }}</span><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`screen:${screen.id}`, cartQuantity(`screen:${screen.id}`) - 1)">−</button><span class="w-6 text-center font-bold">{{ cartQuantity(`screen:${screen.id}`) }}</span><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`screen:${screen.id}`, cartQuantity(`screen:${screen.id}`) + 1)">+</button></div>
-                    <ProductDiscountEditor v-if="isAdmin" :items="discountProducts.filter(p => p.key === `variant:${screen.id}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
-                    <div v-for="camera in selectedCameras" :key="`cart-camera-${camera.key}`" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg border border-neutral-700 bg-black"><img v-if="camera.image" :src="camera.image" alt="" class="h-full w-full object-contain" /></div><div class="min-w-0"><CartProductTitle :title="camera.title" :fallback="camera.isDashcam ? '' : cartVehicleTitle(t('camera.label'))" /><p class="mt-1 text-amber-400">{{ (camera.price * cartQuantity(`camera:${camera.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white hover:text-red-400" @click="toggleCamera(camera.key)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`camera:${camera.key}`, cartQuantity(`camera:${camera.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`camera:${camera.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`camera:${camera.key}`, cartQuantity(`camera:${camera.key}`) + 1)">+</button></div><ProductDiscountEditor v-if="isAdmin" :items="discountProducts.filter(p => p.key === `${camera.variantId ? 'variant' : 'product'}:${camera.variantId ?? camera.productId}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
-                    <div v-for="speaker in selectedSpeakers" :key="`cart-speaker-${speaker.key}`" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg border border-neutral-700 bg-black"><img v-if="speaker.image" :src="speaker.image" alt="" class="h-full w-full object-contain" /></div><div class="min-w-0"><CartProductTitle :title="speaker.productTitle" :fallback="cartVehicleTitle(t('speaker.label'))" /><p v-if="speaker.title !== speaker.productTitle" class="truncate text-sm text-neutral-400">{{ speaker.title }}</p><p class="mt-1 text-amber-400">{{ (speaker.price * cartQuantity(`speaker:${speaker.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white hover:text-red-400" @click="toggleSpeaker(speaker.key)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`speaker:${speaker.key}`, cartQuantity(`speaker:${speaker.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`speaker:${speaker.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`speaker:${speaker.key}`, cartQuantity(`speaker:${speaker.key}`) + 1)">+</button></div><ProductDiscountEditor v-if="isAdmin" :items="discountProducts.filter(p => p.key === `${speaker.variantId ? 'variant' : 'product'}:${speaker.variantId ?? speaker.productId}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
-                    <div v-for="product in selectedCustomProducts" :key="`cart-custom-${product.key}`" class="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"><button type="button" @click="toggleCustomProduct(product.key)">🗑</button><div class="min-w-0"><CartProductTitle :title="product.title" :fallback="cartVehicleTitle(product.category)" /><p class="text-amber-400">{{ (product.price * cartQuantity(`custom:${product.key}`)).toFixed(2) }} €</p></div><div class="col-span-2 flex items-center justify-end gap-2 sm:col-span-1"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) + 1)">+</button></div><ProductDiscountEditor v-if="isAdmin" :items="discountProducts.filter(p => p.key === `${product.variantId ? 'variant' : 'product'}:${product.variantId ?? product.productId}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
+                    <ProductDiscountEditor v-if="isAdmin && !hasPromotions" :items="discountProducts.filter(p => p.key === `variant:${screen.id}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
+                    <div v-for="camera in selectedCameras" :key="`cart-camera-${camera.key}`" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg border border-neutral-700 bg-black"><img v-if="camera.image" :src="camera.image" alt="" class="h-full w-full object-contain" /></div><div class="min-w-0"><CartProductTitle :title="camera.title" :fallback="camera.isDashcam ? '' : cartVehicleTitle(t('camera.label'))" /><p class="mt-1 text-amber-400">{{ (camera.price * cartQuantity(`camera:${camera.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white hover:text-red-400" @click="toggleCamera(camera.key)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`camera:${camera.key}`, cartQuantity(`camera:${camera.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`camera:${camera.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`camera:${camera.key}`, cartQuantity(`camera:${camera.key}`) + 1)">+</button></div><ProductDiscountEditor v-if="isAdmin && !hasPromotions" :items="discountProducts.filter(p => p.key === `${camera.variantId ? 'variant' : 'product'}:${camera.variantId ?? camera.productId}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
+                    <div v-for="speaker in selectedSpeakers" :key="`cart-speaker-${speaker.key}`" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg border border-neutral-700 bg-black"><img v-if="speaker.image" :src="speaker.image" alt="" class="h-full w-full object-contain" /></div><div class="min-w-0"><CartProductTitle :title="speaker.productTitle" :fallback="cartVehicleTitle(t('speaker.label'))" /><p v-if="speaker.title !== speaker.productTitle" class="truncate text-sm text-neutral-400">{{ speaker.title }}</p><p class="mt-1 text-amber-400">{{ (speaker.price * cartQuantity(`speaker:${speaker.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white hover:text-red-400" @click="toggleSpeaker(speaker.key)"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`speaker:${speaker.key}`, cartQuantity(`speaker:${speaker.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`speaker:${speaker.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`speaker:${speaker.key}`, cartQuantity(`speaker:${speaker.key}`) + 1)">+</button></div><ProductDiscountEditor v-if="isAdmin && !hasPromotions" :items="discountProducts.filter(p => p.key === `${speaker.variantId ? 'variant' : 'product'}:${speaker.variantId ?? speaker.productId}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
+                    <div v-for="product in selectedCustomProducts" :key="`cart-custom-${product.key}`" class="grid grid-cols-[auto_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-4 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"><button type="button" @click="toggleCustomProduct(product.key)">🗑</button><div class="min-w-0"><CartProductTitle :title="product.title" :fallback="cartVehicleTitle(product.category)" /><p class="text-amber-400">{{ (product.price * cartQuantity(`custom:${product.key}`)).toFixed(2) }} €</p></div><div class="col-span-2 flex items-center justify-end gap-2 sm:col-span-1"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`custom:${product.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`custom:${product.key}`, cartQuantity(`custom:${product.key}`) + 1)">+</button></div><ProductDiscountEditor v-if="isAdmin && !hasPromotions" :items="discountProducts.filter(p => p.key === `${product.variantId ? 'variant' : 'product'}:${product.variantId ?? product.productId}`)" :discounts="productDiscounts" :applied="selectedProductDiscounts" :labels="adminDiscountCopy" :remove-label="funnelCopy.remove" @change="setProductDiscount" @remove="delete productDiscounts[$event]" /></div>
                     <div v-if="selectedInstallation" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3"><div class="relative flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-lg bg-amber-400"><img  :src="selectedInstallation.image || '/images/icons/installation-tools.png'" :alt="stepContextLabel('installation')" class="h-full w-full object-cover" /></div><div class="min-w-0"><CartProductTitle :title="selectedInstallation.title" :fallback="cartVehicleTitle(t('installation.label'))" /><p class="mt-1 text-amber-400">{{ (selectedInstallation.price * cartQuantity(`installation:${selectedInstallation.key}`)).toFixed(2) }} €</p></div><button type="button" class="flex h-10 w-10 items-center justify-center rounded-lg border border-neutral-600 bg-neutral-900 text-white transition hover:border-red-400 hover:text-red-400" :aria-label="t('actions.remove_product')" @click="selectedInstallationKey = null"><svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-9 0 1 13h10l1-13M10 11v5m4-5v5" /></svg></button><div class="flex items-center justify-end gap-2"><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`installation:${selectedInstallation.key}`, cartQuantity(`installation:${selectedInstallation.key}`) - 1)">−</button><b class="w-6 text-center">{{ cartQuantity(`installation:${selectedInstallation.key}`) }}</b><button type="button" class="h-9 w-9 rounded border border-neutral-600" @click="setCartQuantity(`installation:${selectedInstallation.key}`, cartQuantity(`installation:${selectedInstallation.key}`) + 1)">+</button></div></div>
                     <div v-if="selectedPrecheckMethod === 'installer'" class="grid grid-cols-[76px_minmax(0,1fr)] gap-3 rounded-xl border border-neutral-800 bg-[#121212] p-3">
                         <div class="flex h-[76px] w-[76px] items-center justify-center rounded-lg bg-amber-400 text-black">
@@ -6237,8 +6252,8 @@ watch(
                 </div>
                 <div v-if="hasSelectedProducts" class="mt-8 space-y-5 border-t border-neutral-800 pt-5">
                     <div class="rounded-xl border border-neutral-800 bg-[#121212] p-4">
-                        <div class="flex justify-between text-neutral-400"><span>{{ t('quote.subtotal') }}</span><span>{{ productsSubtotal.toFixed(2) }} €</span></div>
-                        <div v-if="discountAmount > 0" class="mt-3 flex justify-between text-emerald-400"><span>{{ discountLabel }}</span><span>−{{ discountAmount.toFixed(2) }} €</span></div>
+                        <div class="flex justify-between text-neutral-400"><span>{{ hasPromotions ? 'Prezzo di listino' : t('quote.subtotal') }}</span><span>{{ productsSubtotal.toFixed(2) }} €</span></div>
+                        <div v-if="discountAmount > 0" class="mt-3 flex justify-between text-emerald-400"><span>{{ hasPromotions ? `Sconto · ${discountLabel}` : discountLabel }}</span><span>−{{ discountAmount.toFixed(2) }} €</span></div>
                         <div v-if="customImportTotal > 0" class="mt-2 flex justify-between text-sm text-neutral-400"><span>{{ customQuoteCopy.importTotal }}</span><span>{{ euroFormatter.format(customImportTotal) }}</span></div>
                         <div class="mt-4 flex items-center justify-between border-t border-neutral-700 pt-4"><span class="text-lg font-bold">{{ t('quote.estimated_total') }}</span><span class="text-2xl font-bold">{{ estimatedTotal.toFixed(2) }} €</span></div>
                         <div v-if="installationCost > 0" class="mt-3 flex justify-between rounded-lg border border-sky-400/30 bg-sky-400/5 px-3 py-3 text-sky-200"><span>{{ t('quote.installation_direct') }}</span><b>{{ installationCost.toFixed(2) }} €</b></div>
@@ -6419,7 +6434,7 @@ watch(
                 </div>
 
                 <div class="mt-6 grid gap-4">
-                    <fieldset class="grid gap-3 rounded-xl border border-amber-400/30 bg-amber-400/5 p-4">
+                    <fieldset v-if="!hasPromotions" class="grid gap-3 rounded-xl border border-amber-400/30 bg-amber-400/5 p-4">
                         <legend class="px-1 text-sm font-semibold text-amber-400">{{ adminDiscountCopy.title }}</legend>
                         <p class="text-xs text-neutral-400">{{ adminDiscountCopy.help }}</p>
                         <div v-for="p in discountProducts" :key="p.key" class="grid gap-3 rounded-lg border border-neutral-700 p-3">

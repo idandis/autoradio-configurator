@@ -245,6 +245,7 @@ class ConfiguratorController extends Controller
             'translations' => trans('configurator'),
             'sharedConfiguration' => $sharedConfiguration,
             'stockSelection' => $stockSelection,
+            'promotionProducts' => app()->getLocale() === 'it' ? \App\Models\StockProduct::publicProducts()->map(fn ($p) => ['id' => $p['id'], 'discountPercent' => $p['discountPercent']]) : [],
             'stockChoices' => $stockProduct ? $this->customProductOptions(collect([$stockProduct])) : [],
             'customProducts' => $this->customProductOptions($requiredCustomProducts)
                 ->filter(fn (array $product) => $requiredCustomKeys->contains($product['key']))

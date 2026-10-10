@@ -15,6 +15,29 @@ class ItalianCheckoutTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_offer_discount_comes_only_from_database_and_replaces_other_rules(): void
+    {
+        $variant = $this->variant('600.00');
+        $other = ConfiguratorProduct::create(['handle' => 'regular-accessory', 'category' => 'accessory', 'title' => 'Accessory', 'price_min' => 400]);
+        $stock = \App\Models\StockProduct::create(['product_handle' => $variant->product->handle, 'quantity' => 2, 'discount_percent' => 30]);
+        $items = [
+            ['type' => 'variant', 'id' => $variant->id, 'quantity' => 2],
+            ['type' => 'product', 'id' => $other->id, 'quantity' => 1],
+        ];
+        $service = app(ItalianCheckout::class);
+        $custom = ['code' => 'OTHER', 'type' => 'percentage', 'value' => 9000];
+        $quote = $service->quote($items, false, 'it', $custom);
+        $this->assertSame(36000, $quote['discount_amount']);
+        $this->assertSame(124000, $quote['total_amount']);
+        $this->assertSame('Offerta 30%', $quote['discount_label']);
+        $stock->update(['discount_percent' => 20]);
+        $this->assertSame(24000, $service->quote($items)['discount_amount']);
+        $stock->update(['discount_percent' => 0]);
+        $this->assertSame(0, $service->quote($items, false, 'it', $custom)['discount_amount']);
+        $stock->update(['quantity' => 0]);
+        $this->assertSame(5000, $service->quote($items)['discount_amount']);
+    }
+
     public function test_product_discount_only_reduces_the_selected_line_and_replaces_automatic_discounts(): void
     {
         $a = $this->variant('600.00');

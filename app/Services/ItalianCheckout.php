@@ -4,6 +4,8 @@ namespace App\Services;
 
 use App\Models\ConfiguratorProduct;
 use App\Models\ConfiguratorVariant;
+use App\Models\StockProduct;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -155,8 +157,20 @@ class ItalianCheckout
 
         $subtotal = array_sum(array_column($lines, 'total_amount'));
         $importAmount += array_sum(array_column($lines, 'import_total_amount'));
+        $promotions = $locale === 'it' && Schema::hasTable('stock_products')
+            ? StockProduct::where('quantity', '>', 0)->whereIn('product_handle', array_column($lines, 'product_handle'))->get()->keyBy('product_handle')
+            : collect();
         // Same automatic tiers already shown by the configurator, calculated in cents.
-        if (! empty($customDiscount['items'])) {
+        if ($promotions->isNotEmpty()) {
+            $discount = 0;
+            $labels = [];
+            foreach ($lines as $line) {
+                $percentage = (int) ($promotions->get($line['product_handle'])?->discount_percent ?? 0);
+                $discount += intdiv($line['total_amount'] * $percentage + 50, 100);
+                if ($percentage > 0) $labels[] = ($locale === 'es' ? 'Oferta ' : 'Offerta ').$percentage.'%';
+            }
+            $label = $labels ? implode(' + ', array_unique($labels)) : null;
+        } elseif (! empty($customDiscount['items'])) {
             $discount = 0;
             $seen = [];
             $labels = [];

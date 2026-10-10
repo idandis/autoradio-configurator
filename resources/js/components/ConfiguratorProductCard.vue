@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import PromotionPrice from '@/components/PromotionPrice.vue';
 defineProps<{
     title: string;
     image?: string | null;
@@ -6,6 +7,8 @@ defineProps<{
     detailsAriaLabel: string;
     imageUnavailableLabel: string;
     priceLabel: string;
+    promotionPrice?: number;
+    promotionPercent?: number;
     primaryLabel: string;
     selected?: boolean;
 }>();
@@ -51,7 +54,7 @@ defineEmits<{ primary: []; details: [] }>();
         <div class="min-w-0">
             <h3 class="product-card-title">{{ title }}</h3>
             <slot name="subtitle" />
-            <p class="product-card-price">{{ priceLabel }}</p>
+            <p class="product-card-price"><PromotionPrice v-if="promotionPercent && promotionPrice !== undefined" :price="promotionPrice" :percentage="promotionPercent" /><span v-else>{{ priceLabel }}</span></p>
         </div>
 
         <slot name="quantity" />

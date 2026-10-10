@@ -22,6 +22,25 @@ class StockProductsTest extends TestCase
         ]);
     }
 
+    public function test_discount_save_upgrades_existing_stock_table(): void
+    {
+        $product = $this->product();
+        $stock = StockProduct::create(['product_handle' => $product->handle, 'quantity' => 2]);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        foreach (['update', 'store'] as $action) {
+            \Illuminate\Support\Facades\Schema::table('stock_products', fn ($table) => $table->dropColumn('discount_percent'));
+            if ($action === 'update') {
+                $this->patchJson(route('stock-products.update', $stock), ['discount_percent' => 30])->assertOk();
+            } else {
+                $this->postJson(route('stock-products.store'), [
+                    'product_handle' => $product->handle, 'quantity' => 2, 'discount_percent' => 30,
+                ])->assertOk();
+            }
+            $this->assertSame(30, $stock->fresh()->discount_percent);
+            $this->assertSame(2, $stock->fresh()->quantity);
+        }
+    }
+
     public function test_discount_is_saved_exposed_and_preserved_when_quantity_changes(): void
     {
         $product = $this->product();

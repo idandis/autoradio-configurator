@@ -50,6 +50,7 @@ class StockProductsController extends Controller
             abort_unless(Schema::hasTable('stock_products'), 503, 'Gestione In stock non disponibile. Premi Aggiorna database dalla Dashboard e riprova.');
         }
 
+        if (array_key_exists('discount_percent', $data)) $this->ensureDiscountColumn();
         StockProduct::updateOrCreate(['product_handle' => $data['product_handle']], array_diff_key($data, ['product_handle' => true]));
 
         return response()->json(['saved' => true]);
@@ -57,10 +58,12 @@ class StockProductsController extends Controller
 
     public function update(Request $request, StockProduct $stockProduct): JsonResponse
     {
-        $stockProduct->update($request->validate([
+        $data = $request->validate([
             'quantity' => ['required_without:discount_percent', 'integer', 'min:0', 'max:9999'],
             'discount_percent' => ['required_without:quantity', 'integer', 'min:0', 'max:100'],
-        ]));
+        ]);
+        if (array_key_exists('discount_percent', $data)) $this->ensureDiscountColumn();
+        $stockProduct->update($data);
 
         return response()->json(['saved' => true]);
     }
@@ -70,5 +73,19 @@ class StockProductsController extends Controller
         $stockProduct->delete();
 
         return response()->json(['deleted' => true]);
+    }
+
+    private function ensureDiscountColumn(): void
+    {
+        if (Schema::hasColumn('stock_products', 'discount_percent')) return;
+
+        try {
+            $migration = require database_path('migrations/2026_10_10_130000_add_discount_percent_to_stock_products_table.php');
+            $migration->up();
+        } catch (\Throwable $e) {
+            if (Schema::hasColumn('stock_products', 'discount_percent')) return;
+            report($e);
+            abort(503, 'Sconto non disponibile. Premi Aggiorna database dalla Dashboard e riprova.');
+        }
     }
 }
