@@ -4264,7 +4264,7 @@ watch(
         @complete="completeMobileVehicle"
         @missing="missingMobileVehicle"
     />
-    <Head :title="props.homeBeta ? 'Autoradio Italiano · Home beta' : t('page_title')" />
+    <Head :title="props.homeBeta ? 'Autoradio Italiano · Home' : t('page_title')" />
     <iframe v-if="quotePreviewHtml" ref="quotePreviewFrame" :srcdoc="quotePreviewHtml" :title="t('print.document_title')" class="fixed inset-0 z-[120] h-dvh w-full border-0 bg-white" />
     <Teleport to="body">
         <div v-if="quotePreviewHtml" ref="quotePrintDocument" class="quote-print-document" :lang="locale" />

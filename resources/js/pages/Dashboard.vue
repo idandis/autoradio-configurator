@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import StockProductsManager from '@/components/StockProductsManager.vue';
 import { Head, router, useForm } from '@inertiajs/vue3';
 import { ref, watch } from 'vue';
 
@@ -119,7 +118,6 @@ const verifyCatalog = () => {
     <Head title="Dashboard" />
 
     <div class="flex flex-1 flex-col gap-6 p-4">
-        <StockProductsManager />
         <div class="grid gap-4 md:grid-cols-4">
             <div class="rounded-xl border border-sidebar-border/70 bg-card p-5">
                 <p class="text-sm text-muted-foreground">Veicoli</p>

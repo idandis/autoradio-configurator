@@ -3,6 +3,7 @@ import { Head, router, useForm } from '@inertiajs/vue3';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { computed, reactive, ref } from 'vue';
 import DescriptionEditor from '@/components/DescriptionEditor.vue';
+import StockProductsManager from '@/components/StockProductsManager.vue';
 
 const props = defineProps<{
     filters: {
@@ -199,6 +200,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
 
 <template>
     <Head title="Prodotti importati" />
+    <StockProductsManager class="mb-6" />
 
     <section class="rounded-xl border border-sidebar-border/70 bg-card">
         <div class="flex flex-col gap-4 border-b border-sidebar-border/70 p-6 lg:flex-row lg:items-end lg:justify-between">
