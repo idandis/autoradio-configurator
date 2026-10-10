@@ -47,10 +47,9 @@ const editingPrice = ref<number | null>(null);
 const priceDraft = ref('');
 const savingPrice = ref(false);
 const deletingProduct = ref<number | null>(null);
-const editingTitles = ref<number | null>(null);
-const titleItDraft = ref('');
-const titleEnDraft = ref('');
-const savingTitles = ref(false);
+const titleProduct = ref<(typeof props.products.data)[number] | null>(null);
+const titlesOpen = ref(false);
+const titleForm = useForm({ title_it: '', title_en: '' });
 const variantProduct = ref<(typeof props.products.data)[number] | null>(null);
 const variantsOpen = ref(false);
 const variantForm = useForm({ variants: [] as Array<{ id: number; price: string }> });
@@ -99,26 +98,17 @@ const saveVariants = () => {
 };
 
 const startTitleEdit = (product: (typeof props.products.data)[number]) => {
-    editingTitles.value = product.id;
-    titleItDraft.value = product.title_it ?? '';
-    titleEnDraft.value = product.title_en ?? '';
+    titleProduct.value = product;
+    titleForm.clearErrors();
+    titleForm.title_it = product.title_it ?? '';
+    titleForm.title_en = product.title_en ?? '';
+    titlesOpen.value = true;
 };
-
-const cancelTitleEdit = () => {
-    editingTitles.value = null;
-    titleItDraft.value = '';
-    titleEnDraft.value = '';
-};
-
-const saveTitles = (product: (typeof props.products.data)[number]) => {
-    savingTitles.value = true;
-    router.patch(`/imported-products/${product.id}/titles`, {
-        title_it: titleItDraft.value,
-        title_en: titleEnDraft.value,
-    }, {
+const saveTitles = () => {
+    if (!titleProduct.value || titleForm.processing) return;
+    titleForm.patch(`/imported-products/${titleProduct.value.id}/titles`, {
         preserveScroll: true,
-        onSuccess: cancelTitleEdit,
-        onFinish: () => { savingTitles.value = false; },
+        onSuccess: () => { titlesOpen.value = false; },
     });
 };
 
@@ -276,15 +266,8 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                                 />
                                 <div class="min-w-0">
                                     <p class="font-medium">{{ product.title }}</p>
-                                    <div v-if="editingTitles === product.id" class="mt-3 grid min-w-80 gap-2">
-                                        <label class="grid gap-1 text-xs text-muted-foreground"><span>Italiano</span><textarea v-model="titleItDraft" rows="2" class="rounded-md border border-sidebar-border/70 bg-background px-2 py-1.5 text-sm text-foreground" /></label>
-                                        <label class="grid gap-1 text-xs text-muted-foreground"><span>Inglese</span><textarea v-model="titleEnDraft" rows="2" class="rounded-md border border-sidebar-border/70 bg-background px-2 py-1.5 text-sm text-foreground" /></label>
-                                        <div class="flex gap-2"><button type="button" class="rounded-md bg-primary px-2 py-1 text-xs text-primary-foreground" :disabled="savingTitles" @click="saveTitles(product)">Salva titoli</button><button type="button" class="rounded-md border px-2 py-1 text-xs" @click="cancelTitleEdit">Annulla</button></div>
-                                    </div>
-                                    <template v-else>
-                                        <p v-if="product.title_it" class="mt-1 text-xs text-muted-foreground"><span class="font-semibold">IT:</span> {{ product.title_it }}</p>
-                                        <p v-if="product.title_en" class="mt-1 text-xs text-muted-foreground"><span class="font-semibold">EN:</span> {{ product.title_en }}</p>
-                                    </template>
+                                    <p v-if="product.title_it" class="mt-1 text-xs text-muted-foreground"><span class="font-semibold">IT:</span> {{ product.title_it }}</p>
+                                    <p v-if="product.title_en" class="mt-1 text-xs text-muted-foreground"><span class="font-semibold">EN:</span> {{ product.title_en }}</p>
                                     <p class="mt-1 break-all text-xs text-muted-foreground">
                                         {{ product.handle }}
                                     </p>
@@ -320,7 +303,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                             <button type="button" class="rounded-md border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium hover:border-primary hover:text-primary disabled:opacity-50" :disabled="!product.variants_count" @click="openVariants(product)">Varianti ({{ product.variants_count }})</button>
                         </td>
                         <td class="px-6 py-4 text-right align-top">
-                            <button type="button" class="mr-2 rounded-md border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium transition hover:border-primary hover:text-primary" @click="startTitleEdit(product)">Traduci</button>
+                            <button type="button" class="mr-2 rounded-md border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium transition hover:border-primary hover:text-primary" :aria-label="`Modifica titolo ${product.title}`" @click="startTitleEdit(product)">Modifica titolo</button>
                             <button
                                 type="button"
                                 class="rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive transition hover:bg-destructive hover:text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-50"
@@ -361,6 +344,17 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
             />
         </div>
     </section>
+    <Dialog v-model:open="titlesOpen">
+        <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-2xl" @interact-outside="titleForm.processing && $event.preventDefault()" @escape-key-down="titleForm.processing && $event.preventDefault()">
+            <DialogHeader><DialogTitle>Modifica titolo</DialogTitle><DialogDescription>{{ titleProduct?.title }}</DialogDescription></DialogHeader>
+            <form class="grid gap-4" @submit.prevent="saveTitles">
+                <label class="grid gap-1 text-sm">Italiano<textarea v-model="titleForm.title_it" rows="3" maxlength="1000" class="w-full rounded-lg border border-sidebar-border/70 bg-background p-3" :disabled="titleForm.processing" /></label>
+                <label class="grid gap-1 text-sm">Inglese<textarea v-model="titleForm.title_en" rows="3" maxlength="1000" class="w-full rounded-lg border border-sidebar-border/70 bg-background p-3" :disabled="titleForm.processing" /></label>
+                <p v-for="(error, key) in titleForm.errors" :key="key" role="alert" class="text-sm text-red-400">{{ error }}</p>
+                <div class="flex justify-end gap-2"><button type="button" class="rounded-lg border px-4 py-2 text-sm" :disabled="titleForm.processing" @click="titlesOpen = false">Annulla</button><button type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50" :disabled="titleForm.processing">{{ titleForm.processing ? 'Salvataggio…' : 'Salva titolo' }}</button></div>
+            </form>
+        </DialogContent>
+    </Dialog>
     <Dialog v-model:open="descriptionOpen">
         <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-3xl" @interact-outside="descriptionForm.processing && $event.preventDefault()" @escape-key-down="descriptionForm.processing && $event.preventDefault()">
             <DialogHeader><DialogTitle>Modifica descrizione</DialogTitle><DialogDescription>{{ descriptionProduct?.title }}</DialogDescription></DialogHeader>
