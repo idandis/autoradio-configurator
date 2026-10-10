@@ -9,9 +9,9 @@ use Illuminate\Support\Facades\Schema;
 
 class StockProduct extends Model
 {
-    protected $fillable = ['product_handle', 'quantity'];
+    protected $fillable = ['product_handle', 'quantity', 'discount_percent'];
 
-    protected $casts = ['quantity' => 'integer'];
+    protected $casts = ['quantity' => 'integer', 'discount_percent' => 'integer'];
 
     public function product(): BelongsTo
     {
@@ -29,6 +29,7 @@ class StockProduct extends Model
             ->orderBy('id')->get()->map(fn ($stock) => [
                 'id' => $stock->product->id,
                 'handle' => $stock->product_handle,
+                'discountPercent' => $stock->discount_percent ?? 0,
                 'title' => $stock->product->localizedTitle('it'),
                 'category' => $stock->product->category,
                 'image' => $stock->product->image_url ?: $stock->product->variants->first(fn ($v) => filled($v->image_url))?->image_url,

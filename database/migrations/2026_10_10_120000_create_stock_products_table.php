@@ -12,6 +12,7 @@ return new class extends Migration
             $table->id();
             $table->string('product_handle')->unique();
             $table->unsignedInteger('quantity')->default(1);
+            $table->unsignedTinyInteger('discount_percent')->default(0);
             $table->timestamps();
         });
     }

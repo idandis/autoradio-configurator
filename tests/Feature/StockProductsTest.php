@@ -22,6 +22,32 @@ class StockProductsTest extends TestCase
         ]);
     }
 
+    public function test_discount_is_saved_exposed_and_preserved_when_quantity_changes(): void
+    {
+        $product = $this->product();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->postJson(route('stock-products.store'), [
+            'product_handle' => $product->handle, 'quantity' => 2, 'discount_percent' => 30,
+        ])->assertOk();
+        $stock = StockProduct::firstOrFail();
+        $this->getJson(route('stock-products.index'))->assertJsonPath('stock.0.discountPercent', 30);
+        $this->assertSame(30, StockProduct::publicProducts()->first()['discountPercent']);
+        $this->patchJson(route('stock-products.update', $stock), ['quantity' => 3])->assertOk();
+        $this->assertSame(30, $stock->fresh()->discount_percent);
+        $this->patchJson(route('stock-products.update', $stock), ['discount_percent' => 40])->assertOk();
+        $this->assertSame(3, $stock->fresh()->quantity);
+        $this->assertSame(40, StockProduct::publicProducts()->first()['discountPercent']);
+        foreach ([-1, 101, 2.5, null] as $discount) {
+            $this->patchJson(route('stock-products.update', $stock), ['discount_percent' => $discount])
+                ->assertUnprocessable()->assertJsonValidationErrors('discount_percent');
+        }
+        $this->postJson(route('stock-products.store'), ['product_handle' => $product->handle, 'quantity' => 1])->assertOk();
+        $this->assertSame(40, $stock->fresh()->discount_percent);
+        $this->patchJson(route('stock-products.update', $stock), ['discount_percent' => 0])->assertOk();
+        $this->assertSame(0, StockProduct::publicProducts()->first()['discountPercent']);
+        $this->assertSame(199.0, StockProduct::publicProducts()->first()['price']);
+    }
+
     public function test_italian_domain_opens_home_and_preserves_configurator_and_contact_links(): void
     {
         $this->withoutMiddleware(BlockOutsideEurope::class);

@@ -159,7 +159,7 @@ type VehicleImageMapping = {
 const props = defineProps<{
     locale: 'es' | 'it' | 'en';
     homeBeta?: boolean;
-    stockProducts?: Array<{ id: number; title: string; category: 'screen' | 'camera' | 'speaker' | 'accessory'; image: string | null; price: number | null }>;
+    stockProducts?: Array<{ id: number; title: string; category: 'screen' | 'camera' | 'speaker' | 'accessory'; image: string | null; price: number | null; discountPercent: number }>;
     italianCheckoutEnabled?: boolean;
     italianCheckoutIsTest?: boolean;
     translations: TranslationTree;
