@@ -2223,7 +2223,7 @@ onMounted(async () => {
             selectedSpeakerCategory.value = speaker?.categories[0] ?? '';
             if (speaker && selectedSpeakerCategory.value) selectedSpeakerSizeByCategory.value[selectedSpeakerCategory.value] = speaker.sizes[0] ?? '';
         }
-        openSteps.value = ['vehicle', 'screen'];
+        openSteps.value = ['screen'];
     }
     const sharedConfigurationRestored = !stock && await restoreSharedConfiguration();
     if (!stock && !sharedConfigurationRestored) {
@@ -2265,7 +2265,8 @@ onMounted(async () => {
 
         if (stock) {
             await nextTick();
-            document.getElementById(stockNeedsChoices.value ? 'stock-product-choice' : 'vehicle-brand')?.scrollIntoView({ block: 'start' });
+            const card = document.getElementById(stockNeedsChoices.value ? 'stock-product-choice' : `screen-product-${stock.id}`);
+            card?.scrollIntoView({ block: 'center', behavior: 'auto' });
         }
 
         if (sharedConfigurationRestored) {
