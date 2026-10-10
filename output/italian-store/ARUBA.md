@@ -6,6 +6,7 @@ File applicativi e immagini:
 - `app/Http/Controllers/ItalianStorePageController.php`
 - `app/Http/Controllers/StockProductsController.php`
 - `app/Models/StockProduct.php`
+- `app/Models/ConfiguratorProduct.php`
 - `bootstrap/app.php`
 - `database/migrations/2026_10_10_120000_create_stock_products_table.php`
 - `lang/en/configurator.php`
@@ -37,3 +38,7 @@ Dopo il caricamento premere “Aggiorna database” in Dashboard per pulire le c
 Percorsi italiani: /chi-siamo, /privacy, /resi-e-rimborsi, /termini-del-servizio, /spedizioni, /contatti, /note-legali, /marche. I dati del titolare e l’indirizzo spagnolo sono mantenuti come confermato; email e telefono sono quelli italiani. I testi sono adattamenti italiani delle pagine sorgenti, non traduzioni integrali del negozio Shopify.
 
 Verifiche: 10 test, 272 asserzioni; build Vite riuscita; JSON valido; Chrome a 320, 390 e 1440 pixel su home, marche e tutte le sette pagine, nessun overflow o collegamento Canario nelle nuove pagine. Verificati menu e selezione marca. Rimossa l’attribuzione GeoNames dall’interfaccia per tutte le lingue.
+
+I prodotti in stock aprono /configurator?lang=it&stock=ID. Marca e modello sono la prima compatibilità del database; l’anno è il più recente nell’intervallo, senza superare l’anno corrente quando possibile. Il prodotto mostra le varianti prima dell’aggiunta al carrello. Per gli universali viene selezionato il DIN del database. I link a prodotti non più in stock restituiscono 404. Verifica: 11 test, 295 asserzioni; build e browser desktop/mobile riusciti.
+
+La pagina /marche è stata eliminata e reindirizza a /configurator?lang=it&mode=specific&pick=brand. Per marca e Per modello della home aprono direttamente il selettore, con 40 loghi a sinistra e nomi centrati. Il selettore è disponibile anche dal campo Marca del configuratore. Caricare lo ZIP autoradioitaliano-menu-marche-aruba.zip nei percorsi indicati e premere Aggiorna database per svuotare le cache delle route. Verificati il percorso marca/modello/anno su desktop e mobile, 11 test e 296 asserzioni.

@@ -4,13 +4,13 @@ import { Bluetooth, ChevronRight, Headphones, Music2, Navigation, PackageCheck, 
 
 type Product = { id: number; title: string; category: 'screen' | 'camera' | 'speaker' | 'accessory'; image: string | null; price: number | null };
 const props = defineProps<{ products: Product[] }>();
-const emit = defineEmits<{ details: [product: Product] }>();
+const emit = defineEmits<{ select: [product: Product] }>();
 const all = ref(false);
 const products = computed(() => all.value ? props.products : props.products.slice(0, 4));
 const euro = new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' });
 const paths = [
-    { title: 'Per marca', text: 'Scegli la tua auto', image: 'per-marca', href: '/marche' },
-    { title: 'Per modello', text: 'Trova la compatibilità', image: 'per-modello', href: '/marche' },
+    { title: 'Per marca', text: 'Scegli la tua auto', image: 'per-marca', href: '/configurator?lang=it&mode=specific&pick=brand' },
+    { title: 'Per modello', text: 'Trova la compatibilità', image: 'per-modello', href: '/configurator?lang=it&mode=specific&pick=brand' },
     { title: 'Universali', text: 'Soluzioni per ogni auto', image: 'universali', href: '/configurator?lang=it&mode=universal' },
 ];
 const benefits = [
@@ -50,7 +50,7 @@ const benefits = [
             <section id="in-stock" class="home-stock" aria-labelledby="stock-title">
                 <div class="home-stock-heading"><h2 id="stock-title">IN STOCK <span>·</span> CONSEGNA RAPIDA</h2><button v-if="props.products.length > 4" type="button" :aria-expanded="all" aria-controls="stock-grid" @click="all = !all">{{ all ? 'Mostra meno' : 'Vedi tutti' }}<ChevronRight :size="22" /></button></div>
                 <div v-if="products.length" id="stock-grid" class="home-stock-grid">
-                    <button v-for="product in products" :key="product.id" type="button" class="home-product" @click="emit('details', product)">
+                    <button v-for="product in products" :key="product.id" type="button" class="home-product" @click="emit('select', product)">
                         <span class="home-stock-badge"><PackageCheck :size="25" /><span>PRONTA<br>CONSEGNA</span><Truck :size="26" class="home-truck" /></span>
                         <div class="home-product-image"><img v-if="product.image" :src="product.image" :alt="product.title" loading="lazy" /><PackageCheck v-else :size="68" class="text-neutral-600" /></div>
                         <div class="home-product-title"><h3>{{ product.title }}</h3><ChevronRight :size="23" /></div>

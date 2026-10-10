@@ -60,7 +60,7 @@ Route::post('/stripe/webhook', StripeWebhookController::class)->name('stripe.web
 Route::middleware('extra-eu')->group(function () {
     Route::get('/', [ConfiguratorController::class, 'home'])->name('home');
     Route::get('/home-beta', [ConfiguratorController::class, 'homeBeta'])->name('home.beta');
-    Route::get('/marche', [ConfiguratorController::class, 'brandsListing'])->name('store.brands');
+    Route::redirect('/marche', '/configurator?lang=it&mode=specific&pick=brand')->name('store.brands');
     Route::get('/{slug}', \App\Http\Controllers\ItalianStorePageController::class)
         ->whereIn('slug', ['chi-siamo', 'privacy', 'resi-e-rimborsi', 'termini-del-servizio', 'spedizioni', 'contatti', 'note-legali'])
         ->name('store.page');

@@ -92,16 +92,29 @@ class ConfiguratorController extends Controller
             ->with('stockProducts', \App\Models\StockProduct::publicProducts());
     }
 
-    public function brandsListing(Request $request, VehicleImageResolver $vehicleImageResolver): Response
-    {
-        app()->setLocale('it');
-        $request->session()->put('locale', 'it');
-
-        return $this->__invoke($request, $vehicleImageResolver)->with('brandListing', true);
-    }
-
     public function __invoke(Request $request, VehicleImageResolver $vehicleImageResolver): Response
     {
+        $stockProduct = null;
+        $stockSelection = null;
+        if ($request->has('stock')) {
+            $stockProduct = ConfiguratorProduct::with('variants')
+                ->whereKey($request->integer('stock'))
+                ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])
+                ->whereHas('stock', fn ($query) => $query->where('quantity', '>', 0))
+                ->firstOrFail();
+            app()->setLocale('it');
+            $fields = $this->vehicleFields($stockProduct);
+            $vehicle = collect($vehicleImageResolver->vehicleEntries($fields['brand'], $fields['model']))
+                ->first(fn ($entry) => mb_strtolower(trim($entry['model'])) !== 'universal');
+            $year = $stockProduct->year_from !== null && $stockProduct->year_to !== null
+                ? max($stockProduct->year_from, min((int) date('Y'), $stockProduct->year_to)) : null;
+            $stockSelection = [
+                'id' => $stockProduct->id, 'handle' => $stockProduct->handle, 'category' => $stockProduct->category,
+                'brand' => $vehicle['brand'] ?? null, 'model' => $vehicle['model'] ?? null, 'year' => $year,
+                'mode' => $vehicle && $year !== null ? 'specific' : 'universal',
+                'din' => preg_replace('/\s+/u', '', mb_strtoupper((string) ($stockProduct->meta['din'] ?? ''))) ?: null,
+            ];
+        }
         $sharedConfiguration = $this->sharedConfiguration($request);
         $requiredCustomKeys = collect($sharedConfiguration['customProducts'] ?? [])
             ->merge($request->query('summary') === '1' ? (array) $request->query('custom', []) : [])
@@ -145,6 +158,7 @@ class ConfiguratorController extends Controller
 
         $sharedScreenHandles = collect($sharedConfiguration['screens'] ?? [])
             ->pluck('product')
+            ->merge($stockProduct?->category === 'screen' ? [$stockProduct->handle] : [])
             ->merge($request->query('summary') === '1' ? (array) $request->query('product', []) : [])
             ->filter(fn ($handle) => is_string($handle) && $handle !== '')
             ->unique()
@@ -224,6 +238,8 @@ class ConfiguratorController extends Controller
             'locale' => app()->getLocale(),
             'translations' => trans('configurator'),
             'sharedConfiguration' => $sharedConfiguration,
+            'stockSelection' => $stockSelection,
+            'stockChoices' => $stockProduct ? $this->customProductOptions(collect([$stockProduct])) : [],
             'customProducts' => $this->customProductOptions($requiredCustomProducts)
                 ->filter(fn (array $product) => $requiredCustomKeys->contains($product['key']))
                 ->values(),

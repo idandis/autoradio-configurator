@@ -41,6 +41,11 @@ class ConfiguratorProduct extends Model
         return $this->hasMany(ConfiguratorVariant::class);
     }
 
+    public function stock(): HasMany
+    {
+        return $this->hasMany(StockProduct::class, 'product_handle', 'handle');
+    }
+
     public function localizedTitle(?string $locale = null): string
     {
         $translated = match ($locale ?? app()->getLocale()) {

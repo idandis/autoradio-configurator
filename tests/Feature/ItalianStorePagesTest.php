@@ -33,8 +33,9 @@ class ItalianStorePagesTest extends TestCase
             'handle' => 'autoradio-compatibile', 'category' => 'screen', 'title' => 'Autoradio',
             'brand' => 'FIAT', 'model' => '500', 'year_from' => 2007, 'year_to' => 2015,
         ]);
-        $this->get('/marche?lang=es')->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->component('Configurator')->where('brandListing', true)->where('locale', 'it')
-            ->where('vehicleCompatibility.0.brand', 'FIAT')->missing('homeBeta'));
+        $this->get('/marche?lang=es')->assertRedirect('/configurator?lang=it&mode=specific&pick=brand');
+        $this->get('/configurator?lang=it&mode=specific&pick=brand')->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->component('Configurator')->where('locale', 'it')
+            ->where('vehicleCompatibility.0.brand', 'FIAT')->missing('brandListing')->missing('homeBeta'));
     }
 }

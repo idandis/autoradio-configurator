@@ -7,6 +7,8 @@ const props = defineProps<{
     entries: { brand: string; model: string; yearFrom: number | null; yearTo: number | null }[];
     displayModel: (model: string | null) => string;
     missingLabels: string[];
+    locale?: 'es' | 'it' | 'en';
+    brandImage?: (brand: string) => string | null;
 }>();
 const emit = defineEmits<{ complete: [value: VehicleChoice]; missing: [value: VehicleChoice] }>();
 const dialog = ref<HTMLDialogElement>();
@@ -17,7 +19,7 @@ const step = ref(0);
 const query = ref('');
 const draft = ref<VehicleChoice>({ brand: null, model: null, year: null });
 const active = ref(0);
-const titles = ['Selecciona la marca', 'Selecciona el modelo', 'Selecciona el año'];
+const copy = computed(() => ({ es: { titles: ['Selecciona la marca', 'Selecciona el modelo', 'Selecciona el año'], brand: 'Buscar marca', model: 'Buscar modelo', empty: 'No se encontraron resultados', back: 'Atrás' }, it: { titles: ['Seleziona la marca', 'Seleziona il modello', 'Seleziona l’anno'], brand: 'Cerca marca', model: 'Cerca modello', empty: 'Nessun risultato', back: 'Indietro' }, en: { titles: ['Select make', 'Select model', 'Select year'], brand: 'Search make', model: 'Search model', empty: 'No results found', back: 'Back' } })[props.locale ?? 'es']);
 const historyKey = 'autoradioVehiclePicker';
 let session = '';
 let depth = 0;
@@ -56,10 +58,10 @@ function pushStep() {
     else window.history.pushState(state, '');
     depth = 1;
 }
-async function open() {
+async function open(reset = false) {
     if (opened.value || closing) return;
     opener = document.activeElement as HTMLElement;
-    draft.value = { ...props.value };
+    draft.value = reset ? { brand: null, model: null, year: null } : { ...props.value };
     step.value = 0;
     session = String(Date.now());
     previousOverflow = document.body.style.overflow;
@@ -154,14 +156,11 @@ function missing() {
     result.year = null;
     finishWithResult(() => emit('missing', result));
 }
-function resize() { if (opened.value && window.innerWidth >= 1024) close(); }
 onMounted(() => {
     window.addEventListener('popstate', onPop, true);
-    window.addEventListener('resize', resize);
 });
 onBeforeUnmount(() => {
     window.removeEventListener('popstate', onPop, true);
-    window.removeEventListener('resize', resize);
     if (opened.value) {
         document.body.style.overflow = previousOverflow;
         dialog.value?.close();
@@ -177,18 +176,18 @@ defineExpose({ open });
             <div v-if="opened" class="picker-layout">
                 <header>
                     <p class="mb-2 text-sm text-amber-400">{{ step + 1 }} / 3</p>
-                    <h2 id="vehicle-picker-title" ref="heading" tabindex="-1" class="text-2xl font-bold outline-none">{{ titles[step] }}</h2>
-                    <input v-if="step < 2" v-model="query" type="search" :aria-label="step === 0 ? 'Buscar marca' : 'Buscar modelo'" :placeholder="step === 0 ? 'Buscar marca…' : 'Buscar modelo…'" class="mt-5 w-full rounded-lg border border-amber-400 bg-neutral-900 p-3 text-white" @input="active = 0" @keydown.down.prevent="list?.focus()" />
+                    <h2 id="vehicle-picker-title" ref="heading" tabindex="-1" class="text-2xl font-bold outline-none">{{ copy.titles[step] }}</h2>
+                    <input v-if="step < 2" v-model="query" type="search" :aria-label="step === 0 ? copy.brand : copy.model" :placeholder="`${step === 0 ? copy.brand : copy.model}…`" class="mt-5 w-full rounded-lg border border-amber-400 bg-neutral-900 p-3 text-white" @input="active = 0" @keydown.down.prevent="list?.focus()" />
                 </header>
                 <div ref="list" role="listbox" tabindex="0" aria-labelledby="vehicle-picker-title" :aria-activedescendant="options.length ? `vehicle-option-${active}` : undefined" class="picker-list" @keydown="keyboard">
                     <div v-for="(option, index) in options" :id="`vehicle-option-${index}`" :key="option.value" role="option" :aria-selected="selected === option.value" class="picker-option" :class="{ chosen: selected === option.value, active: active === index }" @click="choose(option.value)">
-                        <span>{{ option.label }}</span><span v-if="selected === option.value" aria-hidden="true">✓</span>
+                        <span class="flex w-16 shrink-0 items-center"><img v-if="step === 0 && brandImage?.(String(option.value))" :src="brandImage(String(option.value)) ?? undefined" alt="" class="h-10 w-16 object-contain" /></span><span class="flex-1 text-center">{{ option.label }}</span><span class="w-16 shrink-0 text-right" aria-hidden="true">{{ selected === option.value ? '✓' : '' }}</span>
                     </div>
-                    <p v-if="!options.length" role="status" class="p-4 text-neutral-400">No se encontraron resultados</p>
+                    <p v-if="!options.length" role="status" class="p-4 text-neutral-400">{{ copy.empty }}</p>
                 </div>
                 <footer class="grid gap-3">
                     <button type="button" class="rounded-lg border border-amber-400 p-3 text-amber-400" @click="missing">{{ missingLabels[step] }}</button>
-                    <button type="button" class="flex min-h-12 items-center justify-center gap-3 rounded-xl bg-[#334fb4] p-3 font-semibold text-white hover:bg-[#405dc7]" @click="back"><span aria-hidden="true">←</span> Atrás</button>
+                    <button type="button" class="flex min-h-12 items-center justify-center gap-3 rounded-xl bg-[#334fb4] p-3 font-semibold text-white hover:bg-[#405dc7]" @click="back"><span aria-hidden="true">←</span> {{ copy.back }}</button>
                 </footer>
             </div>
         </dialog>
@@ -204,4 +203,5 @@ defineExpose({ open });
 .picker-option.chosen { background: #fbbf24; color: #000; font-weight: 700; }
 .picker-list:focus-visible { outline: 2px solid white; outline-offset: 3px; }
 .picker-list:focus .picker-option.active { box-shadow: inset 0 0 0 3px white; }
+@media (min-width: 1024px) { .vehicle-picker { margin: auto; width: 560px; height: min(780px, 85dvh); border-radius: 12px; } .vehicle-picker::backdrop { background: #0009; } }
 </style>

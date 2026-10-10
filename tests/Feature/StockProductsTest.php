@@ -49,6 +49,22 @@ class StockProductsTest extends TestCase
         $this->getJson(route('stock-products.index'))->assertJsonPath('ready', true);
     }
 
+    public function test_stock_link_opens_catalog_with_database_vehicle_and_all_variants(): void
+    {
+        $this->withoutMiddleware(BlockOutsideEurope::class);
+        $product = $this->product();
+        $product->update(['brand' => 'DODGE | CHRYSLER', 'model' => '1:Grand Caravan | 2:Town & Country', 'year_from' => 2011, 'year_to' => 2020]);
+        $variant = $product->variants()->create(['title' => '4GB 64GB', 'option_value' => '4GB 64GB', 'price' => 199]);
+        StockProduct::create(['product_handle' => $product->handle, 'quantity' => 1]);
+        $this->get('/configurator?lang=it&stock='.$product->id)->assertInertia(fn (Assert $page) => $page
+            ->component('Configurator')->where('stockSelection.brand', 'DODGE')
+            ->where('stockSelection.model', 'Grand Caravan')->where('stockSelection.year', 2020)
+            ->where('stockSelection.mode', 'specific')->where('vehicles.0.id', $product->id)
+            ->where('vehicles.0.variants.0.id', $variant->id)->missing('homeBeta'));
+        StockProduct::query()->update(['quantity' => 0]);
+        $this->get('/configurator?stock='.$product->id)->assertNotFound();
+    }
+
     public function test_admin_can_select_update_and_remove_existing_stock_products(): void
     {
         $product = $this->product();

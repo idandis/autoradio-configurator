@@ -178,7 +178,8 @@ const props = defineProps<{
     installationZones: InstallationZone[];
     vehicleImageMappings: VehicleImageMapping[];
     brandImages: string[];
-    brandListing?: boolean;
+    stockSelection?: { id: number; handle: string; category: string; brand: string | null; model: string | null; year: number | null; mode: 'specific' | 'universal'; din: string | null } | null;
+    stockChoices?: CustomProduct[];
     sharedConfiguration: SharedConfigurationPayload | null;
 }>();
 
@@ -610,8 +611,7 @@ const mobileVehicleEntries = computed(() => compatibilityEntries.value.map(entry
     ...entry, model: indexedVehicleModel(entry.model).model,
 })).filter(entry => entry.model));
 const openVehicleSelection = () => {
-    if (mobileVehicleViewport.value) mobileVehiclePicker.value?.open();
-    else void toggleStepAndCenter('vehicle', 'vehicle-brand', true);
+    mobileVehiclePicker.value?.open();
 };
 const completeMobileVehicle = async (vehicle: { brand: string | null; model: string | null; year: number | null }) => {
     if (!vehicle.brand || !vehicle.model || vehicle.year === null) return;
@@ -673,6 +673,16 @@ const customQuoteActive = computed(() => showCustomQuoteModal.value || selectedC
 const customProducts = ref<CustomProduct[]>([...(props.customProducts ?? [])]);
 const customProductsLoaded = ref(customProducts.value.length > 0);
 const customProductsLoading = ref(false);
+const stockChoiceKey = ref(props.stockChoices?.[0]?.key ?? '');
+const stockChoice = computed(() => props.stockChoices?.find((product) => product.key === stockChoiceKey.value));
+const stockNeedsChoices = computed(() => props.stockSelection?.category === 'accessory'
+    || (props.stockSelection?.category === 'screen' && props.stockSelection.mode === 'universal' && !props.stockSelection.din));
+const addStockChoice = () => {
+    if (!stockChoice.value) return;
+    if (!customProducts.value.some((product) => product.key === stockChoice.value!.key)) customProducts.value.push(stockChoice.value);
+    if (!selectedCustomProductKeys.value.includes(stockChoice.value.key)) selectedCustomProductKeys.value.push(stockChoice.value.key);
+    showCart.value = true;
+};
 const selectedCustomProducts = computed(() =>
     customProducts.value.filter((product) => selectedCustomProductKeys.value.includes(product.key)),
 );
@@ -750,19 +760,6 @@ const completeCustomQuote = () => {
     }
 };
 const installationRequested = ref(false);
-let brandTypeaheadBuffer = '';
-let brandTypeaheadTimer: ReturnType<typeof setTimeout> | null = null;
-const handleBrandTypeahead = (event: KeyboardEvent) => {
-    if (event.key.length !== 1 || !/[\p{L}\d]/u.test(event.key)) return;
-    brandTypeaheadBuffer += event.key.toLocaleLowerCase();
-    if (brandTypeaheadTimer) clearTimeout(brandTypeaheadTimer);
-    brandTypeaheadTimer = setTimeout(() => { brandTypeaheadBuffer = ''; }, 700);
-    const match = brands.value.find((brand) => brand.toLocaleLowerCase().startsWith(brandTypeaheadBuffer));
-    if (match) {
-        selectedBrand.value = match;
-        handleVehicleBrandChange();
-    }
-};
 const openSteps = ref<string[]>([]);
 watch(customQuoteActive, (active, wasActive) => {
     if (wasActive && !active && isSpecificMode.value && !openSteps.value.includes('vehicle')) {
@@ -2187,14 +2184,31 @@ onMounted(async () => {
     window.addEventListener('message', handlePrintPreviewNavigation);
     document.documentElement.lang = props.locale;
     void trackVisitorEntry();
-    if (props.homeBeta || props.brandListing) return;
+    if (props.homeBeta) return;
     const params = new URLSearchParams(window.location.search);
     const incomingBrand = resolveAvailableBrand(params.get('marca') ?? params.get('brand'));
     if (params.get('form') === 'autoradio') {
         openMissingVehicleForm();
     }
-    const sharedConfigurationRestored = await restoreSharedConfiguration();
-    if (!sharedConfigurationRestored) {
+    const stock = props.stockSelection;
+    if (stock) {
+        await applySharedConfiguration({
+            mode: stock.mode, din: stock.din === '1DIN' || stock.din === '2DIN' ? stock.din : null,
+            brand: stock.brand, model: stock.model, year: stock.year,
+            screens: [], cameras: [], speakers: [], customProducts: [],
+            installation: null, postalCode: null, serviceZone: null, precheck: null,
+        });
+        openSteps.value = [stock.category === 'screen' ? 'screen' : stock.category === 'camera' ? 'camera' : stock.category === 'speaker' ? 'speaker' : 'vehicle'];
+        if (stock.category === 'camera') await loadCameras();
+        if (stock.category === 'speaker') {
+            await loadSpeakers();
+            const speaker = speakerOptions.value.find((option) => option.productId === stock.id);
+            selectedSpeakerCategory.value = speaker?.categories[0] ?? '';
+            if (speaker && selectedSpeakerCategory.value) selectedSpeakerSizeByCategory.value[selectedSpeakerCategory.value] = speaker.sizes[0] ?? '';
+        }
+    }
+    const sharedConfigurationRestored = !stock && await restoreSharedConfiguration();
+    if (!stock && !sharedConfigurationRestored) {
         await restoreConfiguratorState();
 
         if (incomingBrand) {
@@ -2212,10 +2226,15 @@ onMounted(async () => {
             await nextTick();
         }
     }
-    if (!sharedConfigurationRestored && ['specific', 'universal'].includes(params.get('mode') ?? '')) {
+    if (!stock && !sharedConfigurationRestored && ['specific', 'universal'].includes(params.get('mode') ?? '')) {
         await setConfiguratorMode(params.get('mode') as 'specific' | 'universal');
     }
     configuratorStateHydrated = true;
+    if (!stock && !sharedConfigurationRestored && params.get('pick') === 'brand') {
+        await setConfiguratorMode('specific');
+        await nextTick();
+        mobileVehiclePicker.value?.open(true);
+    }
     if (params.get('cart') === '1') showCart.value = true;
     window.addEventListener('keydown', closeImageZoomOnEscape);
     window.addEventListener('scroll', updateMobileQuoteTotals, { passive: true });
@@ -2224,6 +2243,13 @@ onMounted(async () => {
     requestAnimationFrame(async () => {
         await observeQuoteTotals();
         updateMobileQuoteTotals();
+
+        if (stock) {
+            await nextTick();
+            const screen = allScreenVehicles.value.find((vehicle) => vehicle.id === stock.id);
+            if (screen && window.innerWidth < 1024) openVariantPicker(screen);
+            document.getElementById(stock.category === 'screen' ? `screen-product-${stock.id}` : stock.category === 'camera' ? `product-camera-${stock.handle}` : stock.category === 'speaker' ? `product-speaker-${stock.handle}` : 'stock-product-choice')?.scrollIntoView({ block: 'start' });
+        }
 
         if (sharedConfigurationRestored) {
             await nextTick();
@@ -2301,7 +2327,6 @@ const brandImageUrl = (brand: string | null) => {
     return filename ? `/images/brands/${encodeURIComponent(filename)}` : null;
 };
 const selectedBrandImageUrl = computed(() => brandImageUrl(selectedBrand.value));
-const failedBrandLogos = ref<string[]>([]);
 
 watch(selectedVehicleImageUrl, () => {
     failedVehicleImage.value = null;
@@ -4186,12 +4211,14 @@ watch(
         ref="mobileVehiclePicker"
         :value="{ brand: selectedBrand, model: selectedModel, year: selectedYear }"
         :entries="mobileVehicleEntries"
+        :locale="props.locale"
+        :brand-image="brandImageUrl"
         :display-model="displayVehicleModel"
         :missing-labels="[t('vehicle.brand_not_found'), t('vehicle.model_not_found'), t('vehicle.year_not_found')]"
         @complete="completeMobileVehicle"
         @missing="missingMobileVehicle"
     />
-    <Head :title="props.brandListing ? 'Marche auto · Autoradio Italiano' : props.homeBeta ? 'Autoradio Italiano · Home beta' : t('page_title')" />
+    <Head :title="props.homeBeta ? 'Autoradio Italiano · Home beta' : t('page_title')" />
     <iframe v-if="quotePreviewHtml" ref="quotePreviewFrame" :srcdoc="quotePreviewHtml" :title="t('print.document_title')" class="fixed inset-0 z-[120] h-dvh w-full border-0 bg-white" />
     <Teleport to="body">
         <div v-if="quotePreviewHtml" ref="quotePrintDocument" class="quote-print-document" :lang="locale" />
@@ -4268,7 +4295,7 @@ watch(
     </main>
 
     <div v-else class="min-h-screen w-full max-w-full overflow-x-clip bg-[#121212] text-white">
-        <ItalianStoreHeader v-if="props.locale === 'it'" :cart-count="cartItemCount" @cart="props.homeBeta || props.brandListing ? router.visit('/configurator?lang=it&cart=1') : showCart = true" />
+        <ItalianStoreHeader v-if="props.locale === 'it'" :cart-count="cartItemCount" @cart="props.homeBeta ? router.visit('/configurator?lang=it&cart=1') : showCart = true" />
         <header v-else class="border-b border-neutral-800 bg-[#121212]">
             <div class="bg-[#334fb4] text-white">
                 <div class="mx-auto grid h-12 max-w-7xl grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-8">
@@ -4397,19 +4424,7 @@ watch(
             </div>
         </header>
 
-        <HomeBetaContent v-if="props.homeBeta" :products="props.stockProducts ?? []" @details="(product) => openProductDetails({ productId: product.id, category: product.category, key: product.id.toString() })" />
-        <main v-else-if="props.brandListing" class="mx-auto min-h-[60vh] max-w-7xl px-5 py-12 sm:px-8">
-            <a href="/" class="text-sm text-emerald-400 hover:underline">← Home</a>
-            <h1 class="mt-6 text-3xl font-bold sm:text-4xl">Scegli la marca della tua auto</h1>
-            <p class="mt-4 text-neutral-400">Seleziona prima la marca, poi il modello e l’anno per trovare l’autoradio compatibile.</p>
-            <nav aria-label="Marche auto" class="mt-9 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-                <a v-for="brand in brands" :key="brand" :href="`/configurator?lang=it&mode=specific&marca=${encodeURIComponent(brand)}`" class="flex min-h-44 flex-col items-center justify-center gap-2 px-2 py-4 text-center text-xs font-medium transition hover:text-emerald-400 focus-visible:outline-2 focus-visible:outline-emerald-400">
-                    <img v-if="brandImageUrl(brand) && !failedBrandLogos.includes(brand)" :src="brandImageUrl(brand) ?? undefined" :alt="`Logo ${brand}`" class="h-28 w-full max-w-44 object-contain" loading="lazy" @error="failedBrandLogos.push(brand)" />
-                    <span>{{ brand }}</span>
-                </a>
-            </nav>
-            <p v-if="!brands.length" class="mt-9 text-neutral-400">Non ci sono ancora marche disponibili. <a href="/contatti" class="text-emerald-400 underline">Contattaci per la tua auto.</a></p>
-        </main>
+        <HomeBetaContent v-if="props.homeBeta" :products="props.stockProducts ?? []" @select="(product) => router.visit(`/configurator?lang=it&stock=${product.id}`)" />
         <main v-else-if="configuratorMode === null" class="mx-auto flex min-h-[calc(100vh-12rem)] max-w-5xl items-center px-4 py-12 sm:px-6 lg:px-8">
             <div class="w-full text-center">
                 <p class="text-xs font-semibold uppercase tracking-[0.24em] text-amber-400 sm:text-sm">{{ t('mode.eyebrow') }}</p>
@@ -4431,6 +4446,12 @@ watch(
         </main>
 
         <div v-else class="mx-auto max-w-7xl px-4 py-8 pb-28 sm:px-6 lg:px-8 lg:pb-8">
+            <section v-if="stockNeedsChoices && stockChoice" id="stock-product-choice" class="mb-8 rounded-xl border border-neutral-700 p-6">
+                <img v-if="stockChoice.image" :src="stockChoice.image" :alt="stockChoice.title" class="h-48 w-full object-contain" />
+                <h2 class="mt-4 text-xl font-semibold">{{ stockChoice.title }}</h2>
+                <label class="mt-4 block text-sm">Variante<select v-model="stockChoiceKey" class="mt-2 block w-full rounded-lg border border-neutral-600 bg-neutral-900 p-3"><option v-for="choice in props.stockChoices" :key="choice.key" :value="choice.key">{{ choice.variantTitle || choice.title }} · {{ euroFormatter.format(choice.price) }}</option></select></label>
+                <button type="button" class="mt-4 rounded-lg bg-emerald-600 px-5 py-3 font-semibold" @click="addStockChoice">Aggiungi al carrello</button>
+            </section>
             <div class="mb-8">
                 <div v-if="isAdmin" class="mb-8 grid w-full grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
                     <button
@@ -4558,26 +4579,9 @@ watch(
                             :class="selectedBrand ? 'md:grid-cols-[1fr_220px]' : ''"
                         >
                             <div>
-                                <select
-                                    id="vehicle-brand"
-                                    v-model="selectedBrand"
-                                    class="vehicle-option-select mobile-vehicle-select w-full rounded-lg border px-4 py-3 text-base outline-none transition sm:text-sm"
-                                    :class="selectedBrand ? 'vehicle-select-complete border-emerald-400/60 bg-emerald-400/10 text-emerald-400' : 'vehicle-select-pending border-red-500/60 bg-red-500/10 text-red-300'"
-                                    @change="handleVehicleBrandChange"
-                                    @keydown="handleBrandTypeahead"
-                                >
-                                    <option :value="null">{{ t('fields.select_brand') }}</option>
-                                    <option :value="missingBrandOption" class="missing-vehicle-option">
-                                        {{ t('vehicle.brand_not_found') }}
-                                    </option>
-                                    <option
-                                        v-for="brand in brands"
-                                        :key="brand ?? 'unknown-brand'"
-                                        :value="brand"
-                                    >
-                                        {{ brand }}
-                                    </option>
-                                </select>
+                                <button id="vehicle-brand" type="button" aria-haspopup="dialog" class="vehicle-option-select mobile-vehicle-select flex w-full items-center rounded-lg border px-4 py-3 text-base outline-none transition sm:text-sm" :class="selectedBrand ? 'vehicle-select-complete border-emerald-400/60 bg-emerald-400/10 text-emerald-400' : 'vehicle-select-pending border-red-500/60 bg-red-500/10 text-red-300'" @click="mobileVehiclePicker?.open()">
+                                    <span class="w-16 shrink-0"><img v-if="selectedBrandImageUrl" :src="selectedBrandImageUrl" alt="" class="h-10 w-16 object-contain" /></span><span class="flex-1 text-center">{{ selectedBrand || t('fields.select_brand') }}</span><span class="w-16 shrink-0 text-right" aria-hidden="true">⌄</span>
+                                </button>
                             </div>
 
                             <div v-if="selectedBrand">
