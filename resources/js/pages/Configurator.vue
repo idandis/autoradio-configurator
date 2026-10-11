@@ -4479,16 +4479,16 @@ watch(
                 <p class="text-xs font-semibold uppercase tracking-[0.24em] text-amber-400 sm:text-sm">{{ t('mode.eyebrow') }}</p>
                 <h1 class="mx-auto mt-3 max-w-3xl text-3xl font-semibold tracking-tight sm:text-5xl">{{ t('mode.title') }}</h1>
                 <p class="mx-auto mt-4 max-w-2xl text-sm leading-6 text-neutral-400 sm:text-base">{{ t('mode.description') }}</p>
-                <div class="mx-auto mt-10 grid max-w-4xl gap-5 md:grid-cols-2">
-                    <button type="button" class="group rounded-2xl border-2 border-neutral-700 bg-neutral-900 p-7 text-left transition hover:border-amber-400 hover:bg-amber-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:p-9" @click="setConfiguratorMode('specific')">
-                        <span class="block text-xl font-bold text-white sm:text-2xl">{{ t('mode.specific_title') }}</span>
-                        <span class="mt-3 block text-sm leading-6 text-neutral-400">{{ t('mode.specific_description') }}</span>
-                        <span class="mt-6 inline-flex items-center font-semibold text-amber-400">{{ t('mode.choose') }} <span class="ml-2 transition group-hover:translate-x-1">→</span></span>
+                <div class="mode-paths mx-auto mt-10 max-w-4xl">
+                    <button type="button" class="mode-path" @click="setConfiguratorMode('specific')">
+                        <img src="/images/home-beta/per-marca.webp" alt="" />
+                        <span class="mode-path-shade"></span>
+                        <span class="mode-path-content"><span><span class="mode-path-title">{{ props.locale === 'es' ? 'Por marca' : t('mode.specific_title') }}</span><span class="mode-path-description">{{ props.locale === 'es' ? 'Elige tu coche' : t('mode.specific_description') }}</span></span><span aria-hidden="true" class="mode-path-arrow">›</span></span>
                     </button>
-                    <button type="button" class="group rounded-2xl border-2 border-neutral-700 bg-neutral-900 p-7 text-left transition hover:border-amber-400 hover:bg-amber-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 sm:p-9" @click="setConfiguratorMode('universal')">
-                        <span class="block text-xl font-bold text-white sm:text-2xl">{{ t('mode.universal_title') }}</span>
-                        <span class="mt-3 block text-sm leading-6 text-neutral-400">{{ t('mode.universal_description') }}</span>
-                        <span class="mt-6 inline-flex items-center font-semibold text-amber-400">{{ t('mode.choose') }} <span class="ml-2 transition group-hover:translate-x-1">→</span></span>
+                    <button type="button" class="mode-path" @click="setConfiguratorMode('universal')">
+                        <img src="/images/home-beta/universali.webp" alt="" />
+                        <span class="mode-path-shade"></span>
+                        <span class="mode-path-content"><span><span class="mode-path-title">{{ props.locale === 'es' ? 'Universales' : t('mode.universal_title') }}</span><span class="mode-path-description">{{ props.locale === 'es' ? 'Soluciones para cualquier coche' : t('mode.universal_description') }}</span></span><span aria-hidden="true" class="mode-path-arrow">›</span></span>
                     </button>
                 </div>
             </div>
@@ -6575,6 +6575,19 @@ watch(
 </style>
 
 <style scoped>
+.mode-paths{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+.mode-path{position:relative;min-height:260px;overflow:hidden;border:1px solid #383838;border-radius:16px;background:#101010;color:#fff;text-align:left;transition:transform .2s,border-color .2s;isolation:isolate}
+.mode-path:hover{transform:translateY(-4px);border-color:#D8AE2D}
+.mode-path:focus-visible{outline:2px solid #D8AE2D;outline-offset:5px}
+.mode-path img{position:absolute;inset:0;z-index:-2;width:100%;height:100%;object-fit:cover;object-position:50% 35%}
+.mode-path-shade{position:absolute;inset:0;background:linear-gradient(0deg,#101010 5%,#101010b0 35%,transparent 75%);z-index:-1}
+.mode-path-content{position:absolute;inset:auto 22px 20px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.mode-path-title{display:block;font-size:25px;font-weight:700;line-height:1.15}
+.mode-path-description{display:block;font-size:17px;margin-top:5px;color:#d0d0d0}
+.mode-path-arrow{font-size:32px;line-height:1;flex-shrink:0}
+@media(max-width:767px){.mode-paths{gap:10px}.mode-path{min-height:185px;border-radius:12px}.mode-path-content{inset:auto 12px 14px;gap:3px}.mode-path-title{font-size:17px}.mode-path-description{font-size:12px;line-height:1.4}.mode-path-arrow{font-size:25px}}
+@media(prefers-reduced-motion:reduce){.mode-path{transition:none}.mode-path:hover{transform:none}}
+
 .step-context-label {
     position: absolute;
     left: 50%;
