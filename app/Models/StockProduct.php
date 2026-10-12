@@ -46,6 +46,7 @@ class StockProduct extends Model
                 'id' => $stock->product->id,
                 'handle' => $stock->product_handle,
                 'discountPercent' => $stock->discount_percent ?? 0,
+                'singleQuantity' => $stock->discount_percent > 0 && $stock->product->variants->count() <= 1,
                 'discountVariantId' => $stock->discount_variant_key ? ($stock->discountVariant()?->id ?? -1) : null,
                 'variantTitle' => $stock->discountVariant()?->option_value ?: $stock->discountVariant()?->title,
                 'title' => $stock->product->localizedTitle('it'),

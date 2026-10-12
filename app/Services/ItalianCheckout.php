@@ -130,6 +130,11 @@ class ItalianCheckout
             if ($item['type'] === 'product' && $product->variants()->exists()) {
                 throw ValidationException::withMessages(['items' => ($locale === 'es' ? 'Selecciona una variante para ' : 'Seleziona una variante per ').$product->localizedTitle($locale).'.']);
             }
+            if ($locale === 'it' && $item['quantity'] > 1 && Schema::hasTable('stock_products')
+                && $product->variants()->count() <= 1
+                && StockProduct::where('product_handle', $product->handle)->where('quantity', '>', 0)->where('discount_percent', '>', 0)->exists()) {
+                throw ValidationException::withMessages(['items' => 'Questo prodotto in offerta è acquistabile in quantità massima 1.']);
+            }
             $price = $variant ? $variant->price : $product->price_min;
             if ($price === null || ! preg_match('/^\d{1,8}(?:\.\d{1,2})?$/', (string) $price)) {
                 throw ValidationException::withMessages(['items' => ($locale === 'es' ? 'Precio no disponible para ' : 'Prezzo non disponibile per ').$product->localizedTitle($locale).'.']);

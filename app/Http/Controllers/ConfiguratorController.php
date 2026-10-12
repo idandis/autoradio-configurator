@@ -245,7 +245,7 @@ class ConfiguratorController extends Controller
             'translations' => trans('configurator'),
             'sharedConfiguration' => $sharedConfiguration,
             'stockSelection' => $stockSelection,
-            'promotionProducts' => app()->getLocale() === 'it' ? \App\Models\StockProduct::publicProducts()->map(fn ($p) => ['id' => $p['id'], 'discountPercent' => $p['discountPercent'], 'discountVariantId' => $p['discountVariantId']]) : [],
+            'promotionProducts' => app()->getLocale() === 'it' ? \App\Models\StockProduct::publicProducts()->map(fn ($p) => ['id' => $p['id'], 'discountPercent' => $p['discountPercent'], 'discountVariantId' => $p['discountVariantId'], 'singleQuantity' => $p['singleQuantity']]) : [],
             'stockChoices' => $stockProduct ? $this->customProductOptions(collect([$stockProduct])) : [],
             'customProducts' => $this->customProductOptions($requiredCustomProducts)
                 ->filter(fn (array $product) => $requiredCustomKeys->contains($product['key']))
@@ -286,7 +286,7 @@ class ConfiguratorController extends Controller
                     'productTitles' => $zone->services->mapWithKeys(fn ($service) => ['zone-service-'.$service->id => $service->localizedName()]),
                 ])->values(),
             'vehicleImageMappings' => $vehicleImageMappings,
-            'brandImages' => collect(glob(public_path('images/brands/*.{png,jpg,jpeg,webp}'), GLOB_BRACE) ?: [])
+            'brandImages' => collect(glob(public_path('images/brands/*.{png,jpg,jpeg,webp,svg}'), GLOB_BRACE) ?: [])
                 ->map(fn (string $path) => basename($path))
                 ->sort()
                 ->values(),

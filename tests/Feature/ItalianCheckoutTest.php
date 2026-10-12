@@ -15,6 +15,18 @@ class ItalianCheckoutTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_single_variant_offer_rejects_multiple_units_only_in_italian(): void
+    {
+        $v = $this->variant('200.00');
+        \App\Models\StockProduct::create(['product_handle' => $v->product->handle, 'quantity' => 4, 'discount_percent' => 20]);
+        $service = app(ItalianCheckout::class);
+        $item = ['type' => 'variant', 'id' => $v->id, 'quantity' => 2];
+        $this->assertSame(39200, $service->quote([$item], false, 'es')['total_amount']);
+        $this->assertSame(16000, $service->quote([array_replace($item, ['quantity' => 1])])['total_amount']);
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->quote([$item]);
+    }
+
     public function test_offer_only_discounts_the_selected_variant(): void
     {
         $v = $this->variant('200.00');
@@ -34,6 +46,7 @@ class ItalianCheckoutTest extends TestCase
     public function test_offer_discount_comes_only_from_database_and_replaces_other_rules(): void
     {
         $variant = $this->variant('600.00');
+        $variant->product->variants()->create(['title' => 'Seconda variante', 'price' => 700]);
         $other = ConfiguratorProduct::create(['handle' => 'regular-accessory', 'category' => 'accessory', 'title' => 'Accessory', 'price_min' => 400]);
         $stock = \App\Models\StockProduct::create(['product_handle' => $variant->product->handle, 'quantity' => 2, 'discount_percent' => 30]);
         $items = [
