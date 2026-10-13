@@ -20,6 +20,32 @@ class ConfiguratorImportTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_image_urls_change_on_each_import_without_changing_filenames(): void
+    {
+        Http::preventStrayRequests();
+        $headers = (new \ReflectionClass(ConfiguratorCsvImporter::class))->getConstant('REQUIRED_HEADERS');
+        if (! in_array('Image Src', $headers, true)) $headers[] = 'Image Src';
+        $row = array_replace(array_fill_keys($headers, ''), [
+            'Handle' => 'image-reimport', 'Title' => 'Radio', 'Type' => 'Radio AM/FM',
+            'Variant ID' => '987654', 'Variant Price' => '49.00',
+            'Image Src' => 'https://example.com/radio.jpg?v=12&ac_rev=old#photo',
+            'Metafield: custom.modello_auto [single_line_text_field]' => 'Universal',
+        ]);
+        $csv = implode(',', $headers)."\n".implode(',', $row);
+        $importer = app(ConfiguratorCsvImporter::class);
+        $urls = [];
+        foreach ([false, false, true] as $delete) {
+            if ($delete) ConfiguratorProduct::where('handle', 'image-reimport')->firstOrFail()->delete();
+            $importer->import(UploadedFile::fake()->createWithContent('images.csv', $csv), replaceExistingDataset: false);
+            $p = ConfiguratorProduct::where('handle', 'image-reimport')->firstOrFail();
+            $urls[] = $p->image_url;
+            $this->assertMatchesRegularExpression('/^https:\/\/example\.com\/radio\.jpg\?v=12&ac_rev=[a-f0-9]{16}#photo$/', $p->image_url);
+            $this->assertSame($p->image_url, $p->variants()->first()->image_url);
+            $this->assertSame([$p->image_url], $p->meta['gallery_images']);
+        }
+        $this->assertCount(3, array_unique($urls));
+    }
+
     public function test_post_import_reports_exclude_accessories(): void
     {
         ConfiguratorProduct::create([
@@ -170,7 +196,7 @@ CSV;
         $this->assertSame([
             'https://example.com/one.jpg',
             'https://example.com/two.jpg',
-        ], $product->meta['gallery_images']);
+        ], array_map(fn ($url) => preg_replace('/[?&]ac_rev=[^&#]+/', '', $url), $product->meta['gallery_images']));
 
         $product->update([
             'body_html_it' => '<p>Descrizione <strong>completa</strong></p>',

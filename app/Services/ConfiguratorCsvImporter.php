@@ -79,6 +79,8 @@ class ConfiguratorCsvImporter
 
         $this->validateRequiredHeaders($headers);
 
+        $imageRevision = bin2hex(random_bytes(8));
+
         $grouped = [];
 
         foreach ($rows as $row) {
@@ -110,7 +112,7 @@ class ConfiguratorCsvImporter
             ))
             ->keyBy('handle');
 
-        DB::transaction(function () use ($grouped, &$stats, $replaceExistingDataset, $existingTranslations, $hasDescriptionTranslations): void {
+        DB::transaction(function () use ($grouped, &$stats, $replaceExistingDataset, $existingTranslations, $hasDescriptionTranslations, $imageRevision): void {
             if ($replaceExistingDataset) {
                 DB::table('configurator_variants')->delete();
                 DB::table('configurator_products')->delete();
@@ -124,6 +126,18 @@ class ConfiguratorCsvImporter
 
                 if ($product === null) {
                     continue;
+                }
+
+                $product['product']['image_url'] = $this->refreshImageUrl($product['product']['image_url'], $imageRevision);
+                foreach ($product['variants'] as &$variant) {
+                    $variant['image_url'] = $this->refreshImageUrl($variant['image_url'], $imageRevision);
+                }
+                unset($variant);
+                foreach (['gallery_images', 'original_dashboard_images'] as $key) {
+                    $product['product']['meta'][$key] = array_map(
+                        fn ($url) => $this->refreshImageUrl($url, $imageRevision),
+                        $product['product']['meta'][$key] ?? [],
+                    );
                 }
 
                 $previous = $existingTranslations->get($handle);
@@ -806,6 +820,17 @@ class ConfiguratorCsvImporter
         }
 
         return null;
+    }
+
+    private function refreshImageUrl(?string $url, string $revision): ?string
+    {
+        if (! filled($url)) return $url;
+        [$url, $fragment] = array_pad(explode('#', $url, 2), 2, null);
+        $url = preg_replace('/([?&])ac_rev=[^&]*(?:&|$)/', '$1', $url);
+        $url = rtrim($url, '?&');
+
+        return $url.(str_contains($url, '?') ? '&' : '?').'ac_rev='.$revision
+            .($fragment !== null ? '#'.$fragment : '');
     }
 
     private function extractPrimaryImage(mixed $value): ?string
