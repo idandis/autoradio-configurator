@@ -133,12 +133,14 @@ class ConfiguratorCsvImporter
                     $variant['image_url'] = $this->refreshImageUrl($variant['image_url'], $imageRevision);
                 }
                 unset($variant);
-                foreach (['gallery_images', 'original_dashboard_images'] as $key) {
-                    $product['product']['meta'][$key] = array_map(
-                        fn ($url) => $this->refreshImageUrl($url, $imageRevision),
-                        $product['product']['meta'][$key] ?? [],
-                    );
-                }
+                $product['product']['meta']['gallery_images'] = array_map(
+                    fn ($url) => $this->refreshImageUrl($url, $imageRevision),
+                    $product['product']['meta']['gallery_images'] ?? [],
+                );
+                $product['product']['meta']['original_dashboard_images'] = array_map(
+                    fn ($image) => [...$image, 'url' => $this->refreshImageUrl($image['url'], $imageRevision)],
+                    $product['product']['meta']['original_dashboard_images'] ?? [],
+                );
 
                 $previous = $existingTranslations->get($handle);
                 $titleChanged = ! $previous || $previous->title !== $product['product']['title'];
@@ -436,7 +438,7 @@ class ConfiguratorCsvImporter
                         'custom.foto_cruscotto_originale',
                         'Foto cruscotto originale (product.metafields.custom.foto_cruscotto_originale)',
                         'FOTO CRUSCOTTO ORIGINALE (product.metafields.custom.foto_cruscotto_originale)',
-                    ]), $primaryImageUrl),
+                    ]), $primaryImageUrl, $galleryImages),
                     'gallery_images' => $galleryImages,
                 ],
             ],
@@ -445,7 +447,7 @@ class ConfiguratorCsvImporter
     }
 
     /** @return array<int, array{url: string, variant: ?string}> */
-    private function parseFileList(mixed $value, ?string $primaryImageUrl = null): array
+    private function parseFileList(mixed $value, ?string $primaryImageUrl = null, array $galleryImages = []): array
     {
         if (is_array($value)) {
             $items = $value;
@@ -462,14 +464,14 @@ class ConfiguratorCsvImporter
         }
 
         return collect($items)
-            ->map(function ($item) use ($primaryImageUrl) {
+            ->map(function ($item) use ($primaryImageUrl, $galleryImages) {
                 $url = trim((string) (is_array($item)
                     ? ($item['url'] ?? $item['src'] ?? $item['originalSource'] ?? '')
                     : $item));
-                $url = $this->resolveFileUrl($url, $primaryImageUrl);
                 $path = (string) (parse_url($url, PHP_URL_PATH) ?? $url);
                 $filename = pathinfo(rawurldecode($path), PATHINFO_FILENAME);
                 preg_match('/-([a-z])$/iu', $filename, $matches);
+                $url = $this->resolveFileUrl($url, $primaryImageUrl, $galleryImages);
 
                 return $url === '' ? null : [
                     'url' => $url,
@@ -482,8 +484,21 @@ class ConfiguratorCsvImporter
             ->all();
     }
 
-    private function resolveFileUrl(string $value, ?string $primaryImageUrl): string
+    private function resolveFileUrl(string $value, ?string $primaryImageUrl, array $galleryImages = []): string
     {
+        if ($value === '' || filter_var($value, FILTER_VALIDATE_URL)) return $value;
+
+        $name = rawurldecode(basename((string) (parse_url($value, PHP_URL_PATH) ?? $value)));
+        $stem = preg_quote(pathinfo($name, PATHINFO_FILENAME), '/');
+        $ext = preg_quote(pathinfo($name, PATHINFO_EXTENSION), '/');
+        $matches = collect($galleryImages)->filter(function ($url) use ($name, $stem, $ext) {
+            $file = rawurldecode(basename((string) parse_url($url, PHP_URL_PATH)));
+            return $file === $name || preg_match('/^'.$stem.'_[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\\.'.$ext.'$/i', $file);
+        })->values();
+        $exact = $matches->first(fn ($url) => rawurldecode(basename((string) parse_url($url, PHP_URL_PATH))) === $name);
+        if ($exact) return $exact;
+        if ($matches->count() === 1) return $matches->first();
+
         if ($value === '' || filter_var($value, FILTER_VALIDATE_URL)) {
             return $value;
         }

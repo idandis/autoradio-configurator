@@ -25,10 +25,12 @@ class ConfiguratorImportTest extends TestCase
         Http::preventStrayRequests();
         $headers = (new \ReflectionClass(ConfiguratorCsvImporter::class))->getConstant('REQUIRED_HEADERS');
         if (! in_array('Image Src', $headers, true)) $headers[] = 'Image Src';
+        $headers[] = 'Metafield: custom.foto_cruscotto_originale [list.file_reference]';
         $row = array_replace(array_fill_keys($headers, ''), [
             'Handle' => 'image-reimport', 'Title' => 'Radio', 'Type' => 'Radio AM/FM',
             'Variant ID' => '987654', 'Variant Price' => '49.00',
             'Image Src' => 'https://example.com/radio.jpg?v=12&ac_rev=old#photo',
+            'Metafield: custom.foto_cruscotto_originale [list.file_reference]' => 'https://example.com/dashboard-a.jpg',
             'Metafield: custom.modello_auto [single_line_text_field]' => 'Universal',
         ]);
         $csv = implode(',', $headers)."\n".implode(',', $row);
@@ -42,8 +44,22 @@ class ConfiguratorImportTest extends TestCase
             $this->assertMatchesRegularExpression('/^https:\/\/example\.com\/radio\.jpg\?v=12&ac_rev=[a-f0-9]{16}#photo$/', $p->image_url);
             $this->assertSame($p->image_url, $p->variants()->first()->image_url);
             $this->assertSame([$p->image_url], $p->meta['gallery_images']);
+            $image = $p->meta['original_dashboard_images'][0];
+            $this->assertSame('A', $image['variant']);
+            $this->assertMatchesRegularExpression('/^https:\/\/example\.com\/dashboard-a\.jpg\?ac_rev=[a-f0-9]{16}$/', $image['url']);
         }
         $this->assertCount(3, array_unique($urls));
+    }
+
+    public function test_dashboard_filenames_use_actual_gallery_urls_and_keep_variant_letters(): void
+    {
+        $method = new \ReflectionMethod(ConfiguratorCsvImporter::class, 'parseFileList');
+        $base = 'https://cdn.shopify.com/s/files/1/0872/4683/1960/files/';
+        $gallery = [$base.'mazda-cx5-A.png?v=1', $base.'mazda-cx5-C_ce59e388-17a1-4bf7-bea3-a757c37f262e.png?v=2'];
+        $images = $method->invoke(app(ConfiguratorCsvImporter::class), 'mazda-cx5-A.png, mazda-cx5-C.png', $base.'radio.png', $gallery);
+        $this->assertSame([['url' => $gallery[0], 'variant' => 'A'], ['url' => $gallery[1], 'variant' => 'C']], $images);
+        $external = 'https://other.example/mazda-cx5-A.png';
+        $this->assertSame($external, $method->invoke(app(ConfiguratorCsvImporter::class), $external, $base.'radio.png', $gallery)[0]['url']);
     }
 
     public function test_post_import_reports_exclude_accessories(): void
