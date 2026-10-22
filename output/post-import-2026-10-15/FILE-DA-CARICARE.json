@@ -1,0 +1,12 @@
+{
+  "resources/data/screen-descriptions-it.json": "4db5295bc66683522bb3541730de07a244f42c5431c2e76cccf8eed4d33d730e",
+  "resources/data/screen-descriptions-en.json": "b55d7216551f71e89333fc1de5bb450cbd435cf323b10798b80843e73bb35505",
+  "resources/data/camera-descriptions-it.json": "f26f81679f3703ab9b1884411e2d2a8933508ca3a267cb014bc7daa245475761",
+  "resources/data/camera-descriptions-en.json": "c0af10d29e2c3cce1cc7318ce1ea6653f26cb814f46703991fa60e7998041c47",
+  "resources/data/speaker-descriptions-it.json": "707770a370b195484a1921c47135a20b2f8d452f89a09e552cf928fb8712aead",
+  "resources/data/speaker-descriptions-en.json": "2d80781421cbe157bffe388dd1a31938be58b90ea0bd973a7c1d0e5a2acf1921",
+  "resources/data/screen-titles-it.json": "21871ef51657e53f9ff655d55750ee04f90941a847cbf01b7d2f74c7e294f311",
+  "resources/data/screen-titles-en.json": "e3423eaac04772ecb599dbda9eb4fc53ab2a2b4128667a0a12897a5a2e2e1cb7",
+  "public/images/vehicles-dark/mazda-cx-5-2017-2023.webp": "67131604b446cac9172da8f3224132b942b63e8168c918af815865d3d9e71d92",
+  "public/images/vehicles-dark/volkswagen-up-2017-2023.webp": "64d3db0a31896d12815a74fec899ab7809fd77ae07932f5cfad3edf47d3c8046"
+}

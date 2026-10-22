@@ -1,0 +1,40 @@
+ATTIVITÀ COMPLETATE
+
+Caricare il contenuto di aruba-post-import.zip nella radice Laravel su Aruba, mantenendo i percorsi resources/data/ e public/images/vehicles-dark/. Il file FILE-DA-CARICARE.json elenca esattamente i 15 file da caricare. Sovrascrivere i cataloghi JSON esistenti.
+
+Poi premere “Aggiorna database” dalla Dashboard. Il flusso esistente importa i cataloghi senza SSH e senza richieste API sul server. I test confermano la scomparsa delle attività di traduzione e delle immagini completate.
+
+Non caricare database/database.sqlite, testing, .env, vendor, output o i test. Non è richiesta una nuova build frontend. Nessuna modifica al codice applicativo.
+
+RISULTATI
+- Sei descrizioni dell’allegato tradotte in italiano e inglese (12 traduzioni).
+- Quattro titoli mancanti tradotti in italiano e inglese (8 traduzioni); gli altri due erano già disponibili.
+- Cataloghi completi IT/EN delle descrizioni di schermi, camere e altoparlanti inclusi nel pacchetto. Verificati 521 prodotti locali: 405 screen, 98 camera, 18 speaker; nessuna descrizione locale con traduzioni mancanti.
+- Tre fotografie WEBP 1536×1024 generate con la skill imagegen e il tool integrato: Golf Plus, Eos, Transporter T5. Prompt in PROMPT-IMMAGINI.md.
+- Aggiornati 11 campi tradotti locali corrispondenti ai cataloghi. Titoli e descrizioni originali spagnoli verificati prima e dopo: invariati.
+- Quattro prodotti dell’allegato sono assenti dal database locale. Due sono presenti con descrizioni precedenti diverse dal sorgente allegato: non sono state applicate traduzioni incompatibili ai loro originali locali. I cataloghi contengono le nuove versioni richieste per il database importato su Aruba.
+- Reimportazione: traduzioni conservate a sorgente invariato e invalidate quando cambia il sorgente; comportamento coperto da test.
+
+CONTROLLI
+- 24 test dedicati passati, 322 asserzioni. Inclusi importazione dei sei prodotti da “Aggiorna database”, conservazione degli originali e dei tag HTML, attività traduzioni azzerate, risoluzione delle tre immagini su tutti gli anni richiesti e lista immagini mancanti vuota.
+- Tutti i 12 JSON del pacchetto validi. Per le 12 nuove descrizioni: sorgente corrispondente all’allegato, sequenza esatta dei tag e degli attributi (inclusi link) conservata, numeri conservati. Il refuso originale 20l4 nella descrizione Mercedes è mantenuto.
+- Le tre immagini sono state verificate visivamente e decodificate come WEBP.
+- git diff --check superato.
+- La suite generale ConfiguratorImportTest, non modificata in questa attività, segnala 12 fallimenti e 4 errori su 21 test (5 passati): autorizzazioni 403, intestazioni fixture e file temporanei. Questi risultati restano distinti dai 24 test dedicati superati.
+
+Elenco file da caricare:
+resources/data/screen-titles-it.json
+resources/data/screen-titles-en.json
+resources/data/screen-descriptions-it.json
+resources/data/screen-descriptions-en.json
+resources/data/camera-titles-it.json
+resources/data/camera-titles-en.json
+resources/data/camera-descriptions-it.json
+resources/data/camera-descriptions-en.json
+resources/data/speaker-titles-it.json
+resources/data/speaker-titles-en.json
+resources/data/speaker-descriptions-it.json
+resources/data/speaker-descriptions-en.json
+public/images/vehicles-dark/volkswagen-golf-plus-2003-2013.webp
+public/images/vehicles-dark/volkswagen-eos-2003-2013.webp
+public/images/vehicles-dark/volkswagen-transporter-t5-2003-2013.webp

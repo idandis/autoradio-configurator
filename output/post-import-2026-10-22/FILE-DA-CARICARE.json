@@ -1,0 +1,17 @@
+[
+  "resources/data/screen-titles-it.json",
+  "resources/data/screen-titles-en.json",
+  "resources/data/screen-descriptions-it.json",
+  "resources/data/screen-descriptions-en.json",
+  "resources/data/camera-titles-it.json",
+  "resources/data/camera-titles-en.json",
+  "resources/data/camera-descriptions-it.json",
+  "resources/data/camera-descriptions-en.json",
+  "resources/data/speaker-titles-it.json",
+  "resources/data/speaker-titles-en.json",
+  "resources/data/speaker-descriptions-it.json",
+  "resources/data/speaker-descriptions-en.json",
+  "public/images/vehicles-dark/volkswagen-golf-plus-2003-2013.webp",
+  "public/images/vehicles-dark/volkswagen-eos-2003-2013.webp",
+  "public/images/vehicles-dark/volkswagen-transporter-t5-2003-2013.webp"
+]

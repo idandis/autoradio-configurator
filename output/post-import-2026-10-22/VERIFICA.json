@@ -1,0 +1,83 @@
+{
+  "files": [
+    {
+      "file": "resources/data/screen-titles-it.json",
+      "entries": 422,
+      "sha256": "6ab21e27fdfd14a52568b738f3b33593fbdf4759c732f79fbee3fe333d0889c8"
+    },
+    {
+      "file": "resources/data/screen-titles-en.json",
+      "entries": 422,
+      "sha256": "98442b0acc4ad9cfad3ffadff920b53951710a383c269e71ec875397030ed8b7"
+    },
+    {
+      "file": "resources/data/screen-descriptions-it.json",
+      "entries": 425,
+      "sha256": "18c0b16621ab487c9d88cb1fdb101331ad08a3ec1edf5dd707f7599a0f24eed3"
+    },
+    {
+      "file": "resources/data/screen-descriptions-en.json",
+      "entries": 425,
+      "sha256": "7482f9d3cf01c94eb0ef0dec61f385f498c12544936f7fd4e0623276f8b69bf3"
+    },
+    {
+      "file": "resources/data/camera-titles-it.json",
+      "entries": 117,
+      "sha256": "712c6090d3daa3af3bd59647d5fcfc132639e4344679387b0fc0fda7d45c2fe0"
+    },
+    {
+      "file": "resources/data/camera-titles-en.json",
+      "entries": 117,
+      "sha256": "4eef4b308c828f6ee265d3457fb6db180fb3c920f3940ad55583804cf9cc8fb0"
+    },
+    {
+      "file": "resources/data/camera-descriptions-it.json",
+      "entries": 118,
+      "sha256": "d2a46e351114bc215faf0d79e228a20846c7f5bedc214d1d3e85c61ad8f409c5"
+    },
+    {
+      "file": "resources/data/camera-descriptions-en.json",
+      "entries": 118,
+      "sha256": "211d9b9aa567eb52e236ff42187dbf72613c2ad9379d5108c495b57af102869b"
+    },
+    {
+      "file": "resources/data/speaker-titles-it.json",
+      "entries": 68,
+      "sha256": "29adb7dd9930e4cab26450f8395f5b4050e5fd1865435577302492c26d56ef56"
+    },
+    {
+      "file": "resources/data/speaker-titles-en.json",
+      "entries": 68,
+      "sha256": "c38a3e8602d0fb74c3ef00a780a2993665d0d3584c818fca8265f086f9dc2799"
+    },
+    {
+      "file": "resources/data/speaker-descriptions-it.json",
+      "entries": 18,
+      "sha256": "707770a370b195484a1921c47135a20b2f8d452f89a09e552cf928fb8712aead"
+    },
+    {
+      "file": "resources/data/speaker-descriptions-en.json",
+      "entries": 18,
+      "sha256": "2d80781421cbe157bffe388dd1a31938be58b90ea0bd973a7c1d0e5a2acf1921"
+    },
+    {
+      "file": "public/images/vehicles-dark/volkswagen-golf-plus-2003-2013.webp",
+      "sha256": "a7305d6a98293ec5a9a1b6b830d5b0452e80d1f48e95adbab2133a0d9b2377d4"
+    },
+    {
+      "file": "public/images/vehicles-dark/volkswagen-eos-2003-2013.webp",
+      "sha256": "45beef193183f00b93d176bd63d3384d827ca47a991190398fa855a7c6ca76a2"
+    },
+    {
+      "file": "public/images/vehicles-dark/volkswagen-transporter-t5-2003-2013.webp",
+      "sha256": "f02ac73c0a50ae189e3d32c401fb0981b074688aee0832620da41a98a1e4ce56"
+    }
+  ],
+  "new_descriptions": 12,
+  "new_title_translations": 8,
+  "dedicated_tests": 24,
+  "assertions": 322,
+  "local_products": 521,
+  "missing_local_descriptions": 0,
+  "spanish_originals_preserved": true
+}

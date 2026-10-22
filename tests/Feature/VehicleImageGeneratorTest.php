@@ -11,6 +11,36 @@ class VehicleImageGeneratorTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_october_22_volkswagen_images_clear_missing_vehicle_tasks(): void
+    {
+        $resolver = app(\App\Services\VehicleImageResolver::class);
+        foreach (['Golf Plus' => 'golf-plus', 'Eos' => 'eos', 'Transporter T5' => 'transporter-t5'] as $model => $slug) {
+            foreach (range(2003, 2013) as $year) {
+                $this->assertSame("volkswagen-{$slug}-2003-2013.webp", $resolver->resolveFilename('VOLKSWAGEN', $model, $year));
+            }
+            ConfiguratorProduct::create([
+                'handle' => $slug, 'category' => 'screen', 'title' => 'Radio',
+                'brand' => 'VOLKSWAGEN', 'model' => $model, 'year_from' => 2003, 'year_to' => 2013,
+            ]);
+        }
+        $this->assertCount(0, app(VehicleImageGenerator::class)->missingVehicles());
+    }
+
+    public function test_mazda_cx5_and_volkswagen_up_images_cover_requested_years(): void
+    {
+        $resolver = app(\App\Services\VehicleImageResolver::class);
+        foreach ([['MAZDA', 'CX-5', 'mazda-cx-5-2017-2023.webp'], ['VOLKSWAGEN', 'Up', 'volkswagen-up-2017-2023.webp']] as [$brand, $model, $image]) {
+            foreach (range(2017, 2023) as $year) {
+                $this->assertSame($image, $resolver->resolveFilename($brand, $model, $year));
+            }
+            ConfiguratorProduct::create([
+                'handle' => strtolower($brand).'-new-image', 'category' => 'screen', 'title' => 'Radio',
+                'brand' => $brand, 'model' => $model, 'year_from' => 2017, 'year_to' => 2023,
+            ]);
+        }
+        $this->assertCount(0, app(VehicleImageGenerator::class)->missingVehicles());
+    }
+
     public function test_post_import_vehicle_images_cover_each_body_generation(): void
     {
         $resolver = app(\App\Services\VehicleImageResolver::class);

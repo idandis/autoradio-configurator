@@ -13,6 +13,83 @@ class ConfiguratorProductDescriptionTranslationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_dashboard_imports_october_22_catalogs_and_clears_tasks(): void
+    {
+        Http::preventStrayRequests();
+        config(['services.openai.api_key' => null]);
+        $handles = [
+            'camera' => ['camara-hd-165-nissan-nv200-evalia-vanette-2010-2021'],
+            'screen' => [
+                'atoto-a5lg211t-s01-android-10-con-carplay-y-camara',
+                'autoradio-android-13-7-con-carplay-inalambrico-y-gps-para-seat-ibiza-2002-2008',
+                'autoradio-android-14-8-8-128gb-4g-carplay-para-mercedes-w169-w245-w639-w906-2004-2014-y-vw-crafter-2006',
+                'radio-7-2din-carplay-para-vw-golf-2003-2013',
+                'radio-9-2din-volkswagen-tiguan-golf-plus-2006-2015',
+            ],
+        ];
+        $catalogs = [];
+        foreach ($handles as $category => $items) {
+            foreach (['it', 'en'] as $locale) {
+                foreach (['titles', 'descriptions'] as $kind) {
+                    $catalogs[$category][$locale][$kind] = json_decode(file_get_contents(resource_path("data/{$category}-{$kind}-{$locale}.json")), true);
+                }
+            }
+            foreach ($items as $handle) {
+                ConfiguratorProduct::create([
+                    'handle' => $handle, 'category' => $category,
+                    'title' => $catalogs[$category]['it']['titles'][$handle]['source'],
+                    'body_html' => $catalogs[$category]['it']['descriptions'][$handle]['source'],
+                ]);
+            }
+        }
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->post(route('dashboard.database.migrate'))->assertRedirect()->assertSessionHasNoErrors();
+        foreach (ConfiguratorProduct::all() as $product) {
+            foreach (['it', 'en'] as $locale) {
+                foreach (['titles' => ['title', 'title_'], 'descriptions' => ['body_html', 'body_html_']] as $kind => [$source, $target]) {
+                    $entry = $catalogs[$product->category][$locale][$kind][$product->handle];
+                    $this->assertSame($entry['source'], $product->$source);
+                    $this->assertSame($entry['translation'], $product->{$target.$locale});
+                    if ($kind === 'descriptions') {
+                        preg_match_all('/<[^>]*>/', $entry['source'], $a);
+                        preg_match_all('/<[^>]*>/', $entry['translation'], $b);
+                        $this->assertSame($a[0], $b[0]);
+                    }
+                }
+            }
+        }
+        $this->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
+            ->where('postImportTasks.translationCount', 0)
+            ->where('postImportTasks.descriptionTranslationCount', 0));
+    }
+
+    public function test_dashboard_imports_volkswagen_up_post_import_catalogs(): void
+    {
+        Http::preventStrayRequests();
+        config(['services.openai.api_key' => null]);
+        $handle = 'hizpo-9-2din-android-para-volkswagen-up-2017-2023';
+        $titles = json_decode(file_get_contents(resource_path('data/screen-titles-it.json')), true);
+        $descriptions = json_decode(file_get_contents(resource_path('data/screen-descriptions-it.json')), true);
+        $product = ConfiguratorProduct::create([
+            'handle' => $handle, 'category' => 'screen', 'title' => $titles[$handle]['source'],
+            'body_html' => $descriptions[$handle]['source'], 'brand' => 'VOLKSWAGEN', 'model' => 'Up',
+            'year_from' => 2017, 'year_to' => 2023,
+        ]);
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->post(route('dashboard.database.migrate'))->assertRedirect()->assertSessionHasNoErrors();
+        $product->refresh();
+        $this->assertSame($titles[$handle]['source'], $product->title);
+        $this->assertSame($descriptions[$handle]['source'], $product->body_html);
+        foreach (['it', 'en'] as $locale) {
+            foreach (['titles' => 'title_', 'descriptions' => 'body_html_'] as $kind => $column) {
+                $catalog = json_decode(file_get_contents(resource_path("data/screen-{$kind}-{$locale}.json")), true);
+                $this->assertSame($catalog[$handle]['translation'], $product->{$column.$locale});
+            }
+        }
+        $this->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
+            ->where('postImportTasks.translationCount', 0)->where('postImportTasks.descriptionTranslationCount', 0));
+    }
+
     public function test_dashboard_imports_juke_and_i20_descriptions_and_preserves_originals(): void
     {
         Http::preventStrayRequests();

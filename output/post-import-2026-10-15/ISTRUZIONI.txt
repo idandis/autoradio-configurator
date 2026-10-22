@@ -1,0 +1,6 @@
+Caricare i 10 file elencati in FILE-DA-CARICARE.json mantenendo i percorsi relativi, oppure estrarre aruba-post-import.zip nella radice del progetto Laravel.
+Premere Aggiorna database dalla Dashboard dopo il caricamento. Non occorrono SSH, build frontend o nuovi file PHP.
+
+Verifiche: JSON validi; HTML Volkswagen up! con identica sequenza di tag e attributi; originali ES conservati; 405 schermi, 98 camere e 18 altoparlanti locali coperti da entrambi i cataloghi; 12 test / 196 asserzioni superati, inclusi import da Dashboard, attività traduzioni azzerate, conservazione traduzioni al reimport con sorgente invariata e risoluzione immagini per gli anni 2017–2023.
+Il prodotto Volkswagen up! non è nel database locale; le quattro traduzioni sono nei cataloghi pronti per il database Aruba.
+Immagini create tramite imagegen integrato e salvate WEBP 1536x1024 ai due percorsi richiesti; nessuna immagine preesistente sovrascritta.
