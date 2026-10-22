@@ -1,0 +1,3 @@
+Caricare public/images/brands/LEXUS.png e public/images/brands/MAN.png mantenendo i percorsi. Ricaricare completamente la pagina. Il catalogo esistente ordina i nomi e seleziona LEXUS.png prima di LEXUS.svg. Nessuna build frontend necessaria.
+
+MAN: https://commons.wikimedia.org/wiki/File:MAN_logo.svg (PD-textlogo), convertito in PNG con sfondo #121212. Lexus: asset vettoriale del progetto, convertito in PNG con sfondo #121212.

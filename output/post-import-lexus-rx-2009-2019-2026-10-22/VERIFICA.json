@@ -1,0 +1,78 @@
+{
+  "files": [
+    {
+      "path": "resources/data/screen-titles-it.json",
+      "sha256": "829a1942283928e05ad97d469fa66831dc3fc6ce774c1525a24fc0e7759fbc24"
+    },
+    {
+      "path": "resources/data/screen-titles-en.json",
+      "sha256": "a2c49af4c588c1a971d3ae9a3ce9c8d75c0365612ef1e41b7ffe067d39d36bf9"
+    },
+    {
+      "path": "resources/data/screen-descriptions-it.json",
+      "sha256": "56275ade16b068ca63a6147110c2467e95a33f68fded2b1091833200ba41d653"
+    },
+    {
+      "path": "resources/data/screen-descriptions-en.json",
+      "sha256": "197c192d56b5935078c532bcf0d4a390fab169284db03e7de0d29197edb3152c"
+    },
+    {
+      "path": "resources/data/camera-titles-it.json",
+      "sha256": "712c6090d3daa3af3bd59647d5fcfc132639e4344679387b0fc0fda7d45c2fe0"
+    },
+    {
+      "path": "resources/data/camera-titles-en.json",
+      "sha256": "4eef4b308c828f6ee265d3457fb6db180fb3c920f3940ad55583804cf9cc8fb0"
+    },
+    {
+      "path": "resources/data/camera-descriptions-it.json",
+      "sha256": "d2a46e351114bc215faf0d79e228a20846c7f5bedc214d1d3e85c61ad8f409c5"
+    },
+    {
+      "path": "resources/data/camera-descriptions-en.json",
+      "sha256": "211d9b9aa567eb52e236ff42187dbf72613c2ad9379d5108c495b57af102869b"
+    },
+    {
+      "path": "resources/data/speaker-titles-it.json",
+      "sha256": "29adb7dd9930e4cab26450f8395f5b4050e5fd1865435577302492c26d56ef56"
+    },
+    {
+      "path": "resources/data/speaker-titles-en.json",
+      "sha256": "c38a3e8602d0fb74c3ef00a780a2993665d0d3584c818fca8265f086f9dc2799"
+    },
+    {
+      "path": "resources/data/speaker-descriptions-it.json",
+      "sha256": "707770a370b195484a1921c47135a20b2f8d452f89a09e552cf928fb8712aead"
+    },
+    {
+      "path": "resources/data/speaker-descriptions-en.json",
+      "sha256": "2d80781421cbe157bffe388dd1a31938be58b90ea0bd973a7c1d0e5a2acf1921"
+    },
+    {
+      "path": "public/images/vehicles-dark/lexus-rx-2009-2019.webp",
+      "sha256": "91d1db0253884062061dd0f446f7ff7a4726db6b0eb6e97e27e4e8f47989efaa"
+    },
+    {
+      "path": "public/images/vehicles-dark/lexus-rx-2015-2019.webp",
+      "sha256": "53093da3712f375e5ff12fdf01a9d0333c5fbccf2f95e154906a24614961ce18"
+    }
+  ],
+  "local_products": 521,
+  "missing_local_descriptions": 0,
+  "tests_passed": 25,
+  "assertions": 358,
+  "local_lexus_product_present": false,
+  "new_translations": 4,
+  "image_mappings": [
+    {
+      "from": 2009,
+      "to": 2014,
+      "file": "lexus-rx-2009-2019.webp"
+    },
+    {
+      "from": 2015,
+      "to": 2019,
+      "file": "lexus-rx-2015-2019.webp"
+    }
+  ]
+}

@@ -13,6 +13,46 @@ class ConfiguratorProductDescriptionTranslationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_dashboard_imports_lexus_rx_translations_and_clears_tasks(): void
+    {
+        Http::preventStrayRequests();
+        config(['services.openai.api_key' => null]);
+        $handle = 'pantalla-12-3-2din-android-para-lexus-rx-2015-2019';
+        $catalogs = [];
+        foreach (['it', 'en'] as $locale) {
+            foreach (['titles', 'descriptions'] as $kind) {
+                $catalogs[$locale][$kind] = json_decode(file_get_contents(resource_path("data/screen-{$kind}-{$locale}.json")), true)[$handle];
+            }
+        }
+        $product = ConfiguratorProduct::create([
+            'handle' => $handle, 'category' => 'screen',
+            'title' => $catalogs['it']['titles']['source'],
+            'body_html' => $catalogs['it']['descriptions']['source'],
+            'brand' => 'LEXUS', 'model' => 'RX', 'year_from' => 2009, 'year_to' => 2019,
+        ]);
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->post(route('dashboard.database.migrate'))->assertRedirect()->assertSessionHasNoErrors();
+        $product->refresh();
+        foreach (['it', 'en'] as $locale) {
+            foreach (['titles' => 'title', 'descriptions' => 'body_html'] as $kind => $column) {
+                $entry = $catalogs[$locale][$kind];
+                $this->assertSame($entry['source'], $product->$column);
+                $this->assertSame($entry['translation'], $product->{$column.'_'.$locale});
+            }
+            preg_match_all('/<[^>]*>/', $product->body_html, $a);
+            preg_match_all('/<[^>]*>/', $product->{'body_html_'.$locale}, $b);
+            $this->assertSame($a[0], $b[0]);
+        }
+        foreach (range(2009, 2019) as $year) {
+            $image = $year < 2015 ? 'lexus-rx-2009-2019.webp' : 'lexus-rx-2015-2019.webp';
+            $this->assertSame($image, app(\App\Services\VehicleImageResolver::class)->resolveFilename('LEXUS', 'RX', $year));
+        }
+        $this->assertCount(0, app(\App\Services\VehicleImageGenerator::class)->missingVehicles());
+        $this->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
+            ->where('postImportTasks.translationCount', 0)
+            ->where('postImportTasks.descriptionTranslationCount', 0));
+    }
+
     public function test_dashboard_imports_october_22_catalogs_and_clears_tasks(): void
     {
         Http::preventStrayRequests();

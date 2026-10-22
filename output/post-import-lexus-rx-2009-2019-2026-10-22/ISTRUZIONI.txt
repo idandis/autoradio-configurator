@@ -1,0 +1,41 @@
+PACCHETTO AGGIORNATO LEXUS RX 2009–2019
+
+Questo pacchetto sostituisce quello Lexus RX 2015–2019 precedente.
+
+Caricare il contenuto di aruba-post-import-lexus-rx-2009-2019.zip nella radice Laravel su Aruba, mantenendo i percorsi resources/data/ e public/images/vehicles-dark/. Sovrascrivere i cataloghi JSON. I 14 file esatti sono elencati sotto e in FILE-DA-CARICARE.json.
+
+Poi premere “Aggiorna database” dalla Dashboard e ricaricare la pagina. Non servono SSH o build frontend. Non caricare database/database.sqlite, testing, .env, vendor, output o test. Nessun codice applicativo è stato modificato.
+
+TRADUZIONI
+Titolo aggiornato a 2009–2019 in italiano e inglese, con sorgente spagnolo invariato. Descrizione completa IT/EN delle varianti ANDROID 2015-2019 e LINUX 2009-2015; mantenuti HTML, attributi, tabelle, sigle, anni e valori tecnici. Handle invariato: pantalla-12-3-2din-android-para-lexus-rx-2015-2019. Non è stata estesa arbitrariamente la compatibilità Android al 2009: la separazione delle varianti nella descrizione è preservata.
+
+Il prodotto non è nel database locale: nessun prodotto è stato inserito e nessun titolo o descrizione originale locale è stato modificato. “Aggiorna database” applica i cataloghi al prodotto già importato su Aruba, se il sorgente corrisponde.
+
+IMMAGINI
+Il periodo comprende due carrozzerie. È stata generata una fotografia della terza generazione Lexus RX e salvata nel percorso richiesto public/images/vehicles-dark/lexus-rx-2009-2019.webp. È stata riusata la fotografia della quarta generazione già presente, lexus-rx-2015-2019.webp. Il resolver esistente preferisce il range più stretto: 2009–2014 usa la nuova fotografia; 2015–2019 usa la quarta generazione. Non viene usata una sola carrozzeria per tutto il periodo.
+
+Entrambe WEBP 1536×1024, viste anteriori a tre quarti, auto intere e centrate, sfondo scuro, nessuna persona o testo. Generazione tramite skill imagegen e tool integrato; prompt in PROMPT-IMMAGINE.md.
+
+CATALOGHI LOCALI
+Inclusi i cataloghi IT/EN di titoli e descrizioni per schermi, camere e altoparlanti. Verificati i 521 prodotti locali: 405 schermi, 98 camere, 18 altoparlanti; nessuna descrizione locale con traduzioni mancanti. Le due descrizioni locali Seat Ibiza e Mercedes multiveicolo rimaste a versioni precedenti mantengono le proprie traduzioni: i cataloghi contengono le loro versioni più recenti già richieste nella precedente attività.
+
+CONTROLLI
+25 test dedicati passati, 358 asserzioni. Inclusi importazione cataloghi da Dashboard senza richieste API esterne, conservazione originali spagnoli, identità della sequenza dei tag HTML, contatori traduzioni azzerati, immagini corrette per ogni anno 2009–2019 e nessuna immagine mancante per il prodotto.
+Importatore verificato dai test: salva body_html originale, conserva le traduzioni quando il sorgente è invariato e le invalida quando cambia.
+JSON validi, numeri e tag delle nuove descrizioni verificati, immagini decodificate e controllate visivamente, archivio e checksum verificati, git diff --check superato.
+
+FILE DA CARICARE
+resources/data/screen-titles-it.json
+resources/data/screen-titles-en.json
+resources/data/screen-descriptions-it.json
+resources/data/screen-descriptions-en.json
+resources/data/camera-titles-it.json
+resources/data/camera-titles-en.json
+resources/data/camera-descriptions-it.json
+resources/data/camera-descriptions-en.json
+resources/data/speaker-titles-it.json
+resources/data/speaker-titles-en.json
+resources/data/speaker-descriptions-it.json
+resources/data/speaker-descriptions-en.json
+public/images/vehicles-dark/lexus-rx-2009-2019.webp
+public/images/vehicles-dark/lexus-rx-2015-2019.webp

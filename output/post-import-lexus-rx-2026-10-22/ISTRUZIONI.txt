@@ -1,0 +1,34 @@
+CARICAMENTO ARUBA
+
+Estrarre aruba-post-import-lexus-rx.zip nella radice Laravel su Aruba, mantenendo i percorsi. Contiene esattamente i 13 file elencati sotto e in FILE-DA-CARICARE.json. Sovrascrivere i cataloghi JSON esistenti.
+
+Poi premere “Aggiorna database” dalla Dashboard e ricaricare completamente la pagina. Non serve SSH e non serve una build frontend. I test verificano che i cataloghi vengano importati senza richieste esterne e che le attività completate spariscano.
+
+Non caricare database/database.sqlite, testing, .env, vendor, output o i test. Nessun file applicativo PHP/Vue è stato modificato in questa attività.
+
+RISULTATI
+- Titolo Lexus RX tradotto in italiano e inglese.
+- Descrizione Lexus RX tradotta integralmente in italiano e inglese preservando tag, attributi, tabelle, numeri, modelli e specifiche. Originali spagnoli invariati.
+- Lexus RX non presente nel database locale: nessun prodotto inserito e nessun originale locale modificato. I cataloghi vengono applicati al prodotto importato su Aruba quando il sorgente corrisponde.
+- Fotografia Lexus RX quarta generazione, carrozzeria pre-facelift, intera e centrata, vista anteriore a tre quarti; verifica visiva eseguita. File WEBP 1536×1024, generato con imagegen integrato e convertito a qualità 88. Prompt completo in PROMPT-IMMAGINE.md.
+- Cataloghi IT/EN esistenti per schermi, camere e altoparlanti inclusi. Verificati 521 prodotti locali (405 schermi, 98 camere, 18 altoparlanti), nessuna descrizione locale con traduzioni mancanti. Due descrizioni locali (Seat Ibiza e Mercedes multiveicolo) appartengono a versioni precedenti dei sorgenti già aggiornati nei cataloghi nella precedente attività: le loro traduzioni locali sono conservate e non sostituite con testi incompatibili.
+- Importatore verificato: salva body_html originale, conserva le traduzioni se il sorgente non cambia, le invalida se cambia.
+
+CONTROLLI
+25 test dedicati superati, 352 asserzioni. Inclusi il nuovo prodotto Lexus RX tramite “Aggiorna database”, originali preservati, tag HTML identici, contatori traduzioni azzerati, immagine risolta per tutti gli anni 2015–2019 e nessuna immagine mancante per il prodotto.
+13 file del pacchetto verificati, tutti i JSON validi, immagine WEBP decodificabile; archivio e checksum verificati. git diff --check superato.
+
+FILE DA CARICARE
+resources/data/screen-titles-it.json
+resources/data/screen-titles-en.json
+resources/data/screen-descriptions-it.json
+resources/data/screen-descriptions-en.json
+resources/data/camera-titles-it.json
+resources/data/camera-titles-en.json
+resources/data/camera-descriptions-it.json
+resources/data/camera-descriptions-en.json
+resources/data/speaker-titles-it.json
+resources/data/speaker-titles-en.json
+resources/data/speaker-descriptions-it.json
+resources/data/speaker-descriptions-en.json
+public/images/vehicles-dark/lexus-rx-2015-2019.webp
