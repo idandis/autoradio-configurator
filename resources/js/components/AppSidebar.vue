@@ -6,6 +6,7 @@ import {
     CarFront,
     FolderGit2,
     LayoutGrid,
+    MessageCircle,
     MapPin,
     PackageSearch,
     ClipboardList,
@@ -70,6 +71,7 @@ const mainNavItems: NavItem[] = [
     { title: 'Ordini Stripe', href: '/italian-orders', icon: ClipboardList },
     { title: 'Statistiche', href: '/configuration-statistics', icon: Activity },
     { title: 'Visitatori', href: '/visitor-statistics', icon: UserRoundSearch },
+    { title: 'Assistente WhatsApp', href: '/dashboard/whatsapp', icon: MessageCircle },
 ];
 
 const footerNavItems: NavItem[] = [

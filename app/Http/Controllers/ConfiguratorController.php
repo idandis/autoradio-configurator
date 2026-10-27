@@ -10,6 +10,7 @@ use App\Services\ItalianCheckout;
 use App\Services\VehicleImageResolver;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
@@ -40,7 +41,11 @@ class ConfiguratorController extends Controller
             'photo' => ['nullable', 'image', 'max:2048'],
         ]);
 
-        $photo = $request->file('photo');
+        return $this->storeMissingVehicle($data, $request->file('photo'));
+    }
+
+    public function storeMissingVehicle(array $data, ?UploadedFile $photo = null)
+    {
         $photoPath = $photo?->store('missing-vehicle-requests', 'public');
         $storedPhotoPath = $photoPath ? Storage::disk('public')->path($photoPath) : null;
         MissingVehicleRequest::create([...$data, 'photo_path' => $photoPath]);
@@ -51,8 +56,11 @@ class ConfiguratorController extends Controller
             Mail::html($body, function ($message) use ($data, $photo, $storedPhotoPath) {
                 $message
                     ->to(config('mail.notification_to'))
-                    ->replyTo($data['email'], $data['first_name'].' '.$data['last_name'])
                     ->subject('Nuova richiesta autoradio: '.$data['brand'].' '.$data['model']);
+
+                if (! empty($data['email'])) {
+                    $message->replyTo($data['email'], trim($data['first_name'].' '.$data['last_name']));
+                }
 
                 if ($photo && $storedPhotoPath) {
                     $message->attach($storedPhotoPath, [
@@ -62,10 +70,13 @@ class ConfiguratorController extends Controller
                 }
             });
         } catch (\Throwable $exception) {
+            Cache::store('file')->forever('waha-mail-status', ['state' => 'failed', 'at' => now()->timestamp]);
             report($exception);
 
             return response()->json(['message' => 'Errore SMTP: '.$exception->getMessage()], 500);
         }
+
+        Cache::store('file')->forever('waha-mail-status', ['state' => 'smtp_accepted', 'at' => now()->timestamp]);
 
         return response()->json(['message' => 'ok']);
     }
@@ -341,9 +352,7 @@ class ConfiguratorController extends Controller
         ]);
 
         $products = ConfiguratorProduct::with('variants')
-            ->where('category', 'screen')
-            ->where(fn ($query) => $query->whereNull('meta->type')->orWhere('meta->type', '!=', 'DASHCAM'))
-            ->whereRaw('LOWER(TRIM(model)) = ?', ['universal'])
+            ->universalScreens()
             ->orderBy('price_min')
             ->get()
             ->filter(fn (ConfiguratorProduct $product) => preg_replace('/\s+/u', '', mb_strtoupper((string) ($product->meta['din'] ?? ''))) === $data['din']

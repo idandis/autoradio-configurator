@@ -25,6 +25,7 @@ use App\Http\Controllers\SharedConfigurationController;
 use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\StockProductsController;
 use App\Http\Controllers\VisitorStatisticsController;
+use App\Http\Controllers\WhatsAppAssistantController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -123,6 +124,15 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
         ->middleware('throttle:30,1')
         ->name('configurator.shared-configurations.store');
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
+    Route::get('/dashboard/whatsapp', [WhatsAppAssistantController::class, 'index'])->name('whatsapp-assistant.index');
+    Route::put('/dashboard/whatsapp', [WhatsAppAssistantController::class, 'update'])->name('whatsapp-assistant.update');
+    Route::get('/dashboard/whatsapp/status', [WhatsAppAssistantController::class, 'status'])->name('whatsapp-assistant.status');
+    Route::post('/dashboard/whatsapp/preview', [WhatsAppAssistantController::class, 'preview'])->middleware('throttle:10,1')->name('whatsapp-assistant.preview');
+    Route::get('/dashboard/whatsapp/quotes/{id}/pdf', [WhatsAppAssistantController::class, 'quotePdf'])->whereUuid('id')->name('whatsapp-assistant.quote-pdf');
+    Route::post('/dashboard/whatsapp/preview/reset', [WhatsAppAssistantController::class, 'resetPreview'])->name('whatsapp-assistant.preview-reset');
+    Route::post('/dashboard/whatsapp/reset', [WhatsAppAssistantController::class, 'reset'])->name('whatsapp-assistant.reset');
+    Route::post('/dashboard/whatsapp/restart', [WhatsAppAssistantController::class, 'restart'])->middleware('throttle:2,1')->name('whatsapp-assistant.restart');
+    Route::post('/dashboard/whatsapp/recover-unanswered', [WhatsAppAssistantController::class, 'recoverUnanswered'])->middleware('throttle:2,1')->name('whatsapp-assistant.recover-unanswered');
     Route::get('/dashboard/in-stock', [StockProductsController::class, 'index'])->name('stock-products.index');
     Route::post('/dashboard/in-stock', [StockProductsController::class, 'store'])->name('stock-products.store');
     Route::patch('/dashboard/in-stock/{stockProduct}', [StockProductsController::class, 'update'])->name('stock-products.update');

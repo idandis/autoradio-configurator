@@ -13,7 +13,7 @@
         </div>
 
         <div style="background:#ffffff;padding:24px;border-radius:0 0 12px 12px">
-            <p style="margin:0 0 20px;color:#52525b">Un cliente ha compilato il modulo “Déjanos buscar tu autoradio ideal”.</p>
+            <p style="margin:0 0 20px;color:#52525b">@if (empty($requestData['email'])) Richiesta raccolta tramite WhatsApp per il modulo “Déjanos buscar tu autoradio ideal”. @else Un cliente ha compilato il modulo “Déjanos buscar tu autoradio ideal”. @endif</p>
 
             <table role="presentation" style="width:100%;border-collapse:collapse;font-size:14px">
                 @foreach ([
@@ -27,7 +27,7 @@
                 ] as $label => $value)
                     <tr>
                         <th style="width:120px;padding:10px 12px;border-bottom:1px solid #e4e4e7;text-align:left;color:#71717a">{{ $label }}</th>
-                        <td style="padding:10px 12px;border-bottom:1px solid #e4e4e7;font-weight:600">{{ $value }}</td>
+                        <td style="padding:10px 12px;border-bottom:1px solid #e4e4e7;font-weight:600">{{ trim((string) $value) !== '' ? $value : 'Non fornito' }}</td>
                     </tr>
                 @endforeach
             </table>
@@ -37,7 +37,7 @@
                 <div style="padding:14px;border-radius:8px;background:#f4f4f5;white-space:pre-wrap">{{ ($requestData['comment'] ?? null) ?: 'Nessun commento' }}</div>
             </div>
 
-            <p style="margin:22px 0 0;font-size:13px;color:#71717a">Puoi rispondere direttamente a questa email per contattare il cliente.</p>
+            <p style="margin:22px 0 0;font-size:13px;color:#71717a">@if (!empty($requestData['email'])) Puoi rispondere direttamente a questa email per contattare il cliente. @else Contatta il cliente su WhatsApp al numero indicato. @endif</p>
         </div>
     </div>
 </body>

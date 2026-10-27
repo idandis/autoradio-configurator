@@ -118,6 +118,7 @@ const verifyCatalog = () => {
     <Head title="Dashboard" />
 
     <div class="flex flex-1 flex-col gap-6 p-4">
+        <a href="/dashboard/whatsapp" class="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-5 transition hover:bg-emerald-500/10"><span><span class="block font-semibold">Assistente WhatsApp</span><span class="mt-1 block text-sm text-muted-foreground">Gestisci regole, proposte e anteprime delle risposte.</span></span><span class="text-sm font-semibold text-emerald-600">Configura →</span></a>
         <div class="grid gap-4 md:grid-cols-4">
             <div class="rounded-xl border border-sidebar-border/70 bg-card p-5">
                 <p class="text-sm text-muted-foreground">Veicoli</p>

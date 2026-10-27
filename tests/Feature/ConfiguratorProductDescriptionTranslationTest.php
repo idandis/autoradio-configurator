@@ -53,13 +53,19 @@ class ConfiguratorProductDescriptionTranslationTest extends TestCase
             ->where('postImportTasks.descriptionTranslationCount', 0));
     }
 
-    public function test_dashboard_imports_october_22_catalogs_and_clears_tasks(): void
+    public function test_dashboard_imports_autumn_catalogs_and_clears_tasks(): void
     {
         Http::preventStrayRequests();
         config(['services.openai.api_key' => null]);
         $handles = [
-            'camera' => ['camara-hd-165-nissan-nv200-evalia-vanette-2010-2021'],
+            'camera' => [
+                'camara-hd-165-nissan-nv200-evalia-vanette-2010-2021',
+                'camara-trasera-ahd-hd-para-mercedes-benz-sl-r230-sl350-sl400-2008-2012-con-vision-nocturna-y-lineas-de-aparcamiento',
+            ],
             'screen' => [
+                'radio-7-2din-carplay-mercedes-sl-r230-2001-2011',
+                'autoradio-android-16-9-carplay-gps-para-mercedes-benz-sl-r230-2001-2007',
+                'autoradio-android-15-con-pantalla-qled-9-para-mercedes-benz-sl-r230-sl350-sl500-sl55-sl600-sl65-2001-2007-con-carplay-y-gps',
                 'atoto-a5lg211t-s01-android-10-con-carplay-y-camara',
                 'autoradio-android-13-7-con-carplay-inalambrico-y-gps-para-seat-ibiza-2002-2008',
                 'autoradio-android-14-8-8-128gb-4g-carplay-para-mercedes-w169-w245-w639-w906-2004-2014-y-vw-crafter-2006',

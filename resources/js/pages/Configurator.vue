@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { renderQuoteDocument } from '@/lib/quoteDocument';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import MobileVehiclePicker from '@/components/MobileVehiclePicker.vue';
@@ -3892,186 +3893,67 @@ const generateQuote = async (withoutClientData = false) => {
         ? `<div class="checkout"><strong>${escapeHtml(t('print.purchase_link'))}:</strong><br><a href="${escapeHtml(paymentLink)}">${escapeHtml(paymentLink)}</a><p class="purchase-authorization">${escapeHtml(t('print.purchase_authorization'))}</p></div>`
         : '';
 
-    const html = `<!doctype html>
-<html lang="${props.locale}">
-<head>
-    <base target="_top">
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-    <title>${escapeHtml(quoteNumber)} — ${escapeHtml(t('print.document_title'))}</title>
-    <style>
-        @page { size: A4; margin: 12mm; }
-        * {
-            box-sizing: border-box;
-            -webkit-print-color-adjust: exact;
-            print-color-adjust: exact;
-        }
-        body { margin: 0; color: #292727; font-family: Arial, Helvetica, sans-serif; font-size: 11px; }
-        .page { width: 100%; min-height: 268mm; display: flex; flex-direction: column; }
-        .header { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; }
-        .brand { display: flex; align-items: center; gap: 10px; }
-        .brand img { width: ${isItalianStore.value ? '106px' : '95px'}; height: ${isItalianStore.value ? '77px' : '68px'}; object-fit: ${isItalianStore.value ? 'cover' : 'contain'}; background: #121212; }
-        .brand-name { font-size: 22px; font-weight: 800; letter-spacing: .4px; }
-        .tagline { margin-top: 5px; font-size: 7px; letter-spacing: 2px; }
-        .quote-title { text-align: right; }
-        .quote-title h1 { margin: 10px 0 5px; font-size: 24px; text-transform: uppercase; }
-        .vehicle-band { display: flex; align-items: center; justify-content: center; width: 100%; height: 100px; margin-top: 14px; background: #121212; }
-        .vehicle-band img { display: block; width: 180px; height: 94px; object-fit: contain; }
-        .details { display: grid; grid-template-columns: 1fr 1fr; align-items: start; gap: 30px; margin-top: 18px; }
-        .details h2 { margin: 0 0 4px; font-size: 15px; }
-        .details p { margin: 3px 0; }
-        .issuer { text-align: right; }
-        .date { margin: 14px 0; font-size: 13px; }
-        table { width: 100%; border-collapse: collapse; table-layout: fixed; background: #fff; color: #292727; }
-        .table-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-        th, td { border: 1px solid #b8b8b8; padding: 8px 7px; vertical-align: middle; }
-        tr { break-inside: avoid; page-break-inside: avoid; }
-        th { background: #fff; color: #292727; font-size: 12px; font-weight: 700; }
-        th:nth-child(1) { width: 62%; }
-        th:nth-child(2) { width: 7%; }
-        th:nth-child(3), th:nth-child(4) { width: 15.5%; }
-        td { font-size: 10px; font-weight: 600; }
-        .center { text-align: center; }
-        .money { text-align: right; white-space: nowrap; }
-        .notes { margin-top: 22px; font-size: 9px; }
-        .notes ul { margin: 5px 0 14px; padding-left: 18px; }
-        .customs-taxes { margin-top: 10px; line-height: 1.4; break-inside: avoid; page-break-inside: avoid; }
-        .customs-taxes h3 { margin: 0 0 4px; font-size: 10px; }
-        .customs-taxes p { margin: 0; white-space: pre-wrap; }
-        .checkout { margin-top: 12px; overflow-wrap: anywhere; font-size: 8px; }
-        .purchase-authorization { margin: 5px 0 0; font-size: 9px; line-height: 1.4; color: #292727; }
-        .totals { margin-top: auto; border: 1px solid #b8b8b8; background: #fff; color: #292727; font-size: 12px; font-weight: 700; }
-        .total-row { display: grid; grid-template-columns: 2fr 1fr; border-bottom: 1px solid #d5d5d5; }
-        .total-row:last-child { border-bottom: 0; font-size: 14px; font-weight: 800; }
-        .total-row div { padding: 9px 10px; }
-        .total-row .amount { border-left: 1px solid #b8b8b8; text-align: right; }
-        .direct-notice { margin: 10px 0; line-height: 1.4; }
-        .shipping-notice { margin: 8px 0 0; border: 1px solid #e4ad00; padding: 8px 10px; background: #fff8d8; color: #292727; font-size: 10px; font-weight: 700; text-align: center; }
-        .service-amount-notice { margin: 5px 0 0; font-size: 9px; line-height: 1.4; color: #292727; break-inside: avoid; page-break-inside: avoid; }
-        footer { margin: 12px -12mm 0; padding: 18px 12mm; background: #0067a9; color: #fff; text-align: center; font-size: 7px; font-weight: 700; letter-spacing: 1.2px; break-inside: avoid; page-break-inside: avoid; }
-        .screen-actions { display: none; }
-        @media screen and (max-width: 700px) {
-            body { padding: 14px; font-size: 14px; background: #f4f4f4; }
-            .screen-actions { position: relative; display: flex; justify-content: center; padding: 0 0 12px; }
-            .screen-actions { flex-wrap: wrap; gap: 10px; }
-            .screen-actions button { width: 100%; max-width: 420px; border: 0; border-radius: 10px; padding: 14px 18px; background: #d8ae2d; color: #000; font: 700 16px Arial, sans-serif; }
-            .screen-actions button.cart { background: #00a875; }
-            .screen-actions button.cart, .screen-actions button.configurator { color: #fff; }
-            .screen-actions button.configurator { background: #334fb4; }
-            .screen-actions button svg { width: 30px; height: 30px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; vertical-align: middle; }
-            .screen-actions button.back { background: #334fb4; }
-            .page { min-height: 0; gap: 0; background: #fff; overflow: hidden; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,.12); }
-            .header { flex-direction: column; gap: 12px; padding: 14px; }
-            .brand img { width: ${isItalianStore.value ? '78px' : '70px'}; height: ${isItalianStore.value ? '58px' : '52px'}; }
-            .brand-name { font-size: 18px; }
-            .quote-title { width: 100%; text-align: left; border-top: 1px solid #ddd; padding-top: 10px; }
-            .quote-title h1 { margin: 0 0 5px; font-size: 21px; }
-            .vehicle-band { height: 150px; margin-top: 0; }
-            .vehicle-band img { width: 230px; height: 140px; }
-            .details { grid-template-columns: 1fr; gap: 16px; margin: 0; padding: 16px; }
-            .issuer { text-align: left; border-top: 1px solid #ddd; padding-top: 14px; }
-            .date { margin: 0; padding: 0 16px 14px; }
-            .table-scroll { border-top: 1px solid #bbb; border-bottom: 1px solid #bbb; }
-            table { min-width: 0; }
-            th, td { padding: 10px 4px; overflow-wrap: anywhere; }
-            th:nth-child(1) { width: 50%; }
-            th:nth-child(2) { width: 10%; }
-            th:nth-child(3), th:nth-child(4) { width: 20%; }
-            td:first-child { white-space: normal; line-height: 1.45; }
-            .money { white-space: normal; }
-            .notes { margin-top: 0; padding: 18px 16px; font-size: 12px; line-height: 1.45; }
-            .checkout, .purchase-authorization, .service-amount-notice { font-size: 11px; }
-            .totals { display: grid; grid-template-columns: minmax(0,1fr) max-content; margin-top: 0; border-left: 0; border-right: 0; font-size: 13px; line-height: 1.45; font-weight: 700; }
-            .total-row { grid-column: 1 / -1; grid-template-columns: subgrid; }
-            .total-row div { display: flex; align-items: center; min-width: 0; padding: 11px 12px; overflow-wrap: anywhere; }
-            .total-row .amount { justify-content: flex-end; white-space: nowrap; font-variant-numeric: tabular-nums; }
-            .total-row:last-child { font-size: inherit; font-weight: inherit; }
-            .shipping-notice { margin: 12px; font-size: 12px; }
-            footer { display: flex; flex-direction: column; gap: 6px; margin: 12px 0 0; padding: 18px 12px; font-size: 9px; }
-        }
-        @media print {
-            html, body { height: auto; }
-            .screen-actions { display: none !important; }
-            .table-scroll { overflow: visible; }
-            .page { min-height: auto; break-after: avoid; page-break-after: avoid; }
-            .totals { margin-top: 16px; }
-            table, th, td, .totals, .total-row .amount, footer, .vehicle-band {
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            .totals, footer { break-inside: avoid; page-break-inside: avoid; }
-        }
-    </style>
-</head>
-<body>
-<div class="screen-actions"><button type="button" class="cart" aria-label="Cart" onclick="window.parent.postMessage({type:'autoradio:return-to-cart'}, '/')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h2l2.2 10.2a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.6L20.5 8H6"/><circle cx="10" cy="20" r="1"/><circle cx="18" cy="20" r="1"/></svg></button><button type="button" class="configurator" aria-label="Configurator" onclick="window.parent.postMessage({type:'autoradio:return-to-configurator'}, '/')"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12H5m6-6-6 6 6 6"/></svg></button><button type="button" onclick="window.parent.postMessage({type:'autoradio:print-quote'}, '/')">${escapeHtml(props.locale === 'es' ? 'Imprimir o guardar PDF' : props.locale === 'it' ? 'Stampa o salva PDF' : 'Print or save PDF')}</button></div>
-<main class="page">
-    <header class="header">
-        <div class="brand">
-            <img src="${window.location.origin}${brandLogoUrl.value}" alt="AutoRadioCanario">
-            <div>
-                <div class="brand-name">${isItalianStore.value ? 'AUTORADIOITALIANO' : 'AUTORADIOCANARIO'}</div>
-                <div class="tagline">${escapeHtml(t('print.tagline'))}</div>
-            </div>
-        </div>
-        <div class="quote-title">
-            <h1>${escapeHtml(t('quote.title'))}</h1>
-            <div>${escapeHtml(t('print.number'))}: ${escapeHtml(quoteNumber)}</div>
-        </div>
-    </header>
-    ${vehicleImage ? `
+    const html = renderQuoteDocument({
+        locale: props.locale,
+        reference: escapeHtml(quoteNumber),
+        document_title: escapeHtml(t('print.document_title')),
+        logo_width: isItalianStore.value ? '106px' : '95px',
+        logo_height: isItalianStore.value ? '77px' : '68px',
+        logo_fit: isItalianStore.value ? 'cover' : 'contain',
+        mobile_logo_width: isItalianStore.value ? '78px' : '70px',
+        mobile_logo_height: isItalianStore.value ? '58px' : '52px',
+        print_button: escapeHtml(props.locale === 'es' ? 'Imprimir o guardar PDF' : props.locale === 'it' ? 'Stampa o salva PDF' : 'Print or save PDF'),
+        origin: window.location.origin,
+        logo_path: brandLogoUrl.value,
+        business_name: isItalianStore.value ? 'AUTORADIOITALIANO' : 'AUTORADIOCANARIO',
+        tagline: escapeHtml(t('print.tagline')),
+        quote_title: escapeHtml(t('quote.title')),
+        number_label: escapeHtml(t('print.number')),
+        vehicle_image: vehicleImage ? `
         <div class="vehicle-band">
             <img src="${escapeHtml(vehicleImage)}" alt="${escapeHtml(vehicle)}">
         </div>
-    ` : ''}
-    <section class="details">
-        <div>
-            <h2>${escapeHtml(t('print.client'))}:</h2>
-            ${clientName ? `<p><strong>${escapeHtml(clientName)}</strong></p>` : ''}
-            ${clientPhone ? `<p>${escapeHtml(t('print.phone'))}: ${escapeHtml(clientPhone)}</p>` : ''}
-            ${clientEmail ? `<p>${escapeHtml(t('print.email'))}: ${escapeHtml(clientEmail)}</p>` : ''}
-            <p>${escapeHtml(t('print.vehicle'))}: ${escapeHtml(vehicle || (isUniversalMode.value ? t('mode.universal_title') : t('print.not_specified')))}</p>
-        </div>
-        <div class="issuer">
-            <h2>${escapeHtml(t('print.issued_by'))}:</h2>
-            <p><strong>${isItalianStore.value ? 'AUTORADIOITALIANO' : 'AUTORADIOCANARIO'}</strong></p>
-            <p>Avenida Mencey 49</p>
-            <p>35120 Mogán (Las Palmas)</p>
-            <p>${escapeHtml(footerContact.value.email)}</p>
-            <p>${escapeHtml(footerContact.value.phone)}</p>
-        </div>
-    </section>
-    <p class="date"><strong>${escapeHtml(t('print.date'))}:</strong> ${escapeHtml(quoteDate)}</p>
-    <div class="table-scroll"><table>
-        <thead><tr><th>${escapeHtml(t('print.description'))}</th><th>${escapeHtml(t('print.quantity'))}</th><th>${escapeHtml(t('print.unit_price'))}</th><th>${escapeHtml(t('print.amount'))}</th></tr></thead>
-        <tbody>${rows}</tbody>
-    </table></div>
-    <section class="notes">
-        <strong>${escapeHtml(t('print.includes'))}:</strong>
-        <ul>${includedItemsHtml}</ul>
-        ${customsTaxes ? `
+    ` : '',
+        client_label: escapeHtml(t('print.client')),
+        client_name: clientName ? `<p><strong>${escapeHtml(clientName)}</strong></p>` : '',
+        client_phone: clientPhone ? `<p>${escapeHtml(t('print.phone'))}: ${escapeHtml(clientPhone)}</p>` : '',
+        client_email: clientEmail ? `<p>${escapeHtml(t('print.email'))}: ${escapeHtml(clientEmail)}</p>` : '',
+        vehicle_label: escapeHtml(t('print.vehicle')),
+        vehicle: escapeHtml(vehicle || (isUniversalMode.value ? t('mode.universal_title') : t('print.not_specified'))),
+        issuer_label: escapeHtml(t('print.issued_by')),
+        email: escapeHtml(footerContact.value.email),
+        phone: escapeHtml(footerContact.value.phone),
+        date_label: escapeHtml(t('print.date')),
+        date: escapeHtml(quoteDate),
+        description_label: escapeHtml(t('print.description')),
+        quantity_label: escapeHtml(t('print.quantity')),
+        unit_price_label: escapeHtml(t('print.unit_price')),
+        amount_label: escapeHtml(t('print.amount')),
+        rows: rows,
+        includes_label: escapeHtml(t('print.includes')),
+        included_items: includedItemsHtml,
+        customs_notes: customsTaxes ? `
             <div class="customs-taxes">
                 <h3>${escapeHtml(t('quote_form.customs_taxes'))}</h3>
                 <p>${escapeHtml(customsTaxes)}</p>
             </div>
-        ` : ''}
-        <p class="service-amount-notice">${escapeHtml(t('quote.service_amount_notice'))}</p>
-        ${installationCost.value > 0 ? `<p class="direct-notice">${escapeHtml(t('quote.installation_payment_notice'))}</p>` : ''}
-        ${checkoutLink}
-    </section>
-    <section class="totals">
-        <div class="total-row"><div>${escapeHtml(t('quote.products_online'))}</div><div class="amount">${euroFormatter.value.format(productsSubtotal.value)}</div></div>
-        ${discountAmount.value > 0 ? `<div class="total-row"><div>${escapeHtml(discountLabel.value)}</div><div class="amount">−${euroFormatter.value.format(discountAmount.value)}</div></div>` : ''}
-        ${installationCost.value > 0 ? `<div class="total-row"><div>${escapeHtml(t('quote.installation_direct'))}</div><div class="amount">${euroFormatter.value.format(installationCost.value)}</div></div>` : ''}
-        ${customImportTotal.value > 0 ? `<div class="total-row"><div>${escapeHtml(customQuoteCopy.value.importTotal)}</div><div class="amount">${euroFormatter.value.format(customImportTotal.value)}</div></div>` : ''}
-        <div class="total-row"><div>${escapeHtml(t('quote.estimated_total'))}</div><div class="amount">${euroFormatter.value.format(estimatedTotal.value)}</div></div>
-        <div class="total-row"><div>${escapeHtml(t('quote.online_total'))}</div><div class="amount">${euroFormatter.value.format(onlineTotal.value)}</div></div>
-    </section>
-    <p class="shipping-notice">${escapeHtml(t('quote.home_delivery'))}</p>
-    <footer><span>${escapeHtml(footerContact.value.email.toLocaleUpperCase())}</span> <span>${isItalianStore.value ? 'AUTORADIOITALIANO.IT' : 'WWW.AUTORADIOCANARIO.COM'}</span> <span>TEL./WHATSAPP: ${escapeHtml(footerContact.value.phone)}</span></footer>
-</main>
-</body>
-</html>`;
+        ` : '',
+        service_notice: escapeHtml(t('quote.service_amount_notice')),
+        installation_notice: installationCost.value > 0 ? `<p class="direct-notice">${escapeHtml(t('quote.installation_payment_notice'))}</p>` : '',
+        checkout_link: checkoutLink,
+        products_label: escapeHtml(t('quote.products_online')),
+        products_total: euroFormatter.value.format(productsSubtotal.value),
+        discount_row: discountAmount.value > 0 ? `<div class="total-row"><div>${escapeHtml(discountLabel.value)}</div><div class="amount">−${euroFormatter.value.format(discountAmount.value)}</div></div>` : '',
+        installation_row: installationCost.value > 0 ? `<div class="total-row"><div>${escapeHtml(t('quote.installation_direct'))}</div><div class="amount">${euroFormatter.value.format(installationCost.value)}</div></div>` : '',
+        import_row: customImportTotal.value > 0 ? `<div class="total-row"><div>${escapeHtml(customQuoteCopy.value.importTotal)}</div><div class="amount">${euroFormatter.value.format(customImportTotal.value)}</div></div>` : '',
+        estimated_label: escapeHtml(t('quote.estimated_total')),
+        estimated_total: euroFormatter.value.format(estimatedTotal.value),
+        online_label: escapeHtml(t('quote.online_total')),
+        online_total: euroFormatter.value.format(onlineTotal.value),
+        shipping_notice: escapeHtml(t('quote.home_delivery')),
+        footer_email: escapeHtml(footerContact.value.email.toLocaleUpperCase()),
+        domain: isItalianStore.value ? 'AUTORADIOITALIANO.IT' : 'WWW.AUTORADIOCANARIO.COM',
+    });
     quotePreviewHtml.value = html;
     window.history.pushState({ autoradioQuote: true }, '', window.location.href);
     showQuoteModal.value = false;

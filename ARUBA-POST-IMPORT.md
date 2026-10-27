@@ -1,5 +1,9 @@
 # Caricamento Aruba post-importazione
 
+## Mercedes SL e traduzione massiva — 27 ottobre 2026
+
+Elenco completo dei 12 cataloghi da caricare e verifiche: [post-import-mercedes-sl-2026-10-27.md](docs/post-import-mercedes-sl-2026-10-27.md). Dopo il caricamento premi **Aggiorna database**. Nessuna nuova immagine o build richiesta.
+
 ## Volvo C30/S40/V50/C70 — 8 ottobre 2026
 
 Carica questi sette file mantenendo i percorsi, poi premi **Aggiorna database**:
