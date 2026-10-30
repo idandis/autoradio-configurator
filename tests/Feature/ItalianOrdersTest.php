@@ -210,10 +210,10 @@ class ItalianOrdersTest extends TestCase
         $this->assertSame(0, $order->events()->count());
     }
 
-    public function test_only_admin_can_remove_test_orders_and_real_orders_are_preserved(): void
+    public function test_only_admin_can_remove_unpaid_orders_and_paid_test_orders_are_preserved(): void
     {
         $test = $this->order(['is_test' => true]);
-        $real = $this->order();
+        $real = $this->order(['payment_status' => 'paid']);
         $this->delete(route('italian-orders.destroy', $test))->assertRedirect(route('login'));
         $this->actingAs(User::factory()->create())->delete(route('italian-orders.destroy-tests'))->assertForbidden();
         $this->actingAs($this->admin())->delete(route('italian-orders.destroy', $real))->assertForbidden();
@@ -222,9 +222,39 @@ class ItalianOrdersTest extends TestCase
         $this->get(route('italian-orders.show', $test))->assertNotFound();
         $second = $this->order(['is_test' => true, 'payment_status' => 'paid']);
         $this->delete(route('italian-orders.destroy-tests'))->assertRedirect(route('italian-orders.index'));
-        $this->assertSoftDeleted($second);
+        $this->assertNotSoftDeleted($second);
         $this->assertNotSoftDeleted($real);
-        $this->assertSame(1, ItalianOrder::count());
+        $this->assertSame(2, ItalianOrder::count());
+    }
+
+    public function test_admin_can_delete_pending_and_failed_real_orders(): void
+    {
+        $this->actingAs($this->admin());
+        foreach (['pending', 'failed'] as $status) {
+            $order = $this->order(['payment_status' => $status]);
+            $this->get(route('italian-orders.index'))
+                ->assertInertia(fn (Assert $page) => $page->where('orders.data.0.can_delete', true));
+            $this->delete(route('italian-orders.destroy', $order))->assertRedirect(route('italian-orders.index'));
+            $this->assertSoftDeleted($order);
+        }
+    }
+
+    public function test_paid_and_refunded_orders_cannot_be_deleted_individually_or_in_bulk(): void
+    {
+        $this->actingAs($this->admin());
+        foreach (['paid', 'partially_refunded', 'refunded', 'pending', 'failed'] as $status) {
+            $order = $this->order(['is_test' => true, 'payment_status' => $status, 'paid_at' => now()]);
+            $this->get(route('italian-orders.index'))
+                ->assertInertia(fn (Assert $page) => $page->where('orders.data.0.can_delete', false));
+            $this->get(route('italian-orders.show', $order))
+                ->assertInertia(fn (Assert $page) => $page->where('order.can_delete', false));
+            $this->delete(route('italian-orders.destroy', $order))->assertForbidden();
+            $this->delete(route('italian-orders.destroy-tests'))->assertRedirect(route('italian-orders.index'));
+            $this->assertNotSoftDeleted($order);
+        }
+        $unpaid = $this->order(['is_test' => true]);
+        $this->delete(route('italian-orders.destroy-tests'))->assertRedirect(route('italian-orders.index'));
+        $this->assertSoftDeleted($unpaid);
     }
 
     public function test_deleted_checkout_cannot_be_reopened(): void

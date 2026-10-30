@@ -20,7 +20,11 @@ const props = defineProps<{
 
 const deletion = useForm({});
 const deleteTests = () => {
-    if (window.confirm(`Eliminare tutti i ${props.testOrderCount} ordini di prova dall’elenco? Le transazioni sandbox restano su Stripe.`)) deletion.delete('/italian-orders/test-orders');
+    if (window.confirm(`Eliminare tutti i ${props.testOrderCount} ordini di prova non pagati dall’elenco? Le transazioni sandbox restano su Stripe.`)) deletion.delete('/italian-orders/test-orders');
+};
+
+const deleteOrder = (order: ItalianOrderSummary) => {
+    if (window.confirm(`Eliminare l’ordine non pagato ${order.number} dall’elenco?`)) deletion.delete(`/italian-orders/${order.id}`);
 };
 
 const filters = useForm({
@@ -41,7 +45,7 @@ const search = () => filters.get('/italian-orders', { preserveState: true, repla
         </header>
 
         <p v-if="flashStatus" role="status" class="text-sm text-green-600">{{ flashStatus }}</p>
-        <button v-if="testOrderCount" type="button" :disabled="deletion.processing" class="self-start rounded-md border border-destructive px-4 py-2 text-sm text-destructive disabled:opacity-50" @click="deleteTests">Elimina tutti gli ordini di prova ({{ testOrderCount }})</button>
+        <button v-if="testOrderCount" type="button" :disabled="deletion.processing" class="self-start rounded-md border border-destructive px-4 py-2 text-sm text-destructive disabled:opacity-50" @click="deleteTests">Elimina ordini di prova non pagati ({{ testOrderCount }})</button>
 
         <form class="grid gap-4 rounded-xl border bg-card p-5 sm:grid-cols-2 xl:grid-cols-4" @submit.prevent="search">
             <label class="grid gap-2 text-sm">Cerca ordine o cliente
@@ -79,7 +83,7 @@ const search = () => filters.get('/italian-orders', { preserveState: true, repla
                     </tr></thead>
                     <tbody>
                         <tr v-for="order in orders.data" :key="order.id" class="border-t hover:bg-muted/20">
-                            <td class="p-4"><Link :href="`/italian-orders/${order.id}`" class="font-medium underline underline-offset-4">{{ order.number }}</Link><span v-if="order.is_test" class="ml-2 rounded bg-amber-500/15 px-2 py-1 text-xs text-amber-600">Prova</span><p class="mt-1 text-xs text-muted-foreground">{{ orderDate(order.created_at) }}</p></td>
+                            <td class="p-4"><Link :href="`/italian-orders/${order.id}`" class="font-medium underline underline-offset-4">{{ order.number }}</Link><button v-if="order.can_delete" type="button" :disabled="deletion.processing" class="ml-3 text-destructive underline disabled:opacity-50" @click="deleteOrder(order)">Elimina</button><span v-if="order.is_test" class="ml-2 rounded bg-amber-500/15 px-2 py-1 text-xs text-amber-600">Prova</span><p class="mt-1 text-xs text-muted-foreground">{{ orderDate(order.created_at) }}</p></td>
                             <td class="p-4"><p>{{ order.customer_name }}</p><p class="text-xs text-muted-foreground">{{ order.email }}</p></td>
                             <td class="p-4"><span class="rounded-full bg-muted px-2 py-1 text-xs">{{ paymentStatuses[order.payment_status] ?? order.payment_status }}</span></td>
                             <td class="p-4">{{ fulfillmentStatuses[order.fulfillment_status] ?? order.fulfillment_status }}</td>

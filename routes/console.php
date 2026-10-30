@@ -27,3 +27,5 @@ Artisan::command('italian-orders:prepare-emails', function () {
 })->purpose('Deliver pending purchase emails or prepare test previews');
 
 Schedule::command('italian-orders:prepare-emails')->everyMinute()->withoutOverlapping();
+
+Schedule::command('whatsapp:check-health')->everyMinute()->withoutOverlapping();

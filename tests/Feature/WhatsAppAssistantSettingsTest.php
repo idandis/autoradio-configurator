@@ -365,21 +365,78 @@ class WhatsAppAssistantSettingsTest extends TestCase
         ]]);
         $this->postJson('/dashboard/whatsapp/preview/reset')->assertOk();
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Hola!'])
-            ->assertOk()->assertJsonPath('mode', 'vehicle_details')->assertJsonPath('text', "Hola! Bienvenida personalizada.\n\n¿De qué marca es tu coche?");
+            ->assertOk()->assertJsonPath('mode', 'greeting')->assertJsonPath('text', app(\App\Services\WhatsAppWelcome::class)->initialMessage('es'));
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Hola!'])
-            ->assertOk()->assertJsonPath('text', 'Escríbeme solo la marca de tu coche.');
+            ->assertOk()->assertJsonPath('text', '¿De qué marca es tu coche?');
         $this->travel(23)->hours();
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Hola!'])
             ->assertOk()->assertJsonPath('text', '¿De qué marca es tu coche?');
         $this->travel(24)->hours();
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Good evening!'])
-            ->assertOk()->assertJsonPath('text', "Good evening! Custom welcome.\n\nWhat make is your car?");
+            ->assertOk()->assertJsonPath('text', app(\App\Services\WhatsAppWelcome::class)->initialMessage('en'));
         $this->postJson('/dashboard/whatsapp/preview/reset')->assertOk();
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Buonasera!'])
-            ->assertOk()->assertJsonCount(1, 'chat')->assertJsonPath('text', "Buonasera! Benvenuto personalizzato.\n\nDi che marca è la tua auto?");
+            ->assertOk()->assertJsonCount(1, 'chat')->assertJsonPath('text', app(\App\Services\WhatsAppWelcome::class)->initialMessage('it'));
         Sleep::assertSleptTimes(5);
         Http::assertNothingSent();
         $this->travelBack();
+    }
+
+    public function test_spanish_morning_greeting_without_accent_never_hands_off_in_a_new_chat(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        app(WhatsAppAssistantSettings::class)->save(['language' => 'auto', 'fallback_language' => 'it']);
+        Mail::fake();
+        foreach (['Buenos dias', 'buenos días', 'BUENOS DIAS!', '¡Buenos dias!', '  Buenos   dias  '] as $text) {
+            $this->postJson('/dashboard/whatsapp/preview/reset')->assertOk();
+            $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => $text])
+                ->assertOk()->assertJsonPath('mode', 'greeting');
+            $this->assertSame(app(\App\Services\WhatsAppWelcome::class)->initialMessage('es'), $r->json('text'));
+            $this->assertStringNotContainsString('¿De qué marca es tu coche?', $r->json('text'));
+        }
+        Mail::assertNothingSent();
+        Http::assertNothingSent();
+    }
+
+    public function test_initial_greeting_requests_province_vehicle_and_radio_photo_in_each_language(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        app(WhatsAppAssistantSettings::class)->save(['language' => 'auto']);
+        Mail::fake();
+        foreach ([
+            'Ciao' => ['Ciao 👋', 'provincia', 'marca, il modello e l’anno', 'foto del vano'],
+            'Buenos dias' => ['Hola 👋', 'provincia', 'marca, modelo y año', 'foto del hueco'],
+            'Hello' => ['Hello 👋', 'province', 'make, model and year', 'photo of the opening'],
+        ] as $greeting => $parts) {
+            $this->postJson('/dashboard/whatsapp/preview/reset')->assertOk();
+            $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => $greeting])
+                ->assertOk()->assertJsonPath('mode', 'greeting');
+            foreach ($parts as $part) $this->assertStringContainsString($part, $r->json('text'));
+            $this->assertSame(3, substr_count($r->json('text'), "\n- "));
+        }
+        Mail::assertNothingSent();
+        Http::assertNothingSent();
+    }
+
+    public function test_preview_standard_answer_preserves_handoff_then_other_questions_get_waiting_notice(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        app(WhatsAppAssistantSettings::class)->save(['language' => 'it', 'standard_replies' => [[
+            'title' => 'Contatti', 'topic' => 'Contatti', 'category' => 'general', 'enabled' => true,
+            'answers' => ['it' => 'Scrivici a info@example.test.'],
+        ]]]);
+        $until = now()->timestamp + 43200;
+        $this->withSession(['whatsapp_preview' => ['handoff_until' => $until, 'quote_state' => ['product' => 'selected-radio']]]);
+        Mail::fake();
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Qual è la vostra mail?'])
+            ->assertOk()->assertJsonPath('mode', 'standard_general')->assertJsonPath('text', 'Scrivici a info@example.test.');
+        $this->assertSame($until, session('whatsapp_preview.handoff_until'));
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Posso avere un preventivo?'])
+            ->assertOk()->assertJsonPath('mode', 'operator_waiting');
+        $this->assertSame($until, session('whatsapp_preview.handoff_until'));
+        $this->assertSame('selected-radio', session('whatsapp_preview.quote_state.product'));
+        Mail::assertNothingSent();
+        Http::assertNothingSent();
     }
 
     public function test_preview_handoff_pauses_simulated_chat_until_reset(): void
@@ -387,11 +444,61 @@ class WhatsAppAssistantSettingsTest extends TestCase
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Vorrei un operatore'])
             ->assertOk()->assertJsonPath('mode', 'handoff');
-        $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Hola!'])->assertStatus(409);
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Hola!'])->assertOk()->assertJsonPath('mode', 'operator_waiting');
         $this->postJson('/dashboard/whatsapp/preview/reset')->assertOk();
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Hola!'])
-            ->assertOk()->assertJsonPath('mode', 'vehicle_details');
+            ->assertOk()->assertJsonPath('mode', 'greeting');
         $this->assertFalse(Cache::store('file')->has('waha-test-handoff:'.app(WhatsAppAssistantSettings::class)->suffix()));
+    }
+
+    public function test_short_din_answers_in_all_languages_move_to_budget(): void
+    {
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        app(WhatsAppAssistantSettings::class)->save(['language' => 'auto']);
+        foreach ([
+            'quiero una universal' => ['uno' => '1DIN', 'dos' => '2DIN', '1' => '1DIN', '2' => '2DIN'],
+            'vorrei una universale' => ['uno' => '1DIN', 'due' => '2DIN'],
+            'Do you have universal radios?' => ['one' => '1DIN', 'two' => '2DIN'],
+        ] as $request => $answers) {
+            foreach ($answers as $answer => $din) {
+                $this->postJson('/dashboard/whatsapp/preview/reset')->assertOk();
+                $this->postJson('/dashboard/whatsapp/preview', ['message' => $request])
+                    ->assertOk()->assertJsonPath('mode', 'clarify');
+                $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => (string) $answer])
+                    ->assertOk()->assertJsonPath('mode', 'clarify');
+                $this->assertStringNotContainsString('1 DIN o 2 DIN', $r->json('text'));
+                $this->assertStringNotContainsString('1 DIN or 2 DIN', $r->json('text'));
+                $this->assertMatchesRegularExpression('/budget|presupuesto/u', $r->json('text'));
+                $this->assertSame($din, session('whatsapp_preview.quote_state.universal_din'));
+            }
+        }
+        Http::assertNothingSent();
+    }
+
+    public function test_universal_typo_and_spoken_din_continue_to_budget_and_filtered_offer(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        app(WhatsAppAssistantSettings::class)->save(['language' => 'auto', 'fallback_language' => 'es']);
+        foreach (['single' => ['1DIN', 150], 'double' => ['2DIN', 150], 'expensive' => ['1DIN', 300]] as $handle => [$din, $price]) {
+            $p = ConfiguratorProduct::create(['handle' => $handle, 'category' => 'screen', 'title' => 'Radio Universal '.$din,
+                'model' => 'Universal', 'meta' => ['din' => $din], 'price_min' => $price]);
+            $p->variants()->create(['title' => 'Standard', 'option_value' => 'Standard', 'price' => $price, 'shopify_variant_id' => '100']);
+        }
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => 'avete radio universalil?'])
+            ->assertOk()->assertJsonPath('mode', 'clarify')->assertJsonPath('text', 'Cerchi una radio 1 DIN o 2 DIN? Scrivi 1 DIN oppure 2 DIN.');
+        foreach (['no voglio quella universale da un din', 'un din'] as $text) {
+            $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => $text])
+                ->assertOk()->assertJsonPath('mode', 'clarify');
+            $this->assertStringContainsString('Qual è il tuo budget', $r->json('text'));
+            $this->assertStringNotContainsString('Cerchi una radio', $r->json('text'));
+        }
+        $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => '100-200 euro'])
+            ->assertOk()->assertJsonPath('mode', 'offer');
+        $this->assertStringContainsString('/products/single', $r->json('text'));
+        $this->assertStringNotContainsString('/products/double', $r->json('text'));
+        $this->assertStringNotContainsString('/products/expensive', $r->json('text'));
+        Http::assertNothingSent();
     }
 
     public function test_missing_radio_followups_do_not_resubmit_or_repeat_and_unknown_question_goes_to_operator(): void
@@ -410,15 +517,19 @@ class WhatsAppAssistantSettingsTest extends TestCase
         Mail::shouldReceive('mailer')->with('smtp')->once()->andReturnSelf();
         Mail::shouldReceive('raw')->once()->withArgs(fn ($body, $callback) => str_contains($body, 'Fiat') || str_contains($body, 'FIAT'))
             ->andReturn(new \stdClass);
-        $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => '¿Y puedo poner una universal?'])
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => '¿Y puedo poner una universal?'])
+            ->assertOk()->assertJsonPath('mode', 'clarify')->assertJsonPath('text', '¿Buscas una radio 1 DIN o 2 DIN? Escribe 1 DIN o 2 DIN.');
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => '2 DIN'])
+            ->assertOk()->assertJsonPath('mode', 'clarify');
+        $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => '100–200 euro'])
             ->assertOk()->assertJsonPath('mode', 'handoff')->assertJsonPath('vehicle.year', 2021);
         $this->assertStringContainsString('Verificaremos una radio universal', $r->json('text'));
-        $this->postJson('/dashboard/whatsapp/preview', ['message' => '¿Y otra radio?'])->assertOk()->assertJsonPath('mode', 'missing_submitted');
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => '¿Y otra radio para Fiat 500 2021?'])->assertOk()->assertJsonPath('mode', 'operator_waiting');
         $this->assertDatabaseCount('missing_vehicle_requests', 1);
         Http::assertNothingSent();
     }
 
-    public function test_new_vehicle_request_is_answered_after_missing_radio_email_and_operator_handoff(): void
+    public function test_new_vehicle_request_requires_reset_after_preview_operator_handoff(): void
     {
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         app(WhatsAppAssistantSettings::class)->save(['language' => 'es']);
@@ -433,11 +544,13 @@ class WhatsAppAssistantSettingsTest extends TestCase
         Mail::shouldReceive('raw')->once()->andReturn(new \stdClass);
         $this->postJson('/dashboard/whatsapp/preview', ['message' => '¿Cuánto tardarán en buscarla?'])
             ->assertOk()->assertJsonPath('mode', 'handoff');
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => '¿Y tenéis otra radio para Audi A4 2008?'])->assertOk()->assertJsonPath('mode', 'operator_waiting');
+        $this->postJson('/dashboard/whatsapp/preview/reset')->assertOk();
         $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => '¿Y tenéis otra radio para Audi A4 2008?'])
             ->assertOk()->assertJsonPath('mode', 'offer')->assertJsonPath('vehicle.brand', 'AUDI')->assertJsonPath('vehicle.year', 2008);
         $this->assertStringContainsString('/products/audi-new-request', $r->json('text'));
         $this->assertDatabaseCount('missing_vehicle_requests', 1);
-        $this->assertSame([], session('whatsapp_preview.form'));
+        $this->assertEmpty(session('whatsapp_preview.form'));
         Http::assertNothingSent();
     }
 
@@ -513,7 +626,7 @@ class WhatsAppAssistantSettingsTest extends TestCase
             ->assertOk()->assertJsonPath('mode', 'ai');
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Insisto: serve AUX?'])
             ->assertOk()->assertJsonPath('mode', 'technical_handoff');
-        $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Serve AUX?'])->assertStatus(409);
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Serve AUX?'])->assertOk()->assertJsonPath('mode', 'operator_waiting');
         $this->assertFalse(Cache::store('file')->has('waha-test-handoff:'.app(WhatsAppAssistantSettings::class)->suffix()));
     }
 
@@ -532,7 +645,7 @@ class WhatsAppAssistantSettingsTest extends TestCase
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Mitsubishi'])
             ->assertOk()->assertJsonPath('mode', 'vehicle_details')->assertJsonPath('text', '¿Cuál es el modelo de tu coche?');
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Outlnder'])
-            ->assertOk()->assertJsonPath('mode', 'vehicle_details')->assertJsonPath('text', '¿De qué año es tu coche?');
+            ->assertOk()->assertJsonPath('mode', 'vehicle_details')->assertJsonPath('text', '¿De qué año es tu coche? Escribe el año con 4 cifras, por ejemplo 2016.');
         $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => '2013'])->assertOk()->assertJsonPath('mode', 'offer');
         $this->assertStringContainsString('/products/outlander-radio', $r->json('text'));
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'GPS?'])
@@ -569,7 +682,7 @@ class WhatsAppAssistantSettingsTest extends TestCase
         $this->put('/dashboard/whatsapp', $rules)->assertSessionHasErrors('standard_replies.0.category');
     }
 
-    public function test_accessory_followup_keeps_product_and_emails_unknown_delivery_time_without_vehicle_questions(): void
+    public function test_accessory_followup_uses_standard_delivery_time_without_ai_or_operator_email(): void
     {
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         $title = 'Cámara Trasera Universal AHD CVBS Gran Angular';
@@ -579,21 +692,14 @@ class WhatsAppAssistantSettingsTest extends TestCase
             ->assertOk()->assertJsonPath('mode', 'accessory_offer');
         $this->postJson('/dashboard/whatsapp/preview', ['message' => '¿Hacen envío a otra isla?'])
             ->assertOk()->assertJsonPath('mode', 'standard_general');
-        Http::fake(['api.openai.com/v1/responses' => Http::response(['status' => 'completed', 'output' => [[
-            'type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode([
-                'answer' => 'La cámara figura desde 32,94 €. Vamos a verificar el plazo de entrega.',
-                'unknown' => ['Plazo de entrega de la cámara'], 'needs_operator' => true,
-            ])]],
-        ]]])]);
-        Mail::shouldReceive('mailer')->with('smtp')->once()->andReturnSelf();
-        Mail::shouldReceive('raw')->once()->withArgs(fn ($body, $callback) => str_contains($body, 'camera-followup') && str_contains($body, '34611509809'))
-            ->andReturn(new \stdClass);
+        Mail::fake();
         $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => '¿Cuándo llega la cámara?'])
-            ->assertOk()->assertJsonPath('mode', 'technical_handoff')->assertJsonPath('matches', 0);
+            ->assertOk()->assertJsonPath('mode', 'standard_general')->assertJsonPath('matches', 0);
         $this->assertStringNotContainsString('marca', $r->json('text'));
-        $this->assertStringContainsString('contactaremos', $r->json('text'));
-        Http::assertSent(fn ($r) => str_contains($r->url(), 'openai.com') && str_contains($r['instructions'], 'camera-followup')
-            && str_contains($r['instructions'], 'Non stai cercando una radio'));
+        $this->assertStringContainsString('10–15 días', $r->json('text'));
+        $this->assertSame('camera-followup', session('whatsapp_preview.quote_state.accessory_handle'));
+        Mail::assertNothingSent();
+        Http::assertNothingSent();
         $this->assertDatabaseCount('missing_vehicle_requests', 0);
     }
 
@@ -618,7 +724,7 @@ class WhatsAppAssistantSettingsTest extends TestCase
             ->assertOk()->assertJsonPath('mode', 'vehicle_details');
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'El modelo es VOLKSWAGEN UP! 1.0 MOVE 2017'])
             ->assertOk()->assertJsonPath('mode', 'offer');
-        $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Muchas gracias. El servicio de instalación se les podría encargar a ustedes o no lo ofrecen?'])
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => 'instala usted?'])
             ->assertOk()->assertJsonPath('mode', 'standard_general');
         $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Buenos días. Estoy en Las Palmas de Gran Canaria'])
             ->assertOk()->assertJsonPath('mode', 'standard_general')->assertJsonPath('vehicle.model', 'Up')->assertJsonPath('vehicle.year', 2017);
@@ -648,11 +754,92 @@ class WhatsAppAssistantSettingsTest extends TestCase
             'brand' => 'AUDI', 'model' => 'A4', 'year_from' => 2000, 'year_to' => 2009, 'price_min' => 300]);
         $p->variants()->create(['title' => 'Base', 'price' => 300, 'shopify_variant_id' => '300']);
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Presupuesto Audi A4 2001 con instalación'])
-            ->assertOk()->assertJsonPath('mode', 'quote_choice')->assertJsonPath('text', '¿En qué zona quieres la instalación?');
+            ->assertOk()->assertJsonPath('mode', 'quote_choice')->assertJsonPath('text', '¿En qué zona quieres la instalación? Escribe la localidad o el código postal de 5 cifras, por ejemplo Telde o 35200.');
         $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Gran Canaria'])
             ->assertOk()->assertJsonPath('mode', 'quote');
         $this->assertStringContainsString('Total presupuesto: 344,00 €', $r->json('text'));
         $this->assertNotNull($r->json('document'));
+        Http::assertNothingSent();
+    }
+
+    public function test_price_with_installation_generates_quote_for_selected_variant_without_reasking(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $zone = InstallationZone::create(['name' => 'Gran Canaria', 'active' => true]);
+        $zone->services()->create(['name' => 'Pantalla', 'price' => 50]);
+        $p = ConfiguratorProduct::create(['handle' => 'mercedes-sl-2012', 'category' => 'screen', 'title' => 'Mercedes SL R230 2008-2012',
+            'brand' => 'MERCEDES', 'model' => 'SL', 'year_from' => 2008, 'year_to' => 2012, 'price_min' => 300]);
+        $p->variants()->create(['title' => '8core 6G 64G', 'option_value' => '8core 6G 64G', 'price' => 300, 'shopify_variant_id' => '111']);
+        $v = $p->variants()->create(['title' => '8core 8G 128G', 'option_value' => '8core 8G 128G', 'price' => 400, 'shopify_variant_id' => '222']);
+        Mail::fake();
+        foreach ([
+            'es' => "Me interesa la 8core/ 8G/ 128G\nCuál seria el precio con instalación?",
+            'it' => 'Mi interessa la 8core/ 8G/ 128G. Qual è il prezzo con installazione?',
+            'en' => 'I want the 8core/ 8G/ 128G. What is the price with installation?',
+        ] as $locale => $text) {
+            app(WhatsAppAssistantSettings::class)->save(['language' => $locale]);
+            $this->postJson('/dashboard/whatsapp/preview/reset')->assertOk();
+            $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Mercedes SL 2012'])
+                ->assertOk()->assertJsonPath('mode', 'offer');
+            $this->withSession(['whatsapp_preview.quote_state' => ['installation_zone' => $zone->id]]);
+            $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => $text])
+                ->assertOk()->assertJsonPath('mode', 'quote');
+            $this->assertStringContainsString('8core 8G 128G', $r->json('text'));
+            $this->assertStringContainsString('Gran Canaria: 50,00 €', $r->json('text'));
+            $this->assertSame($v->id, session('whatsapp_preview.quote_state.variant_id'));
+            $checkout = app(\App\Services\ItalianCheckout::class);
+            $items = $checkout->normalizeItems(['items' => [['type' => 'variant', 'id' => $v->id, 'quantity' => 1]]]);
+            $quote = $checkout->quote($items, locale: $locale === 'it' ? 'it' : 'es');
+            $total = number_format(($quote['total_amount'] + 5000) / 100, 2, ',', '.').' €';
+            $this->assertStringContainsString($total, $r->json('text'));
+            $this->assertNotNull($r->json('document'));
+        }
+        $this->assertDatabaseCount('italian_orders', 0);
+        Mail::assertNothingSent();
+        Http::assertNothingSent();
+    }
+
+    public function test_stock_followup_uses_supplier_policy_without_ai_or_operator_in_each_language(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        Mail::fake();
+        foreach ([
+            'es' => "Genial, me interesa\nLa tenéis en stock?\nO tenéis que pedirla\nMi coche no tiene fibra óptica, acabo de comprobarlo",
+            'it' => 'Mi interessa, è disponibile in stock o dovete ordinarla? La mia auto non ha fibra ottica.',
+            'en' => 'I am interested. Is it in stock or do you need to order it? My car has no optical fibre.',
+        ] as $locale => $text) {
+            app(WhatsAppAssistantSettings::class)->save(['language' => $locale]);
+            $this->postJson('/dashboard/whatsapp/preview/reset')->assertOk();
+            $this->withSession(['whatsapp_preview' => ['last_activity' => now()->timestamp,
+                'vehicle' => ['brand' => 'MERCEDES', 'model' => 'SL', 'year' => 2011],
+                'quote_state' => ['installation_zone' => 1, 'variant_id' => 999, 'product' => 'selected-radio']]]);
+            $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => $text])
+                ->assertOk()->assertJsonPath('mode', 'standard_general');
+            $this->assertStringContainsString('10–15', $r->json('text'));
+            $this->assertNull(session('whatsapp_preview.handoff_until'));
+            $this->assertSame('selected-radio', session('whatsapp_preview.quote_state.product'));
+            $this->assertSame(999, session('whatsapp_preview.quote_state.variant_id'));
+        }
+        Mail::assertNothingSent();
+        Http::assertNothingSent();
+    }
+
+    public function test_explicit_stock_for_selected_variant_overrides_supplier_policy(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        app(WhatsAppAssistantSettings::class)->save(['language' => 'es']);
+        $p = ConfiguratorProduct::create(['handle' => 'stock-radio', 'category' => 'screen', 'title' => 'Radio']);
+        $v = $p->variants()->create(['title' => '8G 128G', 'shopify_variant_id' => '123', 'price' => 400]);
+        $other = $p->variants()->create(['title' => '4G 64G', 'shopify_variant_id' => '456', 'price' => 300]);
+        $stock = \App\Models\StockProduct::create(['product_handle' => $p->handle, 'quantity' => 1,
+            'discount_variant_key' => \App\Models\StockProduct::variantKey($other)]);
+        $state = ['product' => $p->handle, 'variant_id' => $v->id];
+        $bot = app(WhatsAppTestBot::class);
+        $this->assertStringContainsString('10–15', $bot->answer('¿Está en stock?', [], [], null, $state)['text']);
+        $stock->update(['discount_variant_key' => \App\Models\StockProduct::variantKey($v)]);
+        $this->assertSame('La radio seleccionada figura disponible en stock.', $bot->answer('¿Está en stock?', [], [], null, $state)['text']);
+        $stock->update(['quantity' => 0]);
+        $this->assertStringContainsString('10–15', $bot->answer('¿Está en stock?', [], [], null, $state)['text']);
         Http::assertNothingSent();
     }
 
@@ -668,7 +855,7 @@ class WhatsAppAssistantSettingsTest extends TestCase
         $this->withSession(['whatsapp_preview' => ['vehicle' => $vehicle, 'last_activity' => now()->timestamp,
             'history' => [['role' => 'assistant', 'content' => '¿En qué zona estás?']]]]);
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Zona cerrada'])
-            ->assertOk()->assertJsonPath('text', '¿Cuál es el código postal de tu zona?');
+            ->assertOk()->assertJsonPath('text', '¿Cuál es el código postal de tu zona? Escribe las 5 cifras, por ejemplo 35200.');
         $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => '35010'])
             ->assertOk()->assertJsonPath('mode', 'standard_general')->assertJsonPath('vehicle.year', 2017);
         $this->assertStringContainsString('Gran Canaria', $r->json('text'));
@@ -690,7 +877,7 @@ class WhatsAppAssistantSettingsTest extends TestCase
             $this->withSession(['whatsapp_preview' => ['last_activity' => now()->timestamp]]);
             $this->postJson('/dashboard/whatsapp/preview', ['message' => $question])
                 ->assertOk()->assertJsonPath('mode', 'standard_general')
-                ->assertJsonPath('text', app(WhatsAppStandardReplies::class)->shippingPolicy($locale));
+                ->assertJsonPath('text', app(WhatsAppStandardReplies::class)->shippingPolicy($locale, [$question]));
         }
         Http::assertNothingSent();
     }
@@ -732,6 +919,7 @@ class WhatsAppAssistantSettingsTest extends TestCase
 
     public function test_installation_questions_use_dedicated_general_reply_in_all_languages(): void
     {
+        $this->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class);
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         app(WhatsAppAssistantSettings::class)->save(['standard_replies' => [
             ['title' => 'luogo lavoro invio', 'category' => 'general', 'enabled' => true,
@@ -740,12 +928,122 @@ class WhatsAppAssistantSettingsTest extends TestCase
                 'answers' => ['it' => 'In quale zona sei?', 'es' => '¿En qué zona estás?', 'en' => 'Which area are you in?']],
         ]]);
         $this->mock(WhatsAppCatalogSearch::class)->shouldNotReceive('search');
-        foreach (['buongiorno fate installazioni?' => 'In quale zona sei?', 'Installate anche voi?' => 'In quale zona sei?',
-            '¿Hacéis instalaciones?' => '¿En qué zona estás?', 'Do you install?' => 'Which area are you in?', 'Do you offer installations?' => 'Which area are you in?'] as $question => $answer) {
+        foreach (['buongiorno fate installazioni?' => 'In quale zona sei?', 'Installate anche voi?' => 'In quale zona sei?', 'potete anceh installarla?' => 'In quale zona sei?', 'me la potete anche instalare?' => 'In quale zona sei?', 'potete instalarla?' => 'In quale zona sei?',
+            '¿Hacéis instalaciones?' => '¿En qué zona estás?', 'instala usted?' => '¿En qué zona estás?', '¿La instalas?' => '¿En qué zona estás?', '¿Puede instalarla?' => '¿En qué zona estás?', 'Do you install?' => 'Which area are you in?', 'Do you offer installations?' => 'Which area are you in?'] as $question => $answer) {
             $this->withSession(['whatsapp_preview' => ['last_activity' => now()->timestamp]]);
             $this->postJson('/dashboard/whatsapp/preview', ['message' => $question])
                 ->assertOk()->assertJsonPath('mode', 'standard_general')->assertJsonPath('text', $answer);
         }
+        Http::assertNothingSent();
+    }
+
+    public function test_universal_installation_uses_standard_reply_then_local_zone_without_ai_or_email(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $reply = 'Normalmente sì, il costo è di 50 €, ma dipende dalla zona. Da dove ci scrivi?';
+        app(WhatsAppAssistantSettings::class)->save(['language' => 'it', 'standard_replies' => [
+            ['topic' => 'Installazione', 'title' => 'Installazione', 'category' => 'general', 'enabled' => true, 'answers' => ['it' => $reply]],
+        ]]);
+        foreach (['fits' => 'Radio 1DIN', 'conflicting' => 'Radio 2 DIN'] as $handle => $title) {
+            $p = ConfiguratorProduct::create(['handle' => $handle, 'category' => 'screen', 'title' => $title,
+                'model' => 'Universal', 'meta' => ['din' => '1DIN'], 'price_min' => 150]);
+            $p->variants()->create(['title' => 'Standard', 'option_value' => 'Standard', 'price' => 150, 'shopify_variant_id' => '100']);
+        }
+        $zone = InstallationZone::create(['name' => 'Gran Canaria', 'active' => true]);
+        $zone->services()->create(['name' => 'Radio', 'price' => 50]);
+        $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Radio universale un din 100-200 euro'])
+            ->assertOk()->assertJsonPath('mode', 'offer');
+        $this->assertStringNotContainsString('/products/conflicting', $r->json('text'));
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => 'me la potete anche instalare?'])
+            ->assertOk()->assertJsonPath('mode', 'standard_general')->assertJsonPath('text', $reply);
+        $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Gran Canaria'])
+            ->assertOk()->assertJsonPath('mode', 'standard_general');
+        $this->assertStringContainsString('50,00 €', $r->json('text'));
+        Http::assertNothingSent();
+    }
+
+    public function test_installation_followup_cannot_resume_a_paused_preview(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        app(WhatsAppAssistantSettings::class)->save(['language' => 'es', 'standard_replies' => [
+            ['topic' => 'Installazione', 'category' => 'general', 'enabled' => true,
+                'answers' => ['es' => 'Normalmente sí, cuesta 50 €, pero depende de la zona. ¿Desde dónde nos escribes?']],
+        ]]);
+        $zone = InstallationZone::create(['name' => 'Gran Canaria', 'active' => true]);
+        $zone->services()->create(['name' => 'Radio', 'price' => 50]);
+        Mail::fake();
+        foreach ([false, true] as $pending) {
+            $this->withSession(['whatsapp_preview' => ['handoff_until' => now()->timestamp + 43200,
+                'last_activity' => now()->timestamp, 'technical' => ['unknown' => ['Installation']],
+                'quote_state' => ['installation_pending' => $pending]]]);
+            $this->postJson('/dashboard/whatsapp/preview', ['message' => 'instala usted?'])->assertOk()->assertJsonPath('mode', 'standard_general');
+            $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Gran Canaria'])->assertOk()->assertJsonPath('mode', 'operator_waiting');
+            $this->assertNotNull(session('whatsapp_preview.handoff_until'));
+            $this->postJson('/dashboard/whatsapp/preview/reset')->assertOk();
+            $this->postJson('/dashboard/whatsapp/preview', ['message' => 'instala usted?'])
+                ->assertOk()->assertJsonPath('mode', 'standard_general');
+            $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Gran Canaria'])
+                ->assertOk()->assertJsonPath('mode', 'standard_general');
+            $this->assertStringContainsString('50,00 €', $r->json('text'));
+        }
+        Mail::assertNothingSent();
+        Http::assertNothingSent();
+    }
+
+    public function test_installation_uses_las_palmas_from_the_initial_message_in_all_languages(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $zone = InstallationZone::create(['name' => 'Gran Canaria', 'active' => true]);
+        $zone->services()->create(['name' => 'Radio', 'price' => 50]);
+        Mail::fake();
+        foreach ([
+            'es' => 'Hola! Me gustaría ponerle una radio android a un Mercedes SL 500 (r230), vosotros instaláis radios? Estoy en Las Palmas',
+            'it' => 'Ciao! Vorrei una radio Android per Mercedes SL 500 (r230), installate radio? Sono a Las Palmas',
+            'en' => 'Hello! I want an Android radio for a Mercedes SL 500 (r230), do you install radios? I am in Las Palmas',
+        ] as $locale => $text) {
+            app(WhatsAppAssistantSettings::class)->save(['language' => $locale]);
+            $this->postJson('/dashboard/whatsapp/preview/reset')->assertOk();
+            $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => $text])
+                ->assertOk()->assertJsonPath('mode', 'standard_general');
+            $this->assertStringContainsString('Gran Canaria', $r->json('text'));
+            $this->assertStringContainsString('50,00 €', $r->json('text'));
+            $this->assertStringNotContainsString('?', $r->json('text'));
+            $this->assertSame($zone->id, session('whatsapp_preview.quote_state.installation_zone'));
+        }
+        $this->assertFalse($zone->matchesLocation('Las Palmasextra'));
+        Mail::assertNothingSent();
+        Http::assertNothingSent();
+    }
+
+    public function test_mixed_radio_and_installation_request_asks_only_year_then_offers_matching_radio(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $zone = InstallationZone::create(['name' => 'Gran Canaria', 'active' => true]);
+        $zone->services()->create(['name' => 'Radio', 'price' => 50]);
+        $p = ConfiguratorProduct::create(['handle' => 'mercedes-sl-radio', 'category' => 'screen', 'title' => 'Mercedes SL R230 2001-2007',
+            'brand' => 'MERCEDES', 'model' => 'SL', 'year_from' => 2001, 'year_to' => 2007, 'price_min' => 200]);
+        $p->variants()->create(['title' => '8core 6G', 'option_value' => '8core 6G', 'price' => 200, 'shopify_variant_id' => '100']);
+        Mail::fake();
+        foreach ([
+            'es' => ['Hola! Me gustaría ponerle una radio android a un Mercedes SL 500 (r230), vosotros instaláis radios? Estoy en Las Palmas', '¿De qué año es tu coche? Escribe el año con 4 cifras, por ejemplo 2016.'],
+            'it' => ['Ciao! Vorrei una radio Android per Mercedes SL 500 (r230), installate radio? Sono a Las Palmas', 'Di che anno è la tua auto? Scrivi l’anno con 4 cifre, ad esempio 2016.'],
+            'en' => ['Hello! I want an Android radio for Mercedes SL 500 (r230), do you install radios? I am in Las Palmas', 'What year is your car? Write the 4-digit year, for example 2016.'],
+        ] as $locale => [$text, $question]) {
+            app(WhatsAppAssistantSettings::class)->save(['language' => $locale]);
+            $this->postJson('/dashboard/whatsapp/preview/reset')->assertOk();
+            $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => $text])
+                ->assertOk()->assertJsonPath('mode', 'vehicle_details')
+                ->assertJsonPath('vehicle.brand', 'MERCEDES')->assertJsonPath('vehicle.model', 'SL');
+            $this->assertStringContainsString('50,00 €', $r->json('text'));
+            $this->assertStringContainsString('Gran Canaria', $r->json('text'));
+            $this->assertStringContainsString($question, $r->json('text'));
+            $this->assertStringNotContainsString('/products/', $r->json('text'));
+            $this->assertSame($zone->id, session('whatsapp_preview.quote_state.installation_zone'));
+            $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => '2005'])
+                ->assertOk()->assertJsonPath('mode', 'offer')->assertJsonPath('vehicle.year', 2005);
+            $this->assertStringContainsString('/products/mercedes-sl-radio', $r->json('text'));
+        }
+        Mail::assertNothingSent();
         Http::assertNothingSent();
     }
 
@@ -769,7 +1067,7 @@ class WhatsAppAssistantSettingsTest extends TestCase
             ->andReturn(new \stdClass);
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'xyz boh questa cosa'])
             ->assertOk()->assertJsonPath('mode', 'handoff');
-        $this->postJson('/dashboard/whatsapp/preview', ['message' => 'ciao'])->assertStatus(409);
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => 'ciao'])->assertOk()->assertJsonPath('mode', 'operator_waiting');
         Http::assertNothingSent();
     }
 
@@ -785,7 +1083,7 @@ class WhatsAppAssistantSettingsTest extends TestCase
         $this->assertSame('general', $replies[1]['category']);
     }
 
-    public function test_quote_for_seven_inches_selects_front_by_known_year_and_calculates_total(): void
+    public function test_quote_lists_all_sizes_then_selected_radio_uses_known_year_and_calculates_total(): void
     {
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         $p = ConfiguratorProduct::create(['handle' => 'mercedes-sl-7', 'category' => 'screen', 'title' => 'Radio 7” Mercedes SL R230 2001–2011',
@@ -795,7 +1093,10 @@ class WhatsAppAssistantSettingsTest extends TestCase
         ConfiguratorProduct::create(['handle' => 'mercedes-sl-9', 'category' => 'screen', 'title' => 'Radio 9” Mercedes SL',
             'brand' => 'MERCEDES', 'model' => 'SL', 'year_from' => 2001, 'year_to' => 2011, 'price_min' => 300]);
         $this->postJson('/dashboard/whatsapp/preview', ['message' => 'Mercedes SL 2010'])->assertOk();
-        $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => "mi faresti un preventivo per quellada 7 ''"])
+        $this->postJson('/dashboard/whatsapp/preview', ['message' => "mi faresti un preventivo per quellada 7 ''"])
+            ->assertOk()->assertJsonPath('mode', 'quote_choice')
+            ->assertJsonFragment(['text' => "Quale radio preferisci?\n1. Radio 7” Mercedes SL R230 2001–2011\n2. Radio 9” Mercedes SL\n\nPer favore, scrivi solo 1 o 2."]);
+        $r = $this->postJson('/dashboard/whatsapp/preview', ['message' => '1'])
             ->assertOk()->assertJsonPath('mode', 'quote');
         $text = $r->json('text');
         $this->assertNotNull($r->json('document'));

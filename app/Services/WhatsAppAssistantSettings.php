@@ -18,13 +18,13 @@ class WhatsAppAssistantSettings
             'fallback_language' => 'es', 'reply_delay_seconds' => 4, 'language' => 'auto', 'tone' => 'diretto', 'max_words' => 35, 'max_questions' => 1,
             'direct_offers' => true, 'max_products' => 2, 'show_prices' => true, 'show_links' => true,
             'price_disclaimer' => true, 'custom_rules' => '',
-            'handoff_keywords' => "operatore\nassistenza umana\nreclamo\nrimborso\nhuman agent\nagente humano",
+            'handoff_keywords' => "operatore\noperador\noperator\nassistenza umana\nreclamo\nrimborso\nhuman agent\nagente humano",
             'handoff_on_missing' => false,
             'standard_replies' => [],
             'welcome_messages' => [
-                'it' => 'Benvenuto da Autoradio Canario!',
-                'es' => '¡Bienvenido a Autoradio Canario!',
-                'en' => 'Welcome to Autoradio Canario!',
+                'it' => 'Sono l’assistente AI di AutoRadioCanario. Posso aiutarti con radio, versioni, prezzi, spedizioni e installazione. In qualsiasi momento puoi scrivere OPERATORE per parlare con una persona: verrai ricontattato entro 24 ore.',
+                'es' => 'Soy el asistente de IA de AutoRadioCanario. Puedo ayudarte con radios, versiones, precios, envíos e instalación. En cualquier momento puedes escribir OPERADOR para hablar con una persona: te contactaremos en un plazo de 24 horas.',
+                'en' => 'I’m AutoRadioCanario’s AI assistant. I can help with radios, versions, prices, shipping and installation. You can write OPERATOR at any time to speak with a person: we’ll contact you within 24 hours.',
             ],
         ];
     }
@@ -66,7 +66,8 @@ class WhatsAppAssistantSettings
 
     public function reset(): void
     {
-        foreach (['history', 'vehicle', 'offer', 'handoff', 'form', 'technical', 'quote'] as $kind) {
+        app(WhatsAppPhotoReview::class)->discard(Cache::store('file')->get('waha-test-photos:'.$this->suffix(), []));
+        foreach (['history', 'vehicle', 'offer', 'handoff', 'form', 'technical', 'quote', 'photos'] as $kind) {
             Cache::store('file')->forget('waha-test-'.$kind.':'.$this->suffix());
         }
         Cache::store('file')->put('waha-test-revision:'.$this->suffix(), bin2hex(random_bytes(12)), now()->addDay());
@@ -100,9 +101,9 @@ class WhatsAppAssistantSettings
                 continue;
             }
             $patterns = [
-                'es' => 'hola|buenos días|buenas tardes|buenas noches|quiero|busco|tengo|tenéis|precio|pantalla|gracias|tiene|tienen|lleva|incluye|garantía|envío|mantienen|conserva|funciones|puede|puedo|cómo|qué|dónde|donde|horario|presupuesto|instalaciones|instalación|hacéis|instaláis|envios|enviáis|envían',
-                'en' => 'hello|hi|good morning|good afternoon|good evening|looking|price|thanks|my car|does|has|have|supports|warranty|shipping|can|will|retain|retains|keep|keeps|functions?|features?|what|how|is|are|do|quote|quotation|ship|shipping|deliver|delivery',
-                'it' => 'ciao|buongiorno|buonasera|salve|pagamento|rateale|posso|vorrei|cerco|avete|prezzo|grazie|mantiene|mantengono|funzioni|funzionalità|ha il|della mia|della tua|la mia auto|dove|orari|preventivo|faresti|cosa significa|che significa|spedite|spedizioni|spedizione|consegnate',
+                'es' => 'cu[aá]nto|tarda|llegar|operador|cu[aá]l|vuestro|vuestra|correo|hola|buenos\s+d[ií]as|buenas(?:\s+(?:tardes|noches))?|quiero|busco|tengo|tenéis|precio|pantalla|gracias|tiene|tienen|lleva|incluye|garantía|envío|mantienen|conserva|funciones|puede|puedo|cómo|qué|dónde|donde|horario|presupuesto|instalaciones|instalación|instala|instalas|instalan|instalar(?:l[ao]s?)?|usted|ustedes|hacéis|instaláis|envios|enviáis|envían',
+                'en' => 'operator|hello|hi|good morning|good afternoon|good evening|looking|price|thanks|my car|does|has|have|supports|warranty|shipping|can|will|retain|retains|keep|keeps|functions?|features?|what|how|is|are|do|quote|quotation|ship|shipping|deliver|delivery',
+                'it' => 'quanto|consegna|arrivare|operatore|quale|qual|vostr[aoie]|indirizzo|scrivervi|potete|installate|installarla|installarlo|montarla|montarlo|hai|universali|universalil|universale|al caso mio|ciao|buongiorno|buonasera|salve|pagamento|rateale|posso|vorrei|cerco|avete|prezzo|grazie|mantiene|mantengono|funzioni|funzionalità|ha il|della mia|della tua|la mia auto|dove|orari|preventivo|faresti|cosa significa|che significa|spedite|spedizioni|spedizione|consegnate',
             ];
             $scores = [];
             foreach ($patterns as $lang => $pattern) {

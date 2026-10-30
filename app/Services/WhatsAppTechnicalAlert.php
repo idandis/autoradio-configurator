@@ -4,6 +4,7 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -33,7 +34,19 @@ class WhatsAppTechnicalAlert
         $body .= "\n\nPunti da verificare:\n".implode("\n", $data['unknown']);
         $label = trim(implode(' ', array_filter([$vehicle['brand'] ?? '', $vehicle['model'] ?? '']))) ?: 'cliente WhatsApp';
         try {
-            $sent = Mail::mailer('smtp')->raw($body, fn ($m) => $m->to('pollong@gmail.com')->subject('WhatsApp: verifica tecnica '.$label));
+            $photos = $data['photos'] ?? [];
+            if ($photos) $body .= "\n\nFoto del cliente allegate: ".count($photos).". Nessun riconoscimento AI eseguito.";
+            $test = ! empty($data['photo_test']);
+            if ($test) $body = "EMAIL DI PROVA DALL’ANTEPRIMA — nessun messaggio WhatsApp inviato.\n\n".$body;
+            $sent = Mail::mailer('smtp')->raw($body, function ($m) use ($photos, $label, $test) {
+                $m->to($photos ? config('mail.notification_to', 'pollong@gmail.com') : 'pollong@gmail.com')
+                    ->subject(($test ? '[PROVA] ' : '').($photos ? 'WhatsApp: foto per verifica compatibilità ' : 'WhatsApp: verifica tecnica ').$label);
+                foreach ($photos as $i => $photo) {
+                    if (! preg_match('~^waha/photos/[a-f0-9-]+\.(jpg|png|webp)$~', $photo['path'] ?? '', $ext)
+                        || ! Storage::disk('local')->exists($photo['path'])) throw new RuntimeException('Foto cliente non disponibile.');
+                    $m->attach(Storage::disk('local')->path($photo['path']), ['as' => 'foto-cliente-'.($i + 1).'.'.$ext[1], 'mime' => $photo['mime']]);
+                }
+            });
             if ($sent === null) {
                 throw new RuntimeException('Email tecnica non inviata.');
             }

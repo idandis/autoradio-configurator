@@ -29,6 +29,18 @@ class ItalianOrder extends Model
 
     protected $guarded = ['id'];
 
+    protected $appends = ['can_delete'];
+
+    public function scopeDeletable($query)
+    {
+        return $query->whereIn('payment_status', ['pending', 'failed'])->whereNull('paid_at');
+    }
+
+    public function getCanDeleteAttribute(): bool
+    {
+        return in_array($this->payment_status, ['pending', 'failed'], true) && $this->paid_at === null;
+    }
+
     protected $casts = [
         'is_test' => 'boolean',
         'shipping_address' => 'array',

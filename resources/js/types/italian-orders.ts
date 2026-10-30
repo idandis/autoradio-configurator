@@ -10,6 +10,7 @@ export type OrderAddress = {
 
 export type ItalianOrderSummary = {
     is_test: boolean;
+    can_delete: boolean;
     id: number;
     number: string;
     customer_name: string;

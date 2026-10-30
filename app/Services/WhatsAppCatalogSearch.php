@@ -7,19 +7,25 @@ use Illuminate\Support\Str;
 
 class WhatsAppCatalogSearch
 {
-    public function universal(array $messages, array $vehicle = []): array
+    public function universal(array $messages, array $vehicle = [], ?string $savedDin = null, ?array $budget = null): array
     {
-        $text = $this->normalize(implode(' ', array_slice($messages, -3)));
-        preg_match('/\b([12])\s*din\b/', $text, $din);
+        $text = $this->normalize($this->normalizeDin(implode(' ', array_slice($messages, -3))));
+        preg_match_all('/\b([12])\s*din\b/', $text, $matches);
+        $din = $matches[1] ? end($matches[1]).'DIN' : $savedDin;
         $products = ConfiguratorProduct::universalScreens()->with('variants')->orderBy('price_min')->get()
-            ->filter(fn ($p) => $din ? preg_replace('/\s+/', '', strtoupper($p->meta['din'] ?? '')) === $din[1].'DIN'
-                : in_array(preg_replace('/\s+/', '', strtoupper($p->meta['din'] ?? '')), ['1DIN', '2DIN'], true));
+            ->filter(function ($p) use ($din) {
+                $format = preg_replace('/\s+/', '', strtoupper($p->meta['din'] ?? ''));
+                preg_match_all('/\b([12])\s*din\b/i', $this->normalizeDin($p->title), $titles);
+                if (collect($titles[1])->contains(fn ($n) => $n.'DIN' !== $format)) return false;
+
+                return $din ? $format === $din : in_array($format, ['1DIN', '2DIN'], true);
+            });
         $features = array_filter(['carplay', 'android auto', 'bluetooth', 'gps'], fn ($f) => $this->contains($text, $f));
         if ($features) {
             $products = $products->filter(fn ($p) => collect($features)->every(fn ($f) => $this->contains($this->normalize($p->title.' '.$p->body_html), $f)));
         }
 
-        $results = $products->map(function ($p) use ($features) {
+        $results = $products->map(function ($p) use ($features, $budget) {
             $product = $this->product($p);
             foreach ($features as $feature) {
                 $labels = collect($product['variants'])->filter(fn ($v) => $this->contains($this->normalize($v['option'].' '.$v['title']), $feature));
@@ -31,11 +37,48 @@ class WhatsAppCatalogSearch
                 }
             }
 
+            if ($budget !== null) {
+                $fits = fn ($price) => is_numeric($price) && $price >= $budget['min']
+                    && ($budget['max'] === null || $price <= $budget['max']);
+                if ($product['variants']) {
+                    $product['variants'] = collect($product['variants'])->filter(fn ($v) => $fits($v['price']))->values()->all();
+                    if (! $product['variants']) return null;
+                } elseif (! $fits($product['price_min'])) {
+                    return null;
+                }
+            }
+
             return $product;
         })->filter();
 
-        return ['vehicle' => $vehicle, 'universal' => true, 'matching_specific_screens' => 0, 'matching_universal_screens' => $results->count(),
+        return ['vehicle' => $vehicle, 'universal' => true, 'din' => $din, 'matching_specific_screens' => 0, 'matching_universal_screens' => $results->count(),
             'products' => $results->take(8)->values()->all()];
+    }
+
+    public function budget(string $text, bool $pending = false): ?array
+    {
+        if (preg_match('/\b(senza limiti|sin l[ií]mite|no limit|any budget)\b/ui', $text)) {
+            return ['min' => 0, 'max' => null];
+        }
+        if (! $pending && ! preg_match('/€|\b(euro|euros|budget|presupuesto|massimo|maximum|m[aá]ximo)\b/ui', $text)) return null;
+        $text = preg_replace('/\b[12]\s*din\b/ui', '', $this->normalizeDin($text));
+        if (preg_match('/(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)?\s*(?:-|–|a|e|and|to|y)\s*(\d+(?:[.,]\d{1,2})?)/ui', $text, $m)) {
+            $a = (float) str_replace(',', '.', $m[1]);
+            $b = (float) str_replace(',', '.', $m[2]);
+            return $a <= $b ? ['min' => $a, 'max' => $b] : null;
+        }
+        if (preg_match('/^\s*(?:fino a|hasta|up to|massimo|max(?:imum)?|m[aá]ximo|budget)?\s*(\d+(?:[.,]\d{1,2})?)\s*(?:€|euros?)?\s*[.!]?\s*$/ui', $text, $m)) {
+            return ['min' => 0, 'max' => (float) str_replace(',', '.', $m[1])];
+        }
+
+        return null;
+    }
+
+    private function normalizeDin(string $text): string
+    {
+        $text = preg_replace('/\b(un|uno|una|one|single|singolo)\s*[- ]?\s*din\b/ui', '1 DIN', $text);
+
+        return preg_replace('/\b(due|dos|two|double|doble|doppio|doppia)\s*[- ]?\s*din\b/ui', '2 DIN', $text);
     }
 
     private function normalize(string $text): string
@@ -48,31 +91,21 @@ class WhatsAppCatalogSearch
         return $term !== '' && str_contains(' '.$text.' ', ' '.$term.' ');
     }
 
-    public function search(array $messages, array $vehicle = []): array
+    public function search(array $messages, array $vehicle = [], ?string $category = null): array
     {
         $resolver = app(VehicleImageResolver::class);
         $matcher = app(WhatsAppVehicleMatcher::class);
         $rows = ConfiguratorProduct::query()->get()->map(function ($p) use ($resolver) {
             $entries = $resolver->vehicleEntries($p->brand, $p->model);
-            if ($p->category === 'screen') {
-                $title = $this->normalize($p->title);
-                foreach ($entries as $entry) {
-                    $brand = preg_quote($this->normalize($entry['brand']), '/');
-                    if (preg_match('/\b'.$brand.'\s+([a-z0-9 ]{1,55}?)\s+(?:19|20)\d{2}\b/', $title, $m)
-                        && str_starts_with($m[1], $this->normalize($entry['model']).' ')
-                        && str_word_count($m[1]) <= 4) {
-                        $entries[] = ['brand' => $entry['brand'], 'model' => strtoupper(trim($m[1])), 'title_alias' => true];
-                    }
-                }
-            }
-
             return ['product' => $p, 'entries' => $entries];
         });
         $entries = $rows->flatMap(fn ($r) => $r['entries']);
         foreach ($vehicle ? array_slice($messages, -1) : $messages as $message) {
+            $vehicleMessage = $message;
             $text = $this->normalize($message);
-            $brand = $entries->pluck('brand')->unique()->sortByDesc(fn ($b) => strlen($b))
-                ->first(fn ($b) => $this->contains($text, $this->normalize($b)));
+            $brands = $entries->pluck('brand')->unique()->filter(fn ($b) => $this->contains($text, $this->normalize($b)))
+                ->sortBy(fn ($b) => strpos(' '.$text.' ', ' '.$this->normalize($b).' '));
+            $brand = $brands->contains($vehicle['brand'] ?? '') ? $vehicle['brand'] : $brands->first();
             $brand ??= $matcher->brand($text, $entries->pluck('brand')->unique()->values()->all());
             if ($brand && $this->normalize($vehicle['brand'] ?? '') !== $this->normalize($brand)) {
                 $keep = empty($vehicle['brand']) || $matcher->brand($this->normalize($vehicle['brand']), [$brand]) === $brand;
@@ -82,8 +115,7 @@ class WhatsAppCatalogSearch
                 $brandEntries = $entries->filter(fn ($e) => $this->normalize($e['brand']) === $this->normalize($vehicle['brand']));
                 $model = $brandEntries->pluck('model')->unique()->sortByDesc(fn ($m) => strlen($m))
                     ->first(fn ($m) => ! preg_match('/^(19|20)\d{2}$/', $m) && $this->contains($text, $this->normalize($m)));
-                $model ??= $brandEntries->reject(fn ($e) => $e['title_alias'] ?? false)
-                    ->pluck('model')->unique()->sortByDesc(fn ($m) => strlen($m))->first(function ($m) use ($text, $vehicle) {
+                $model ??= $brandEntries->pluck('model')->unique()->sortByDesc(fn ($m) => strlen($m))->first(function ($m) use ($text, $vehicle) {
                         $m = $this->normalize($m);
                         if (preg_match('/^(19|20)\d{2}$/', $m)) {
                             return $this->contains($text, $this->normalize($vehicle['brand']).' '.$m)
@@ -143,8 +175,12 @@ class WhatsAppCatalogSearch
                     }
                 }
             }
-            $yearText = preg_replace('/\b\d{1,2}[-\/.]\d{1,2}[-\/.](?:19|20)\d{2}\b/u', '', $message);
-            if (preg_match('/\b((?:19|20)\d{2})\s*[-–—]\s*((?:19|20)\d{2})\b/u', $yearText, $range)) {
+            $yearText = preg_replace('/\b\d{1,2}[-\/.]\d{1,2}[-\/.](?:19|20)\d{2}\b/u', '', $vehicleMessage);
+            if (preg_match('/\b(?:anno|a[nñ]o|year|del|de|of)\s+((?:19|20)\d{2})\b/ui', $yearText, $explicitYear)) {
+                $yearText = $explicitYear[1];
+            } elseif (! empty($vehicle['year'])) {
+                $yearText = preg_replace('/\b(?:19|20)\d{2}\s*[-–—]\s*(?:19|20)\d{2}\b/u', '', $yearText);
+            } elseif (preg_match('/\b((?:19|20)\d{2})\s*[-–—]\s*((?:19|20)\d{2})\b/u', $yearText, $range)) {
                 $yearText = $range[1];
             }
             preg_match_all('/\b(?:19|20)\d{2}\b/', $yearText, $years);
@@ -155,8 +191,9 @@ class WhatsAppCatalogSearch
         }
         $question = $this->normalize(implode(' ', array_slice($messages, -3)));
         $tokens = collect(explode(' ', $question))->filter(fn ($w) => strlen($w) >= 2)->unique();
-        $matches = $rows->filter(function ($row) use ($vehicle) {
+        $matches = $rows->filter(function ($row) use ($vehicle, $category) {
             $p = $row['product'];
+            if ($category !== null && $p->category !== $category) return false;
             if (! empty($vehicle['brand'])) {
                 $found = collect($row['entries'])->contains(fn ($e) => $this->normalize($e['brand']) === $this->normalize($vehicle['brand'])
                     && (empty($vehicle['model']) || $this->normalize($e['model']) === $this->normalize($vehicle['model'])));
@@ -172,7 +209,7 @@ class WhatsAppCatalogSearch
             return true;
         })->map(function ($row) use ($tokens) {
             $p = $row['product'];
-            $name = $this->normalize($p->title.' '.$p->brand.' '.$p->model);
+            $name = $this->normalize($p->brand.' '.$p->model);
             $row['score'] = $tokens->sum(fn ($w) => $this->contains($name, $w) ? 1 : 0);
 
             return $row;

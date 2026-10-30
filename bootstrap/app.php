@@ -51,6 +51,6 @@ return Application::configure(basePath: dirname(__DIR__))
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*', 'dashboard/in-stock', 'dashboard/in-stock/*'),
+            fn (Request $request) => $request->is('api/*', 'dashboard/in-stock', 'dashboard/in-stock/*', 'dashboard/whatsapp/chats', 'dashboard/whatsapp/chats/*', 'dashboard/whatsapp/preview', 'dashboard/whatsapp/preview/photo-email'),
         );
     })->create();

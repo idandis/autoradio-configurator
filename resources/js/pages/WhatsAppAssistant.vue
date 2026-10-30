@@ -2,7 +2,7 @@
 import { Head, useForm } from '@inertiajs/vue3';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import axios from 'axios';
-import { Eye, MessageCircle, RefreshCw, Save, ShieldCheck, SlidersHorizontal, Zap } from '@lucide/vue';
+import { Eye, MessageCircle, RefreshCw, Save, ShieldCheck, SlidersHorizontal, Trash2, Zap } from '@lucide/vue';
 
 type Rules = {
     standard_replies: { category: 'general' | 'product'; title?: string; topic?: string; questions: { it: string; es: string; en: string }; answers: { it: string; es: string; en: string }; enabled: boolean }[];
@@ -13,19 +13,111 @@ type Rules = {
 };
 type Runtime = { mail?: { state: string; at: number } | null; running: boolean; state: string; replies: number; expires_at: number | null; number: string | null; handoff: boolean; manual_stop: boolean; local: boolean; connection?: { available: boolean; status: string } };
 type Preview = { document?: { id: string; filename: string; download_url: string; download_label?: string; caption: string } | null; text: string; mode: string; vehicle: { brand?: string; model?: string; year?: number }; matches: number };
-const props = defineProps<{ rules: Rules; runtime: Runtime; previewChat?: (Preview & { question: string })[] }>();
+const props = defineProps<{ rules: Rules; runtime: Runtime; previewPhotoEmailSent?: boolean; previewChat?: (Preview & { question: string })[] }>();
 const form = useForm<Rules>({ ...props.rules });
 const languages = [{ key: 'it', label: 'Italiano' }, { key: 'es', label: 'Español' }, { key: 'en', label: 'English' }] as const;
 const tab = ref('rules');
 const runtime = ref(props.runtime);
 const saved = ref(false);
-const message = ref('Ciao, ho una Audi A4 del 2001. Avete una radio specifica?');
+const message = ref('');
 const chat = ref(props.previewChat ?? []);
 const preview = ref<Preview | null>(null);
 const busy = ref(false);
 const pendingQuestion = ref('');
+const photo = ref<File | null>(null);
+const audio = ref<File | null>(null);
+const audioInput = ref<HTMLInputElement | null>(null);
+const selectAudio = (event: Event) => { audio.value = (event.target as HTMLInputElement).files?.[0] ?? null; };
+const sendingPhotoEmail = ref(false);
+const photoEmailSent = ref(props.previewPhotoEmailSent ?? false);
+const photoEmailNotice = ref('');
+const sendPhotoEmail = async () => {
+    sendingPhotoEmail.value = true; photoEmailNotice.value = '';
+    try { await axios.post('/dashboard/whatsapp/preview/photo-email'); photoEmailSent.value = true; }
+    catch (e: any) { photoEmailNotice.value = e.response?.data?.message ?? 'Invio email di prova non riuscito.'; }
+    finally { sendingPhotoEmail.value = false; }
+};
+const photoInput = ref<HTMLInputElement | null>(null);
+const selectPhoto = (event: Event) => { photo.value = (event.target as HTMLInputElement).files?.[0] ?? null; };
 const error = ref('');
 const statusError = ref(false);
+type ClientChat = { id: number; phone: string; import_label_name: string | null; authorized?: boolean; paused: boolean; pause_reason: string | null; last_activity_at: string | null };
+const clients = ref<ClientChat[]>([]);
+const chatSearch = ref('');
+const chatPage = ref(1);
+const chatLastPage = ref(1);
+const chatError = ref('');
+const changingChat = ref<number | null>(null);
+const deletingChat = ref<number | 'all' | null>(null);
+let chatVersion = 0;
+const syncingChats = ref(false);
+const chatLabels = ref<{ id: string; name: string }[]>([]);
+const importLabel = ref('');
+const loadingLabels = ref(false);
+const labelError = ref('');
+const syncNotice = ref('');
+const loadLabels = async () => {
+    if (!runtime.value.local || loadingLabels.value) return;
+    loadingLabels.value = true; labelError.value = '';
+    try {
+        const { data } = await axios.get('/dashboard/whatsapp/chats/labels');
+        chatLabels.value = data.labels;
+        if (!importLabel.value) importLabel.value = chatLabels.value.find(l => l.name.trim().toLocaleUpperCase() === 'NUOVO CLIENTE')?.id ?? '';
+    } catch { labelError.value = 'Etichette non disponibili. Verifica WAHA e riprova.'; }
+    finally { loadingLabels.value = false; }
+};
+
+const syncChats = async () => {
+    if (!importLabel.value) return;
+    const labelId = importLabel.value === '__all__' ? null : importLabel.value;
+    syncingChats.value = true; chatError.value = ''; syncNotice.value = '';
+    try {
+        let offset: number | null = 0;
+        while (offset !== null) {
+            const { data }: { data: { next_offset: number | null } } = await axios.post('/dashboard/whatsapp/chats/sync', { offset, label_id: labelId });
+            offset = data.next_offset;
+        }
+        await loadChats(1);
+        syncNotice.value = labelId ? `Importazione completata: ${chatLabels.value.find(l => l.id === labelId)?.name ?? 'etichetta selezionata'}.` : 'Sincronizzazione di tutte le chat completata.';
+    } catch { chatError.value = 'Sincronizzazione non riuscita. Verifica che WAHA locale sia collegato.'; }
+    finally { syncingChats.value = false; }
+};
+
+const loadingChats = ref(false);
+const pauseReasons: Record<string, string> = { dashboard: 'Pausa manuale', handoff: 'Passaggio a operatore', photo_review: 'Compatibilità da verificare con foto', technical_handoff: 'Verifica tecnica', operator_message: 'Risposta manuale da WhatsApp', send_unverified: 'Invio da verificare' };
+const loadChats = async (page = chatPage.value) => {
+    if (loadingChats.value) return;
+    loadingChats.value = true;
+    const version = chatVersion;
+    try {
+        const { data } = await axios.get('/dashboard/whatsapp/chats', { params: { page, q: chatSearch.value } });
+        if (version !== chatVersion) return;
+        clients.value = data.data; chatPage.value = data.current_page; chatLastPage.value = data.last_page; chatError.value = '';
+    } catch { chatError.value = 'Impossibile aggiornare le chat. Riprova.'; }
+    finally { loadingChats.value = false; }
+};
+const toggleChat = async (client: ClientChat) => {
+    changingChat.value = client.id; chatVersion++; chatError.value = '';
+    try {
+        const { data } = await axios.patch(`/dashboard/whatsapp/chats/${client.id}`, { paused: !client.paused });
+        clients.value = clients.value.map(c => c.id === client.id ? { ...c, ...data } : c);
+    } catch { chatError.value = 'Modifica non riuscita. Riprova.'; }
+    finally { changingChat.value = null; }
+};
+const deleteChat = async (client?: ClientChat) => {
+    if (!client && !window.confirm('Eliminare tutte le righe, anche quelle nelle altre pagine o nascoste dal filtro? Le chat su WhatsApp restano intatte.')) return;
+    deletingChat.value = client?.id ?? 'all'; chatError.value = ''; syncNotice.value = ''; chatVersion++;
+    try {
+        await axios.delete(client ? `/dashboard/whatsapp/chats/${client.id}` : '/dashboard/whatsapp/chats');
+        clients.value = client ? clients.value.filter(c => c.id !== client.id) : [];
+        if (!client) { chatPage.value = 1; chatLastPage.value = 1; }
+        syncNotice.value = client ? 'Riga eliminata.' : 'Tutte le righe eliminate.';
+        await loadChats(1);
+    } catch { chatError.value = 'Eliminazione non riuscita. Riprova.'; }
+    finally { deletingChat.value = null; }
+};
+const chatTime = (value: string | null) => value ? new Date(value).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+
 const restarting = ref(false);
 const reconnecting = ref(false);
 const restartNotice = ref('');
@@ -49,6 +141,7 @@ const status = computed(() => !runtime.value.running ? 'Servizio fermo' : runtim
 const expires = computed(() => runtime.value.expires_at ? new Date(runtime.value.expires_at * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }) : null);
 const save = () => form.put('/dashboard/whatsapp', { preserveScroll: true, onSuccess: () => { form.defaults(); saved.value = true; preview.value = null; void refresh(); } });
 const refresh = async () => {
+    void loadChats();
     try {
         runtime.value = (await axios.get('/dashboard/whatsapp/status')).data; statusError.value = false;
         if (reconnecting.value) {
@@ -76,20 +169,31 @@ const restart = async () => {
 };
 const tryPreview = async () => {
     const question = message.value.trim();
-    busy.value = true; error.value = ''; preview.value = null; pendingQuestion.value = question; message.value = '';
-    try { const data = (await axios.post('/dashboard/whatsapp/preview', { message: question })).data; preview.value = data; chat.value = data.chat; }
-    catch (e: any) { message.value ||= question; error.value = e.response?.data?.errors?.message?.[0] ?? e.response?.data?.message ?? 'Anteprima non disponibile. Riprova.'; }
+    busy.value = true; error.value = ''; preview.value = null; pendingQuestion.value = question || (audio.value ? '[Audio in trascrizione]' : '[Foto allegata]'); message.value = '';
+    try {
+        let payload: FormData | { message: string } = { message: question };
+        if (photo.value || audio.value) {
+            payload = new FormData(); payload.append('message', question);
+            if (photo.value) payload.append('photo', photo.value);
+            if (audio.value) payload.append('audio', audio.value);
+        }
+        const data = (await axios.post('/dashboard/whatsapp/preview', payload)).data;
+        preview.value = data; chat.value = data.chat; photo.value = null; audio.value = null;
+        if (photoInput.value) photoInput.value.value = '';
+        if (audioInput.value) audioInput.value.value = '';
+    }
+    catch (e: any) { message.value ||= question; error.value = e.response?.data?.errors?.audio?.[0] ?? e.response?.data?.errors?.photo?.[0] ?? e.response?.data?.errors?.message?.[0] ?? e.response?.data?.message ?? 'Anteprima non disponibile. Riprova.'; }
     finally { busy.value = false; pendingQuestion.value = ''; }
 };
 const resetChat = async () => {
     busy.value = true; error.value = '';
-    try { await axios.post('/dashboard/whatsapp/preview/reset'); chat.value = []; preview.value = null; message.value = ''; }
+    try { await axios.post('/dashboard/whatsapp/preview/reset'); chat.value = []; photoEmailSent.value = false; photoEmailNotice.value = ''; preview.value = null; message.value = ''; photo.value = null; audio.value = null; if (photoInput.value) photoInput.value.value = ''; if (audioInput.value) audioInput.value.value = ''; }
     catch { error.value = 'Reset della simulazione non riuscito. Riprova.'; }
     finally { busy.value = false; }
 };
 
 let timer: ReturnType<typeof setInterval>;
-onMounted(() => { void refresh(); timer = setInterval(() => { if (!document.hidden) void refresh(); }, 5000); });
+onMounted(() => { void refresh(); void loadLabels(); timer = setInterval(() => { if (!document.hidden) void refresh(); }, 5000); });
 onUnmounted(() => clearInterval(timer));
 const toggleFields = [
     { key: 'show_prices', label: 'Mostra il prezzo “da”', detail: 'Usa il prezzo regionale quando noto, altrimenti il prezzo base di catalogo.' },
@@ -113,6 +217,29 @@ const toggleFields = [
             </div>
         </header>
 
+        <section class="rounded-xl border bg-card p-5">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+                <div><h2 class="font-semibold">Chat e interventi operatore</h2><p class="mt-1 text-xs text-muted-foreground">Una riga per contatto, senza testo dei messaggi. Scegli un’etichetta per importare soltanto le chat associate. La pausa resta attiva fino a “Riprendi bot”; gli altri clienti continuano normalmente.</p></div>
+                <form class="flex flex-wrap gap-2" @submit.prevent="loadChats(1)"><select v-model="importLabel" aria-label="Etichetta WhatsApp da importare" :disabled="syncingChats || loadingLabels || !runtime.local" class="max-w-60 rounded-lg border bg-background px-3 py-2 text-sm disabled:opacity-50"><option disabled value="">{{ loadingLabels ? 'Caricamento etichette…' : 'Seleziona un’etichetta' }}</option><option v-for="label in chatLabels" :key="label.id" :value="label.id">{{ label.name }}</option><option value="__all__">Tutte le chat</option></select><button type="button" :disabled="loadingLabels || syncingChats || !runtime.local" aria-label="Aggiorna etichette WhatsApp" class="rounded-lg border px-3 py-2 text-sm disabled:opacity-50" @click="loadLabels"><RefreshCw class="size-4" :class="{ 'animate-spin': loadingLabels }" /></button><button type="button" :disabled="syncingChats || deletingChat !== null || !runtime.local || !importLabel" class="rounded-lg border px-3 py-2 text-sm disabled:opacity-50" @click="syncChats">{{ syncingChats ? 'Importazione…' : 'Importa chat' }}</button><input v-model="chatSearch" aria-label="Cerca numero cliente" placeholder="Cerca numero" maxlength="30" class="w-44 rounded-lg border bg-background px-3 py-2 text-sm" /><button type="submit" :disabled="loadingChats" class="rounded-lg border px-3 py-2 text-sm disabled:opacity-50">Cerca</button></form>
+            </div>
+            <div class="mt-3 flex justify-end"><button type="button" :disabled="deletingChat !== null || changingChat !== null || syncingChats" class="flex items-center gap-2 rounded-lg border border-red-500/30 px-3 py-2 text-sm text-red-600 hover:bg-red-500/10 disabled:opacity-50" @click="deleteChat()"><Trash2 class="size-4" />{{ deletingChat === 'all' ? 'Eliminazione…' : 'Elimina tutte le righe' }}</button></div>
+            <p v-if="labelError" role="alert" class="mt-3 text-sm text-red-500">{{ labelError }}</p>
+            <p v-if="syncNotice" role="status" class="mt-3 text-sm text-emerald-600">{{ syncNotice }}</p>
+            <p v-if="chatError" role="alert" class="mt-3 text-sm text-red-500">{{ chatError }}</p>
+            <div class="mt-4 max-h-[728px] overflow-auto"><table class="min-w-[760px] w-full text-left text-sm">
+                <thead class="sticky top-0 z-10 bg-card"><tr class="h-12 border-b text-muted-foreground"><th scope="col" class="py-3 pr-4">Cliente</th><th scope="col" class="py-3 pr-4" title="Etichetta scelta durante l’importazione">Etichetta</th><th scope="col" class="py-3 pr-4">Stato bot</th><th scope="col" class="py-3 pr-4">Motivo pausa</th><th scope="col" class="py-3 pr-4">Ultima attività</th><th scope="col" class="py-3">Azione</th></tr></thead>
+                <tbody><tr v-for="client in clients" :key="client.id" class="h-[68px] border-b last:border-0">
+                    <td class="py-3 pr-4 whitespace-nowrap">+{{ client.phone }}<span v-if="!client.authorized" class="mt-1 block text-xs text-muted-foreground">Fuori dai numeri di prova</span></td>
+                    <td class="max-w-56 truncate whitespace-nowrap py-3 pr-4" :title="client.import_label_name ?? undefined">{{ client.import_label_name ?? '—' }}</td>
+                    <td class="py-3 pr-4 whitespace-nowrap" :class="client.paused ? 'text-amber-600' : 'text-emerald-600'">{{ client.paused ? (['handoff', 'technical_handoff', 'photo_review'].includes(client.pause_reason ?? '') ? 'Operatore · standard attive' : 'In pausa') : 'Attivo' }}</td>
+                    <td class="whitespace-nowrap py-3 pr-4">{{ client.pause_reason ? (pauseReasons[client.pause_reason] ?? 'In pausa') : '—' }}</td>
+                    <td class="py-3 pr-4 whitespace-nowrap">{{ chatTime(client.last_activity_at) }}</td>
+                    <td class="whitespace-nowrap py-3"><button type="button" :disabled="changingChat !== null || deletingChat !== null || syncingChats" :aria-label="`${client.paused ? 'Riprendi bot' : 'Metti in pausa'} per +${client.phone}`" class="whitespace-nowrap rounded-lg border px-3 py-2 font-medium hover:bg-muted disabled:opacity-50" @click="toggleChat(client)">{{ changingChat === client.id ? 'Salvataggio…' : client.paused ? 'Riprendi bot' : 'Metti in pausa' }}</button><button type="button" :disabled="deletingChat !== null || changingChat !== null || syncingChats" :aria-label="`Elimina riga per +${client.phone}`" title="Elimina riga" class="ml-2 inline-flex rounded-lg border border-red-500/30 p-2 text-red-600 hover:bg-red-500/10 disabled:opacity-50" @click="deleteChat(client)"><Trash2 class="size-4" /></button></td>
+                </tr><tr v-if="!clients.length"><td colspan="6" class="py-5 text-muted-foreground">{{ loadingChats ? 'Caricamento…' : 'Nessuna chat trovata. Importa le chat da un’etichetta oppure attendi un nuovo contatto gestito dal servizio.' }}</td></tr></tbody>
+            </table></div>
+            <div v-if="chatLastPage > 1" class="mt-3 flex items-center justify-end gap-3 text-sm"><button type="button" :disabled="chatPage <= 1 || loadingChats" class="rounded border px-3 py-1 disabled:opacity-50" @click="loadChats(chatPage - 1)">Precedente</button><span>{{ chatPage }} / {{ chatLastPage }}</span><button type="button" :disabled="chatPage >= chatLastPage || loadingChats" class="rounded border px-3 py-1 disabled:opacity-50" @click="loadChats(chatPage + 1)">Successiva</button></div>
+        </section>
+
         <div class="grid gap-3 md:grid-cols-3">
             <div class="rounded-xl border bg-card p-4">
                 <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Servizio locale</p>
@@ -127,7 +254,7 @@ const toggleFields = [
             <div class="flex flex-wrap gap-2"><a v-if="runtime.local" href="http://localhost:3000/dashboard" class="rounded-lg border px-4 py-2.5 text-sm font-medium hover:bg-muted">Apri WAHA / QR</a><button type="button" :disabled="!runtime.local || restarting || reconnecting" class="flex items-center gap-2 rounded-lg border border-emerald-600/40 px-4 py-2.5 text-sm font-semibold text-emerald-600 hover:bg-emerald-500/10 disabled:opacity-50" @click="restart"><RefreshCw class="size-4" :class="{ 'animate-spin': restarting || reconnecting }" />{{ restarting || reconnecting ? 'Riconnessione…' : 'Riavvia sessione WAHA' }}</button></div>
         </section>
         <section class="flex flex-wrap items-center justify-between gap-4 rounded-xl border bg-card p-5">
-            <div><h2 class="font-semibold">Domande senza risposta</h2><p class="mt-1 text-xs text-muted-foreground">Controlla gli ultimi 30 messaggi di ciascun numero autorizzato e risponde a quelli successivi all’ultima risposta. Risponde anche alle domande generali nelle chat in attesa di operatore.</p><p v-if="checkNotice" role="status" class="mt-2 whitespace-pre-line text-sm">{{ checkNotice }}</p></div>
+            <div><h2 class="font-semibold">Domande senza risposta</h2><p class="mt-1 text-xs text-muted-foreground">Controlla gli ultimi 30 messaggi di ciascun numero autorizzato e risponde a quelli successivi all’ultima risposta. Durante l’attesa dell’operatore risponde alle domande standard; per le altre conferma la presa in carico. Le pause manuali restano escluse.</p><p v-if="checkNotice" role="status" class="mt-2 whitespace-pre-line text-sm">{{ checkNotice }}</p></div>
             <button type="button" :disabled="checking || !runtime.local || !form.enabled || form.isDirty" class="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" @click="recoverUnanswered"><RefreshCw class="size-4" :class="{ 'animate-spin': checking }" />{{ checking ? 'Controllo e invio…' : 'Controlla e rispondi' }}</button>
         </section>
         <p v-if="runtime.manual_stop" class="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">Il processo è stato arrestato manualmente. Salvare le regole non riavvia il servizio locale.</p>
@@ -139,6 +266,7 @@ const toggleFields = [
         </nav>
         <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1.2fr)_minmax(340px,0.8fr)]">
             <form id="whatsapp-rules" class="space-y-5" @submit.prevent="save">
+                <button type="submit" :disabled="form.processing || !form.isDirty" class="w-full rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">{{ form.processing ? 'Salvataggio…' : 'Salva regole' }}</button>
                 <section v-if="tab === 'standard'" class="rounded-xl border bg-card p-5">
                     <h2 class="text-lg font-semibold">Risposte standard</h2>
                     <p class="mt-2 text-sm text-muted-foreground">Inserisci le traduzioni della stessa risposta, includendo il nome della funzione e tutte le condizioni. Il bot sceglie la lingua del cliente (o quella impostata nelle regole), senza AI né ricerca nel catalogo. Italiano obbligatorio; se manca una traduzione, segue il percorso normale.</p>
@@ -199,22 +327,28 @@ const toggleFields = [
                 </section>
                 </div>
                 <div v-if="Object.keys(form.errors).length" role="alert" class="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-500"><p v-for="(value, key) in form.errors" :key="key">{{ value }}</p></div>
-                <button type="submit" :disabled="form.processing || !form.isDirty" class="w-full rounded-lg bg-emerald-600 px-4 py-3 font-semibold text-white hover:bg-emerald-500 disabled:opacity-50">{{ form.processing ? 'Salvataggio…' : 'Salva regole' }}</button>
             </form>
 
             <aside class="space-y-5 xl:sticky xl:top-6">
                 <section class="overflow-hidden rounded-xl border bg-card">
-                    <div class="border-b p-5"><h2 class="flex items-center gap-2 text-lg font-semibold"><Eye class="size-5 text-emerald-500" /> Anteprima della risposta</h2><button type="button" :disabled="busy || !chat.length" class="mt-3 rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50" @click="resetChat">Reset chat</button><p class="mt-1 text-xs text-muted-foreground">Usa le regole salvate. Simula le stesse risposte di WhatsApp: benvenuto dopo 24 ore, saluti, memoria, attesa e passaggio a operatore. Reset chat riparte da un nuovo contatto. Non invia messaggi reali.</p></div>
+                    <div class="border-b p-5"><h2 class="flex items-center gap-2 text-lg font-semibold"><Eye class="size-5 text-emerald-500" /> Anteprima della risposta</h2><button type="button" :disabled="busy || sendingPhotoEmail || !chat.length" class="mt-3 rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50" @click="resetChat">Reset chat</button><p class="mt-1 text-xs text-muted-foreground">Usa le regole salvate. Simula le stesse risposte di WhatsApp: benvenuto dopo 24 ore, saluti, memoria, attesa e passaggio a operatore. Reset chat riparte da un nuovo contatto. Non invia messaggi reali.</p></div>
                     <div class="p-5">
                         <label for="preview-question" class="text-sm font-medium">Messaggio del cliente</label>
                         <textarea id="preview-question" v-model="message" maxlength="3000" rows="4" class="mt-2 w-full rounded-lg border bg-background px-3 py-2.5 text-sm" />
+                        <label class="mt-3 block text-sm font-medium">Foto del cliente<input ref="photoInput" type="file" accept="image/jpeg,image/png,image/webp" :disabled="busy" class="mt-2 block w-full text-sm" @change="selectPhoto" /><span class="mt-1 block text-xs font-normal text-muted-foreground">JPG, PNG o WEBP, massimo 8 MB. Simula la segnalazione con foto, senza analisi AI né invio email reale.</span></label>
+                        <label class="mt-3 block text-sm font-medium">Audio del cliente<input ref="audioInput" type="file" accept=".ogg,.opus,.mp3,.wav,.m4a,.webm,audio/*" :disabled="busy || !runtime.local" class="mt-2 block w-full text-sm" @change="selectAudio" /><span class="mt-1 block text-xs font-normal text-muted-foreground">OGG, OPUS, MP3, WAV, M4A o WEBM, massimo 12 MB e 2 minuti. Il Mac trascrive l’audio e mostra la risposta nella chat di prova.</span></label>
                         <p v-if="form.isDirty" class="mt-2 text-xs text-amber-500">Salva le modifiche prima di provare la risposta.</p>
-                        <button type="button" :disabled="busy || form.isDirty || !message.trim()" class="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-3 text-sm font-semibold text-background disabled:opacity-50" @click="tryPreview"><RefreshCw v-if="busy" class="size-4 animate-spin" /><Eye v-else class="size-4" />{{ busy ? 'Preparazione e attesa prima dell’invio…' : 'Prova senza inviare' }}</button>
+                        <button type="button" :disabled="busy || form.isDirty || (!message.trim() && !photo && !audio)" class="mt-4 flex w-full items-center justify-center gap-2 rounded-lg bg-foreground px-4 py-3 text-sm font-semibold text-background disabled:opacity-50" @click="tryPreview"><RefreshCw v-if="busy" class="size-4 animate-spin" /><Eye v-else class="size-4" />{{ busy ? (audio ? 'Trascrizione audio e preparazione risposta…' : 'Preparazione e attesa prima dell’invio…') : 'Prova senza inviare' }}</button>
                         <p class="mt-2 text-xs text-muted-foreground">Le risposte standard e le proposte dirette non consumano token. Le risposte libere usano l’AI.</p>
                         <p v-if="error" role="alert" class="mt-3 text-sm text-red-500">{{ error }}</p>
                     </div>
                     <div class="min-h-48 border-t bg-emerald-950/10 p-5">
-                        <template v-if="chat.length"><div v-for="(preview, i) in chat" :key="i" class="mb-5"><p class="mb-3 whitespace-pre-wrap break-words rounded-xl bg-muted p-3 text-sm">{{ preview.question }}</p><div class="mb-3 flex flex-wrap gap-2 text-xs text-muted-foreground"><span class="rounded-full border px-2 py-1">{{ ['missing_form', 'missing_submitted'].includes(preview.mode) ? 'Modulo radio non trovata · 0 token AI' : preview.mode === 'technical_handoff' ? 'Verifica tecnica · email inviata' : preview.mode === 'greeting' ? 'Saluto · 0 token AI' : preview.mode === 'vehicle_details' ? 'Dati veicolo mancanti · 0 token AI' : preview.mode === 'quote' ? 'Preventivo · 0 token AI' : preview.mode === 'quote_choice' ? 'Scelta versione · 0 token AI' : preview.mode === 'standard_general' ? 'Informazioni generali · 0 token AI' : preview.mode === 'standard' ? 'Risposta standard · 0 token AI' : preview.mode === 'accessory_offer' ? 'Prodotto richiesto · 0 token AI' : preview.mode === 'offer' ? 'Proposta diretta · 0 token AI' : preview.mode === 'handoff' ? 'Richiesta operatore · 0 token AI' : 'Risposta AI' }}</span><span class="rounded-full border px-2 py-1">{{ preview.mode === 'accessory_offer' ? '1 prodotto trovato' : `${preview.matches} schermi trovati` }}</span></div><p class="whitespace-pre-wrap break-words rounded-xl rounded-tl-none bg-emerald-700/15 p-4 text-sm leading-relaxed">{{ preview.document?.caption ?? preview.text }}</p><a v-if="preview.document" :href="preview.document.download_url" class="mt-3 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500">{{ preview.document.download_label ?? (preview.document.caption.includes('Aquí tienes') ? 'Descargar presupuesto PDF' : preview.document.caption.includes('Here is') ? 'Download quote PDF' : 'Scarica preventivo PDF') }}</a><p v-if="['missing_submitted', 'technical_handoff'].includes(preview.mode)" class="mt-2 text-xs text-muted-foreground">Segnalazione inviata via email.</p></div></template>
+                        <template v-if="chat.length"><div v-for="(preview, i) in chat" :key="i" class="mb-5"><p class="mb-3 whitespace-pre-wrap break-words rounded-xl bg-muted p-3 text-sm">{{ preview.question }}</p><div class="mb-3 flex flex-wrap gap-2 text-xs text-muted-foreground"><span class="rounded-full border px-2 py-1">{{ ['missing_form', 'missing_submitted'].includes(preview.mode) ? 'Modulo radio non trovata · 0 token AI' : preview.mode === 'operator_waiting' ? 'In attesa di operatore · 0 token AI' : preview.mode === 'photo_review' ? 'Foto per verifica · simulazione · 0 token AI' : preview.mode === 'photo_error' ? 'Foto non recuperata · 0 token AI' : preview.mode === 'technical_handoff' ? 'Verifica tecnica · email inviata' : preview.mode === 'greeting' ? 'Saluto · 0 token AI' : preview.mode === 'clarify' ? 'Formato DIN / budget · 0 token AI' : preview.mode === 'vehicle_details' ? 'Dati veicolo mancanti · 0 token AI' : preview.mode === 'quote' ? 'Preventivo · 0 token AI' : preview.mode === 'quote_choice' ? 'Scelta versione · 0 token AI' : preview.mode === 'standard_general' ? 'Informazioni generali · 0 token AI' : preview.mode === 'standard' ? 'Risposta standard · 0 token AI' : preview.mode === 'accessory_offer' ? 'Prodotto richiesto · 0 token AI' : preview.mode === 'offer' ? 'Proposta diretta · 0 token AI' : preview.mode === 'handoff' ? 'Richiesta operatore · 0 token AI' : 'Risposta AI' }}</span><span class="rounded-full border px-2 py-1">{{ preview.mode === 'accessory_offer' ? '1 prodotto trovato' : `${preview.matches} schermi trovati` }}</span></div><p class="whitespace-pre-wrap break-words rounded-xl rounded-tl-none bg-emerald-700/15 p-4 text-sm leading-relaxed">{{ preview.document?.caption ?? preview.text }}</p><a v-if="preview.document" :href="preview.document.download_url" class="mt-3 inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-500">{{ preview.document.download_label ?? (preview.document.caption.includes('Aquí tienes') ? 'Descargar presupuesto PDF' : preview.document.caption.includes('Here is') ? 'Download quote PDF' : 'Scarica preventivo PDF') }}</a><p v-if="['missing_submitted', 'technical_handoff'].includes(preview.mode)" class="mt-2 text-xs text-muted-foreground">Segnalazione inviata via email.</p></div></template>
+                        <div v-if="chat.some(p => p.mode === 'photo_review')" class="mb-4 rounded-lg border p-3 text-sm">
+                            <p class="mb-2 text-xs text-muted-foreground">La simulazione non invia la foto. Questo pulsante invia un’email reale all’amministratore con foto, auto e radio individuate.</p>
+                            <button type="button" :disabled="busy || sendingPhotoEmail || photoEmailSent" class="rounded-lg border px-3 py-2 font-medium disabled:opacity-50" @click="sendPhotoEmail">{{ photoEmailSent ? 'Email di prova accettata dal server SMTP' : sendingPhotoEmail ? 'Invio in corso…' : 'Invia email di prova con foto' }}</button>
+                            <p v-if="photoEmailNotice" role="alert" class="mt-2 text-red-500">{{ photoEmailNotice }}</p>
+                        </div>
                         <div v-if="pendingQuestion" role="status" aria-live="polite"><p class="mb-3 whitespace-pre-wrap break-words rounded-xl bg-muted p-3 text-sm">{{ pendingQuestion }}</p><p class="flex items-center gap-2 rounded-xl bg-emerald-700/15 p-4 text-sm text-muted-foreground"><RefreshCw class="size-4 animate-spin" />L’assistente sta preparando la risposta…</p></div>
                         <p v-if="!chat.length && !pendingQuestion" class="py-10 text-center text-sm text-muted-foreground">La risposta apparirà qui.</p>
                     </div>

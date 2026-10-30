@@ -126,9 +126,16 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::get('/dashboard/whatsapp', [WhatsAppAssistantController::class, 'index'])->name('whatsapp-assistant.index');
     Route::put('/dashboard/whatsapp', [WhatsAppAssistantController::class, 'update'])->name('whatsapp-assistant.update');
+    Route::get('/dashboard/whatsapp/chats', [\App\Http\Controllers\WhatsAppChatsController::class, 'index'])->name('whatsapp-chats.index');
+    Route::get('/dashboard/whatsapp/chats/labels', [\App\Http\Controllers\WhatsAppChatsController::class, 'labels'])->name('whatsapp-chats.labels');
+    Route::post('/dashboard/whatsapp/chats/sync', [\App\Http\Controllers\WhatsAppChatsController::class, 'sync'])->middleware('throttle:60,1')->name('whatsapp-chats.sync');
+    Route::delete('/dashboard/whatsapp/chats', [\App\Http\Controllers\WhatsAppChatsController::class, 'destroyAll'])->name('whatsapp-chats.destroy-all');
+    Route::delete('/dashboard/whatsapp/chats/{chat}', [\App\Http\Controllers\WhatsAppChatsController::class, 'destroy'])->whereNumber('chat')->name('whatsapp-chats.destroy');
+    Route::patch('/dashboard/whatsapp/chats/{chat}', [\App\Http\Controllers\WhatsAppChatsController::class, 'update'])->whereNumber('chat')->name('whatsapp-chats.update');
     Route::get('/dashboard/whatsapp/status', [WhatsAppAssistantController::class, 'status'])->name('whatsapp-assistant.status');
     Route::post('/dashboard/whatsapp/preview', [WhatsAppAssistantController::class, 'preview'])->middleware('throttle:10,1')->name('whatsapp-assistant.preview');
     Route::get('/dashboard/whatsapp/quotes/{id}/pdf', [WhatsAppAssistantController::class, 'quotePdf'])->whereUuid('id')->name('whatsapp-assistant.quote-pdf');
+    Route::post('/dashboard/whatsapp/preview/photo-email', [WhatsAppAssistantController::class, 'sendPreviewPhotoEmail'])->middleware('throttle:3,1')->name('whatsapp-assistant.preview-photo-email');
     Route::post('/dashboard/whatsapp/preview/reset', [WhatsAppAssistantController::class, 'resetPreview'])->name('whatsapp-assistant.preview-reset');
     Route::post('/dashboard/whatsapp/reset', [WhatsAppAssistantController::class, 'reset'])->name('whatsapp-assistant.reset');
     Route::post('/dashboard/whatsapp/restart', [WhatsAppAssistantController::class, 'restart'])->middleware('throttle:2,1')->name('whatsapp-assistant.restart');

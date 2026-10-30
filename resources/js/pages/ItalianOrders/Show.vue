@@ -32,8 +32,8 @@ const cancelOrder = () => {
     cancellation.post(`/italian-orders/${props.order.id}/cancel`, { preserveScroll: true });
 };
 const deletion = useForm({});
-const deleteTest = () => {
-    if (window.confirm('Eliminare questo ordine di prova dall’elenco? La transazione sandbox resta su Stripe.')) deletion.delete(`/italian-orders/${props.order.id}`);
+const deleteOrder = () => {
+    if (window.confirm('Eliminare questo ordine non pagato dall’elenco?')) deletion.delete(`/italian-orders/${props.order.id}`);
 };
 const testEmailForm = useForm({});
 const sendTestEmail = () => testEmailForm.post(`/italian-orders/${props.order.id}/purchase-email/test`, { preserveScroll: true });
@@ -143,7 +143,7 @@ const changeLabels: Record<string, string> = { carrier: 'Corriere', tracking_num
                 <button v-if="['pending', 'processing'].includes(order.fulfillment_status)" type="button" :disabled="cancellation.processing || form.processing" class="w-full rounded-md border border-destructive px-4 py-2 text-sm text-destructive disabled:opacity-50" @click="cancelOrder">Annulla ordine</button>
                 <p v-for="(error, key) in cancellation.errors" :key="key" role="alert" class="text-sm text-destructive">{{ error }}</p>
                 <button v-if="cancellation.errors.version" class="text-sm underline" @click="reloadOrder">Ricarica ordine</button>
-                <button v-if="order.is_test" type="button" :disabled="deletion.processing" class="w-full rounded-md border border-destructive px-4 py-2 text-sm text-destructive disabled:opacity-50" @click="deleteTest">Elimina ordine di prova</button>
+                <button v-if="order.can_delete" type="button" :disabled="deletion.processing" class="w-full rounded-md border border-destructive px-4 py-2 text-sm text-destructive disabled:opacity-50" @click="deleteOrder">Elimina ordine</button>
                 <section class="rounded-xl border bg-card p-5">
                     <h2 class="font-semibold">Pagamento</h2>
                     <p class="mt-3 font-medium">{{ paymentStatuses[order.payment_status] ?? order.payment_status }}</p>

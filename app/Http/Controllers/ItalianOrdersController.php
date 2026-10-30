@@ -22,17 +22,20 @@ class ItalianOrdersController extends Controller
 {
     public function destroy(ItalianOrder $italianOrder): RedirectResponse
     {
-        abort_unless($italianOrder->is_test, 403);
-        $italianOrder->delete();
+        DB::transaction(function () use ($italianOrder) {
+            $order = ItalianOrder::query()->lockForUpdate()->findOrFail($italianOrder->id);
+            abort_unless($order->can_delete, 403);
+            $order->delete();
+        });
 
-        return to_route('italian-orders.index')->with('status', 'Ordine di prova eliminato.');
+        return to_route('italian-orders.index')->with('status', 'Ordine eliminato.');
     }
 
     public function destroyTests(): RedirectResponse
     {
-        ItalianOrder::where('is_test', true)->delete();
+        ItalianOrder::where('is_test', true)->deletable()->delete();
 
-        return to_route('italian-orders.index')->with('status', 'Ordini di prova eliminati.');
+        return to_route('italian-orders.index')->with('status', 'Ordini di prova non pagati eliminati.');
     }
 
     public function index(Request $request): Response
@@ -54,12 +57,12 @@ class ItalianOrdersController extends Controller
             ->when($filters['payment_status'] ?? null, fn ($query, $status) => $query->where('payment_status', $status))
             ->when($filters['fulfillment_status'] ?? null, fn ($query, $status) => $query->where('fulfillment_status', $status))
             ->latest('id')
-            ->paginate(25, ['id', 'number', 'customer_name', 'email', 'total_amount', 'currency', 'payment_status', 'fulfillment_status', 'created_at', 'is_test'])
+            ->paginate(25, ['id', 'number', 'customer_name', 'email', 'total_amount', 'currency', 'payment_status', 'fulfillment_status', 'created_at', 'is_test', 'paid_at'])
             ->withQueryString();
 
         return Inertia::render('ItalianOrders/Index', [
             'orders' => $orders,
-            'testOrderCount' => ItalianOrder::where('is_test', true)->count(),
+            'testOrderCount' => ItalianOrder::where('is_test', true)->deletable()->count(),
             'flashStatus' => session('status'),
             'filters' => $filters,
             'paymentStatuses' => ItalianOrder::PAYMENT_STATUSES,
