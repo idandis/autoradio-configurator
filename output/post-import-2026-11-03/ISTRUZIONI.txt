@@ -1,0 +1,39 @@
+Caricare il contenuto di aruba-post-import.zip nella radice Laravel su Aruba mantenendo tutti i percorsi. Sovrascrivere i file corrispondenti. FILE-DA-CARICARE.json elenca esattamente i 16 file del pacchetto.
+
+Dopo il caricamento premere “Aggiorna database” nella Dashboard. I cataloghi vengono importati dal flusso già presente senza SSH. Il comando aggiornato riconosce anche le differenze tra spazi normali e non separabili introdotte dal testo copiato, conservando gli originali spagnoli. Le attività completate spariscono automaticamente.
+
+Non serve una nuova build frontend. Non caricare database/database.sqlite, testing, .env, vendor, test o la cartella output sul server.
+
+RISULTATI
+- Tutte le 475 descrizioni dell’allegato disponibili in italiano e inglese (950 traduzioni): 472 riusate dai cataloghi, 2 nuove schede tradotte (Octavia e Duster/Mazda), 1 scheda Mercedes allineata alle chiusure HTML del nuovo sorgente.
+- Tre titoli aggiornati in italiano e inglese: Octavia, Scenic e Duster/Mazda. Gli originali spagnoli non sono stati modificati.
+- Cataloghi completi di titoli e descrizioni IT/EN per schermi, camere e altoparlanti inclusi.
+- Tutti i 561 prodotti nel database locale hanno già titoli e descrizioni in entrambe le lingue; nessun aggiornamento necessario. Due prodotti dell’allegato non sono presenti in locale; Scenic ha ancora il titolo sorgente precedente e Mercedes una precedente descrizione con finale HTML troncato. Le traduzioni locali di queste versioni sono state conservate, senza sostituire gli originali con quelli dell’allegato.
+- Foto Tucson TL 2015–2018 generata con imagegen; Scenic IV riusa la foto esistente della stessa generazione con sfondo adattato. File WEBP 1536×1024; prompt in PROMPT-IMMAGINI.md.
+- Mappature per riusare le immagini su anni e facelift della stessa carrozzeria; Tucson precedente conserva la propria fotografia.
+
+VERIFICHE
+- 26 test dedicati passati, 470 asserzioni; coprono aggiornamento Dashboard, importazioni successive e risoluzione immagini.
+- Prova aggiuntiva su tutti i 476 prodotti dell’allegato: passata, 3825 asserzioni; importazione delle 950 descrizioni, dei titoli mancanti, conservazione degli originali e attività azzerate.
+- 12 JSON validi. Per tutte le 950 descrizioni richieste: sequenza esatta dei tag HTML, attributi/link e valori numerici conservati.
+- Originali locali verificati tramite hash prima e dopo: invariati.
+- La suite generale ConfiguratorImportTest mantiene i problemi già documentati il 22 ottobre: 12 fallimenti e 4 errori (403, intestazioni di vecchie fixture e file temporanei). I test dedicati alla conservazione del sorgente e delle traduzioni alla reimportazione passano.
+- Sintassi PHP e git diff --check superati.
+
+ELENCO ESATTO DEI FILE DA CARICARE
+resources/data/screen-titles-it.json
+resources/data/screen-titles-en.json
+resources/data/screen-descriptions-it.json
+resources/data/screen-descriptions-en.json
+resources/data/camera-titles-it.json
+resources/data/camera-titles-en.json
+resources/data/camera-descriptions-it.json
+resources/data/camera-descriptions-en.json
+resources/data/speaker-titles-it.json
+resources/data/speaker-titles-en.json
+resources/data/speaker-descriptions-it.json
+resources/data/speaker-descriptions-en.json
+app/Console/Commands/TranslateConfiguratorProductDescriptions.php
+resources/data/vehicle-image-generations.json
+public/images/vehicles-dark/renault-scenic-2016-2024.webp
+public/images/vehicles-dark/hyundai-tucson-2015-2018.webp

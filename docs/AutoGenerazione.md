@@ -23,8 +23,8 @@ Esecuzione locale: una vettura, confronto di 3–5 candidati, conferma dell'uten
 - Portale attuale: https://open.aliexpress.com/
 - La procedura sul precedente portale console.aliexpress.com rifiutava il salvataggio con “海外版禁止写入”.
 - Registrazione sul nuovo portale inviata come Dropshipping (individual), paese Spagna.
-- Stato mostrato: Under Review; tempo indicato dal portale: 2–5 giorni lavorativi. Approvazione non ancora verificata.
-- Dopo approvazione: verificare creazione app, autorizzazione account, permessi, quote e risposte reali per ricerca, dettagli, SKU, immagini e logistica. Nessuna integrazione API ancora implementata o collaudata.
+- Profilo approvato: il 2 novembre 2026 l'utente ha condiviso l'email “Profile Approval Granted” di AliExpress Open Platform. L'email conferma l'approvazione del profilo e invita a creare l'applicazione su https://openservice.aliexpress.com/.
+- Prossimo passo: creare l'applicazione e verificare autorizzazione account, permessi, quote e risposte reali per ricerca, dettagli, SKU, immagini e logistica. L'approvazione del profilo non conferma ancora i permessi API dell'app. Nessuna integrazione API ancora implementata o collaudata.
 - Possibile problema nel modulo inviato: campo LinkedIn con limite 30 caratteri, URL probabilmente troncato. Correggere se richiesto dal portale.
 
 ## Base esistente e questioni aperte
@@ -38,4 +38,4 @@ Esecuzione locale: una vettura, confronto di 3–5 candidati, conferma dell'uten
 
 ## Ripresa
 
-Controllare l'esito della registrazione AliExpress, poi provare il recupero dati di un prodotto reale prima di sviluppare il flusso completo.
+Profilo AliExpress approvato. Ripartire dalla creazione dell'applicazione su https://openservice.aliexpress.com/, poi provare il recupero dati di un prodotto reale prima di sviluppare il flusso completo.

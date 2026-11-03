@@ -51,7 +51,7 @@ class TranslateConfiguratorProductDescriptions extends Command
                 $pending = $batch->filter(function ($product) use (&$catalog, $target, &$translated) {
                     $entry = $catalog[$product->handle] ?? null;
                     if (is_array($entry) && is_string($entry['source'] ?? null)
-                        && trim($entry['source']) === trim($product->body_html)
+                        && $this->normalizeSource($entry['source']) === $this->normalizeSource($product->body_html)
                         && filled($entry['translation'] ?? null)) {
                         $product->update([$target => $entry['translation']]);
                         $translated++;
@@ -79,6 +79,11 @@ class TranslateConfiguratorProductDescriptions extends Command
 
         $this->info("Tradotte {$translated} descrizioni in {$locale} nei cataloghi di categoria.");
         return self::SUCCESS;
+    }
+
+    private function normalizeSource(string $html): string
+    {
+        return trim(str_replace(["\u{00A0}", "\r\n"], [' ', "\n"], $html));
     }
 
     private function translateBatch(array $products, string $locale): array

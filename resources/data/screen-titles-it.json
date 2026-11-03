@@ -1404,8 +1404,8 @@
         "translation": "Schermo originale Peugeot 3008 Phase 1 2009–2016 Rif. 16095882XT OEM"
     },
     "pantalla-tesla-9-7-android-15-con-carplay-y-4g-para-renault-scenic-iv-2016-2020-gps-dsp-y-control-volante": {
-        "source": "Pantalla Tesla 9,7” Android 15 con CarPlay y 4G para Renault Scenic IV 2016-2020 – GPS, DSP y Control Volante",
-        "translation": "Schermo Tesla 9,7” Android 15 con CarPlay e 4G per Renault Scenic IV 2016-2020 – GPS, DSP e Comandi al volante"
+        "source": "Pantalla Tesla 9,7” Android 15 con CarPlay y 4G para Renault Scenic IV 2016-2024 – GPS, DSP y Control Volante",
+        "translation": "Schermo Tesla 9,7” Android 15 con CarPlay e 4G per Renault Scenic IV 2016-2024 – GPS, DSP e Comandi al Volante"
     },
     "pantalla-tesla-android-16-con-gps-carplay-y-128gb-para-toyota-land-cruiser-100-2003-y-lexus-lx470-multimedia-inteligente-y-control-total": {
         "source": "Pantalla Tesla Android 16” con GPS, CarPlay y 128GB para Toyota Land Cruiser 100 2003 y Lexus LX470 – Multimedia Inteligente y Control Total",
@@ -1694,5 +1694,13 @@
     "radio-7-2din-carplay-mercedes-sl-r230-2001-2011": {
         "source": "Radio 7” 2DIN CarPlay Mercedes SL R230 2001–2011",
         "translation": "Autoradio 7” 2DIN CarPlay Mercedes SL R230 2001–2011"
+    },
+    "autoradio-9-11-5-2din-carplay-para-skoda-octavia-a7-2013-2018": {
+        "source": "Autoradio 10''2DIN CarPlay para Skoda Octavia A7 2013-2018",
+        "translation": "Autoradio 10''2DIN CarPlay per Skoda Octavia A7 2013-2018"
+    },
+    "radio-android-9-dacia-duster-2018-2019-mazda-6-2012-2016": {
+        "source": "Radio Android 9″ Dacia Duster 2018–2019, Mazda 6 2012–2016",
+        "translation": "Radio Android 9″ Dacia Duster 2018–2019, Mazda 6 2012–2016"
     }
 }

@@ -151,19 +151,31 @@ class WhatsAppProductOffer
         if (! $v) return null;
         $label = trim(($v['title'] ?? '').' '.($v['option'] ?? ''));
         $intro = ['it' => 'Per questa radio consigliamo la variante', 'es' => 'Para esta radio recomendamos la versión', 'en' => 'For this radio we recommend the version'][$locale];
-        $reason = ['it' => 'È la variante 8 core più economica disponibile; in assenza di 8 core scegliamo almeno 4 GB di RAM.', 'es' => 'Es la versión de 8 núcleos más económica disponible; si no hay versiones de 8 núcleos, recomendamos al menos 4 GB de RAM.', 'en' => 'We recommend the lowest-priced available 8-core version, or at least 4 GB of RAM if no 8-core version is listed.'][$locale];
         $rules = app(WhatsAppAssistantSettings::class)->get();
         $answer = $intro.' '.$label.'.';
-        $eight = preg_match('/8\s*[- ]?core|octa\s*[- ]?core/ui', $label);
-        if (! $eight) $reason = ['it' => 'Non risulta una variante 8 core: consigliamo almeno 4 GB di RAM.', 'es' => 'No figura una versión de 8 núcleos: recomendamos al menos 4 GB de RAM.', 'en' => 'No 8-core version is listed: we recommend at least 4 GB of RAM.'][$locale];
-        $answer .= "\n".$reason;
         if ($rules['show_prices']) $answer .= "\n".number_format($this->money($v['price']), 2, ',', '.').' €';
         if ($rules['show_links']) $answer .= "\n".$p['url'].(! empty($v['id']) ? '?variant='.rawurlencode($v['id']) : '');
+
+        $answer .= "\n\n".$this->support($locale, [...collect($history)->where('role', 'user')->pluck('content')->all(), $text]);
 
         $variantId = ! empty($v['id']) ? ConfiguratorProduct::where('handle', $p['handle'])->first()?->variants()->where('shopify_variant_id', $v['id'])->value('id') : null;
 
         return ['text' => $answer, 'mode' => 'standard', 'context' => $context,
             'signature' => hash('sha256', json_encode($context['vehicle'])), 'quote_state' => ['product' => $p['handle'], 'variant_id' => $variantId]];
+    }
+
+    private function support(string $locale, array $messages): string
+    {
+        $shipping = app(WhatsAppStandardReplies::class);
+        $delivery = $shipping->shippingDestination($messages) !== null
+            ? $shipping->shippingPolicy($locale, $messages)
+            : ['it' => 'Le condizioni di spedizione dipendono dalla destinazione.', 'es' => 'Las condiciones de envío dependen del destino.', 'en' => 'Shipping terms depend on the destination.'][$locale];
+
+        return $delivery.' '.[
+            'it' => 'Ti seguiamo anche dopo l’acquisto: in caso di reso gestiamo la pratica e facciamo da intermediari con il fornitore.',
+            'es' => 'También te acompañamos después de la compra: en caso de devolución, gestionamos el trámite y hacemos de intermediarios con el proveedor.',
+            'en' => 'We also support you after purchase: for returns, we manage the process and liaise with the supplier.',
+        ][$locale];
     }
 
     public function preferredVariants(Collection $variants): Collection
@@ -270,6 +282,6 @@ class WhatsAppProductOffer
             'es' => 'Hay que verificar el montaje y los posibles adaptadores para tu coche.', 'en' => 'Fitment and any adapters need to be checked for your car.'][$locale] : '';
 
         return $heading.":\n\n"
-            .implode("\n\n", $lines).$fit.($showPrices && $rules['price_disclaimer'] ? "\n\n".$copy[3] : '');
+            .implode("\n\n", $lines).$fit.($showPrices && $rules['price_disclaimer'] ? "\n\n".$copy[3] : '')."\n\n".$this->support($locale, $messages);
     }
 }

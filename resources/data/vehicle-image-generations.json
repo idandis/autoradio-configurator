@@ -547,6 +547,30 @@
         "year_to": 2025,
         "image": "volkswagen-amarok-2023-2025.webp"
     },
+    "renault-scenic-iv": {
+        "brand": "RENAULT",
+        "model": "Scenic",
+        "aliases": ["Scenic", "Scenic IV", "Scenic 4"],
+        "year_from": 2016,
+        "year_to": 2024,
+        "image": "renault-scenic-2016-2024.webp"
+    },
+    "hyundai-tucson-lm": {
+        "brand": "HYUNDAI",
+        "model": "Tucson",
+        "aliases": ["Tucson", "Tucson LM"],
+        "year_from": 2009,
+        "year_to": 2014,
+        "image": "hyundai-tucson-2011-2017.webp"
+    },
+    "hyundai-tucson-tl": {
+        "brand": "HYUNDAI",
+        "model": "Tucson",
+        "aliases": ["Tucson", "Tucson TL"],
+        "year_from": 2015,
+        "year_to": 2020,
+        "image": "hyundai-tucson-2015-2018.webp"
+    },
     "man-van": {
         "brand": "MAN",
         "model": "Van",

@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-03",
+  "requested_products": 476,
+  "requested_descriptions": 475,
+  "description_translations_verified": 950,
+  "new_description_products": 2,
+  "new_title_products": 3,
+  "html_closing_tags_aligned": 1,
+  "catalogs_validated": 12,
+  "html_tags_attributes_links_preserved": true,
+  "numeric_values_preserved": true,
+  "local_database": {
+    "screen": 425,
+    "camera": 118,
+    "speaker": 18,
+    "total": 561,
+    "missing_translations": 0,
+    "spanish_originals_unchanged": true,
+    "requested_handles_absent": 2,
+    "requested_description_source_differs": 1,
+    "updates_needed": 0
+  },
+  "tests": {
+    "dedicated": 26,
+    "dedicated_assertions": 470,
+    "bulk_dashboard_test": 1,
+    "bulk_dashboard_assertions": 3825,
+    "bulk_translation_tasks_after_update": 0,
+    "bulk_description_tasks_after_update": 0,
+    "bulk_image_tasks_after_update": 0,
+    "reimport_source_preservation_test_passed": true
+  },
+  "preexisting_import_suite": {
+    "tests": 21,
+    "passed": 5,
+    "failures": 12,
+    "errors": 4,
+    "previously_documented": "output/post-import-2026-10-22/ISTRUZIONI.txt",
+    "causes": [
+      "403 authorization in old fixtures",
+      "required headers absent in old fixtures",
+      "temporary upload files absent"
+    ]
+  },
+  "php_syntax": true,
+  "git_diff_check": true,
+  "upload_files": 16
+}

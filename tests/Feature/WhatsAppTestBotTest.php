@@ -36,6 +36,20 @@ class WhatsAppTestBotTest extends TestCase
 
     private ?\Closure $onAi = null;
 
+    public function test_recommendation_with_compatibility_and_warranty_reaches_full_answer(): void
+    {
+        $p = ConfiguratorProduct::create(['handle' => 'tucson', 'category' => 'screen',
+            'title' => 'Pantalla Hyundai Tucson 2015-2017', 'brand' => 'HYUNDAI', 'model' => 'Tucson', 'year_from' => 2015, 'year_to' => 2017]);
+        $p->variants()->create(['title' => '8Core 4G 64G', 'price' => 528.26]);
+        $r = app(WhatsAppTestBot::class)->answer('Tengo un Hyundai Tucson 2017. ¿Qué modelo recomendáis con CarPlay? Confirmar compatibilidad con cámara trasera original y mandos del volante, precio final con envío a La Palma, garantía y devoluciones desde Canarias.');
+        $this->assertSame('ai', $r['mode']);
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/v1/responses')
+            && str_contains($request['instructions'], 'garanzia, costi dei resi'));
+        $proposal = app(WhatsAppProductOffer::class)->recommendVariant('recomiendas', $r['context'], 'es');
+        $this->assertStringNotContainsString('más económica', $proposal['text']);
+        $this->assertStringNotContainsString('si no hay', $proposal['text']);
+    }
+
     public function test_email_questions_use_saved_contact_reply_in_customer_language_without_ai(): void
     {
         $settings = app(WhatsAppAssistantSettings::class);

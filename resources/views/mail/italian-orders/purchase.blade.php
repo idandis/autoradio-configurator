@@ -90,6 +90,9 @@
                         <p style="margin:0;padding:16px;background:#202020;border-radius:10px;color:#e7e7e7;font-size:14px">{{ $address['name'] ?? $order->customer_name }}<br>{{ $address['line1'] ?? '' }}<br>@if(!empty($address['line2'])){{ $address['line2'] }}<br>@endif{{ $address['postal_code'] ?? '' }} {{ $address['city'] ?? '' }}@if(!empty($address['province'])) ({{ $address['province'] }})@endif<br>{{ $address['country'] ?? 'IT' }}</p>
 
                         <p style="margin:28px 0 0;padding-top:18px;border-top:1px solid #303030;color:#858585;font-size:12px;text-align:center">{{ $copy['confirmation'] }} · {{ $order->number }}<br>{{ $copy['not_invoice'] }}</p>
+                        @if(!$es)
+                            <p style="margin:14px 0 0;color:#bdbdbd;font-size:13px;text-align:center"><a href="mailto:info@autoradioitaliano.it" style="color:#f5c400;text-decoration:none">info@autoradioitaliano.it</a><br><a href="tel:+393514346911" style="color:#f5c400;text-decoration:none">+39 351 434 6911</a></p>
+                        @endif
                     </td>
                 </tr>
             </table>

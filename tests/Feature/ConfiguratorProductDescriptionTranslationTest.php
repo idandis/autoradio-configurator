@@ -13,6 +13,63 @@ class ConfiguratorProductDescriptionTranslationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_dashboard_imports_november_catalogs_with_copied_spaces_and_clears_tasks(): void
+    {
+        Http::preventStrayRequests();
+        config(['services.openai.api_key' => null]);
+        $handles = [
+            'screen' => [
+                'autoradio-9-11-5-2din-carplay-para-skoda-octavia-a7-2013-2018',
+                'radio-android-9-dacia-duster-2018-2019-mazda-6-2012-2016',
+                'pantalla-tesla-9-7-android-15-con-carplay-y-4g-para-renault-scenic-iv-2016-2020-gps-dsp-y-control-volante',
+            ],
+            'camera' => ['camara-360-ahd-para-navegacion-android-1080p-8k'],
+            'speaker' => ['sony-xs-nw1202e-subwoofer-30cm-12-300w'],
+        ];
+        $catalogs = [];
+        foreach ($handles as $category => $items) {
+            foreach (['it', 'en'] as $locale) {
+                foreach (['titles', 'descriptions'] as $kind) {
+                    $catalogs[$category][$locale][$kind] = json_decode(file_get_contents(resource_path("data/{$category}-{$kind}-{$locale}.json")), true);
+                }
+            }
+            foreach ($items as $handle) {
+                ConfiguratorProduct::create([
+                    'handle' => $handle, 'category' => $category,
+                    'title' => $catalogs[$category]['it']['titles'][$handle]['source'],
+                    'body_html' => str_replace("\u{00A0}", ' ', $catalogs[$category]['it']['descriptions'][$handle]['source']),
+                ]);
+            }
+        }
+        $originals = ConfiguratorProduct::all()->keyBy('handle');
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->post(route('dashboard.database.migrate'))->assertRedirect()->assertSessionHasNoErrors();
+        foreach (ConfiguratorProduct::all() as $product) {
+            $this->assertSame($originals[$product->handle]->title, $product->title);
+            $this->assertSame($originals[$product->handle]->body_html, $product->body_html);
+            foreach (['it', 'en'] as $locale) {
+                $data = $catalogs[$product->category][$locale];
+                $this->assertSame($data['titles'][$product->handle]['translation'], $product->{'title_'.$locale});
+                $this->assertSame($data['descriptions'][$product->handle]['translation'], $product->{'body_html_'.$locale});
+                preg_match_all('/<[^>]*>/', $product->body_html, $a);
+                preg_match_all('/<[^>]*>/', $product->{'body_html_'.$locale}, $b);
+                $this->assertSame($a[0], $b[0]);
+            }
+        }
+        $resolver = app(\App\Services\VehicleImageResolver::class);
+        foreach (range(2016, 2024) as $year) {
+            $this->assertSame('renault-scenic-2016-2024.webp', $resolver->resolveFilename('RENAULT', 'Scenic', $year));
+        }
+        foreach (range(2015, 2020) as $year) {
+            $this->assertSame('hyundai-tucson-2015-2018.webp', $resolver->resolveFilename('HYUNDAI', 'Tucson', $year));
+        }
+        $this->assertSame('hyundai-tucson-2011-2017.webp', $resolver->resolveFilename('HYUNDAI', 'Tucson', 2011));
+        $this->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
+            ->where('postImportTasks.translationCount', 0)
+            ->where('postImportTasks.descriptionTranslationCount', 0)
+            ->where('postImportTasks.imageCount', 0));
+    }
+
     public function test_dashboard_imports_lexus_rx_translations_and_clears_tasks(): void
     {
         Http::preventStrayRequests();
