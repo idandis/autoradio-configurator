@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { renderQuoteDocument } from '@/lib/quoteDocument';
+import { statisticSessionUuid, statisticReferrer, trackVisitorEntry } from '@/lib/visitorStatistics';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Head, router, usePage } from '@inertiajs/vue3';
 import MobileVehiclePicker from '@/components/MobileVehiclePicker.vue';
@@ -2216,7 +2216,7 @@ onMounted(async () => {
     window.addEventListener('popstate', handleCartHistoryBack);
     window.addEventListener('message', handlePrintPreviewNavigation);
     document.documentElement.lang = props.locale;
-    void trackVisitorEntry();
+    void trackVisitorEntry(props.locale);
     if (props.homeBeta) return;
     const params = new URLSearchParams(window.location.search);
     const incomingBrand = resolveAvailableBrand(params.get('marca') ?? params.get('brand'));
@@ -3372,65 +3372,6 @@ const checkoutUrl = computed(() => {
     return `https://www.autoradiocanario.com${localePrefix}/cart/${cartPath}${query ? `?${query}` : ''}`;
 });
 
-const statisticSessionUuid = () => {
-    try {
-        const storageKey = 'autoradiocanario-statistics-session';
-        const existing = window.sessionStorage.getItem(storageKey);
-        if (existing) return existing;
-
-        const uuid = window.crypto?.randomUUID?.() ?? 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
-            const random = Math.floor(Math.random() * 16);
-            const value = character === 'x' ? random : (random & 0x3) | 0x8;
-            return value.toString(16);
-        });
-        window.sessionStorage.setItem(storageKey, uuid);
-        return uuid;
-    } catch {
-        return null;
-    }
-};
-
-const statisticReferrer = () => {
-    if (!document.referrer) return null;
-
-    try {
-        const referrer = new URL(document.referrer);
-        return `${referrer.origin}${referrer.pathname}`.slice(0, 2048);
-    } catch {
-        return null;
-    }
-};
-
-const trackVisitorEntry = async () => {
-    try {
-        const csrfToken = document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content;
-        const searchParams = new URLSearchParams(window.location.search);
-        await fetch('/configurator/statistics', {
-            method: 'POST',
-            headers: {
-                Accept: 'application/json',
-                'Content-Type': 'application/json',
-                ...(csrfToken ? { 'X-CSRF-TOKEN': csrfToken } : {}),
-            },
-            credentials: 'same-origin',
-            keepalive: true,
-            body: JSON.stringify({
-                session_uuid: statisticSessionUuid(),
-                event_type: 'configurator_entered',
-                installation_selected: false,
-                camera_selected: false,
-                language: props.locale,
-                referrer: statisticReferrer(),
-                utm_source: searchParams.get('utm_source'),
-                utm_campaign: searchParams.get('utm_campaign'),
-                device_type: window.innerWidth < 768 ? 'mobile' : window.innerWidth < 1024 ? 'tablet' : 'desktop',
-            }),
-        });
-    } catch {
-        // Visitor analytics are best-effort and must never affect the configurator.
-    }
-};
-
 const statisticProduct = computed(() => {
     const screen = selectedScreens.value[0];
     if (screen) {
@@ -3893,6 +3834,7 @@ const generateQuote = async (withoutClientData = false) => {
         ? `<div class="checkout"><strong>${escapeHtml(t('print.purchase_link'))}:</strong><br><a href="${escapeHtml(paymentLink)}">${escapeHtml(paymentLink)}</a><p class="purchase-authorization">${escapeHtml(t('print.purchase_authorization'))}</p></div>`
         : '';
 
+    const { renderQuoteDocument } = await import('@/lib/quoteDocument');
     const html = renderQuoteDocument({
         locale: props.locale,
         reference: escapeHtml(quoteNumber),

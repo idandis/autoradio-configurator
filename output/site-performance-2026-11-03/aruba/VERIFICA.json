@@ -1,0 +1,70 @@
+{
+  "date": "2026-11-03",
+  "production_modified": false,
+  "initial_home_javascript": {
+    "before_live_bytes": 745314,
+    "after_build_bytes": 342496,
+    "after_gzip_bytes": 119005,
+    "files": [
+      "assets/createLucideIcon-v2-DOQZs4k7.js",
+      "assets/x-v2-DCDwlNKF.js",
+      "assets/search-v2-Cba7mFUq.js",
+      "assets/HomeBetaContent-v2-BJ0ows_b.js",
+      "assets/chevron-right-v2-DSeXbzxw.js",
+      "assets/ItalianStoreFooter-v2-Dn1-uQoo.js",
+      "assets/app-DkH-LFkR.js",
+      "assets/shield-check-v2-CARcdEss.js",
+      "assets/ItalianHome-v2-CSsl0VFT.js",
+      "assets/_plugin-vue_export-helper-v2-BDNMzG2s.js"
+    ]
+  },
+  "image_optimization": {
+    "logo_before_bytes": 914348,
+    "logo_after_bytes": 3712,
+    "favicon_before_bytes": 617832,
+    "favicon_after_bytes": 5328
+  },
+  "same_local_data_inertia_payload": {
+    "before_bytes": 143203,
+    "after_bytes": 163,
+    "note": "Controller-only Inertia JSON without middleware shared properties. Local stock list is empty. Not production HTML size."
+  },
+  "build_success": true,
+  "apache_syntax_success": true,
+  "apache_gzip_content_verified": true,
+  "apache_hashed_asset_immutable_cache_verified": true,
+  "apache_manifest_not_immutable_verified": true,
+  "root_htaccess_changed": false,
+  "php_tests": {
+    "passed": 34,
+    "baseline_failures": 2,
+    "baseline_assertions_reproduced": 18,
+    "failures": [
+      "ConfigurationStatisticTest::test_cloudflare_proxy_ip_is_never_geolocated_or_counted_as_a_second_visit",
+      "ConfigurationStatisticTest::test_admin_can_filter_paginated_statistics"
+    ]
+  },
+  "browser": {
+    "visitor_statistics": {
+      "language": "it",
+      "event_type": "configurator_entered"
+    },
+    "home": {
+      "title": "Autoradio Italiano · Home",
+      "logo": "/images/logo-it-small.webp",
+      "configuratorLoaded": false,
+      "layoutLoaded": false,
+      "preload": true
+    },
+    "configurator": {
+      "title": "Configuratore",
+      "url": "/configurator?lang=it&mode=specific",
+      "buttons": 12
+    },
+    "contact_page": true,
+    "login": true,
+    "javascript_exceptions": []
+  },
+  "shopify_changes": false,
+  "upload_files": 88
+}

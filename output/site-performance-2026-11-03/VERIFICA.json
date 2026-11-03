@@ -1,0 +1,404 @@
+{
+  "date": "2026-11-03",
+  "scope": "Public websites, desktop browser, browser cache disabled, unthrottled connection. Single browser navigation per site; figures are diagnostic samples, not field averages.",
+  "italiano": {
+    "navigation": [
+      {
+        "ttfb": 993.4000000953674,
+        "start": 0,
+        "dom": 17506.700000286102,
+        "load": 0
+      }
+    ],
+    "paint": [
+      {
+        "name": "first-paint",
+        "start": 7740
+      },
+      {
+        "name": "first-contentful-paint",
+        "start": 17540
+      }
+    ],
+    "lcp": 24868,
+    "title": "Autoradio Italiano · Home",
+    "imageCount": 8,
+    "htmlBytes": 324467,
+    "encoded_bytes": 2121111,
+    "largest_transfers": [
+      {
+        "name": "https://www.autoradioitaliano.it/build/assets/app-BeDJBQ01.js",
+        "bytes": 422887
+      },
+      {
+        "name": "https://www.autoradioitaliano.it/build/assets/index.esm-v2-igikr9wf.js",
+        "bytes": 292191
+      },
+      {
+        "name": "https://www.googletagmanager.com/gtag/js",
+        "bytes": 195689
+      },
+      {
+        "name": "https://cdn.shopify.com/s/files/1/0872/4683/1960/files/ccc57fc8-946b-4bf7-a00f-194da6d4cbf8.png",
+        "bytes": 173087
+      },
+      {
+        "name": "https://cdn.shopify.com/s/files/1/0872/4683/1960/files/0a7eadd4-00c4-4bee-a8a8-8064c3912953.png",
+        "bytes": 165089
+      },
+      {
+        "name": "https://www.autoradioitaliano.it/images/home-beta/hero.webp",
+        "bytes": 159723
+      },
+      {
+        "name": "https://www.googletagmanager.com/gtm.js",
+        "bytes": 159208
+      },
+      {
+        "name": "https://cdn.shopify.com/s/files/1/0872/4683/1960/files/24f401bb-cbc8-4fbb-a7ed-ac06357746c9.png",
+        "bytes": 148923
+      }
+    ],
+    "documents": [
+      {
+        "url": "https://www.autoradioitaliano.it/",
+        "status": 200,
+        "protocol": "h2",
+        "headers": {
+          "cache-control": "no-cache, private",
+          "content-encoding": "gzip",
+          "content-type": "text/html; charset=utf-8",
+          "server": "aruba-proxy"
+        }
+      }
+    ],
+    "request_count": 21,
+    "resource_bytes": 1898859,
+    "configurator": [],
+    "slowest": [
+      {
+        "name": "https://www.autoradioitaliano.it/build/assets/app-BeDJBQ01.js",
+        "duration": 16470.10000038147,
+        "bytes": 422725,
+        "transfer": 423025
+      },
+      {
+        "name": "https://www.autoradioitaliano.it/build/assets/index.esm-v2-igikr9wf.js",
+        "duration": 13370.199999809265,
+        "bytes": 292029,
+        "transfer": 292329
+      },
+      {
+        "name": "https://www.autoradioitaliano.it/images/home-beta/hero.webp",
+        "duration": 7343.200000286102,
+        "bytes": 159564,
+        "transfer": 159864
+      },
+      {
+        "name": "https://www.autoradioitaliano.it/build/assets/app-BGNiyuoo.css",
+        "duration": 6737.199999809265,
+        "bytes": 41467,
+        "transfer": 8381
+      },
+      {
+        "name": "https://www.autoradioitaliano.it/images/home-beta/per-marca.webp",
+        "duration": 6552.800000190735,
+        "bytes": 100992,
+        "transfer": 101292
+      },
+      {
+        "name": "https://www.autoradioitaliano.it/images/home-beta/universali.webp",
+        "duration": 5551.300000190735,
+        "bytes": 51042,
+        "transfer": 51342
+      },
+      {
+        "name": "https://www.autoradioitaliano.it/build/assets/app-CQnm_yBM.css",
+        "duration": 4139.700000286102,
+        "bytes": 170574,
+        "transfer": 26830
+      },
+      {
+        "name": "https://www.autoradioitaliano.it/build/assets/button-v2-CSMokvkn.js",
+        "duration": 4045.3999996185303,
+        "bytes": 30560,
+        "transfer": 30860
+      }
+    ],
+    "largest": [
+      {
+        "name": "https://www.autoradioitaliano.it/build/assets/app-BeDJBQ01.js",
+        "duration": 16470.10000038147,
+        "bytes": 422725,
+        "transfer": 423025
+      },
+      {
+        "name": "https://www.autoradioitaliano.it/build/assets/index.esm-v2-igikr9wf.js",
+        "duration": 13370.199999809265,
+        "bytes": 292029,
+        "transfer": 292329
+      },
+      {
+        "name": "https://cdn.shopify.com/s/files/1/0872/4683/1960/files/ccc57fc8-946b-4bf7-a00f-194da6d4cbf8.png",
+        "duration": 334.40000009536743,
+        "bytes": 172224,
+        "transfer": 172524
+      },
+      {
+        "name": "https://www.autoradioitaliano.it/build/assets/app-CQnm_yBM.css",
+        "duration": 4139.700000286102,
+        "bytes": 170574,
+        "transfer": 26830
+      },
+      {
+        "name": "https://cdn.shopify.com/s/files/1/0872/4683/1960/files/0a7eadd4-00c4-4bee-a8a8-8064c3912953.png",
+        "duration": 439,
+        "bytes": 164604,
+        "transfer": 164904
+      },
+      {
+        "name": "https://www.autoradioitaliano.it/images/home-beta/hero.webp",
+        "duration": 7343.200000286102,
+        "bytes": 159564,
+        "transfer": 159864
+      }
+    ],
+    "failed": [
+      "net::ERR_BLOCKED_BY_ORB",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED"
+    ]
+  },
+  "canario": {
+    "navigation": [
+      {
+        "ttfb": 609.9000000953674,
+        "start": 0,
+        "dom": 1966.3000001907349,
+        "load": 2199.5999999046326
+      }
+    ],
+    "paint": [
+      {
+        "name": "first-paint",
+        "start": 1376
+      },
+      {
+        "name": "first-contentful-paint",
+        "start": 1376
+      }
+    ],
+    "lcp": 1376,
+    "title": "Car Audio Isole Canarie - AutoRadioCanario: Radio Economiche per Auto – Auto Radio Canario",
+    "imageCount": 87,
+    "htmlBytes": 1128016,
+    "encoded_bytes": 1684356,
+    "largest_transfers": [
+      {
+        "name": "https://integration.prefixbox.com/34ea9e9b-af3c-4ff7-9e87-ae1ed1f45e85",
+        "bytes": 278689
+      },
+      {
+        "name": "https://www.googletagmanager.com/gtag/js",
+        "bytes": 195689
+      },
+      {
+        "name": "https://www.googletagmanager.com/gtm.js",
+        "bytes": 159208
+      },
+      {
+        "name": "https://www.autoradiocanario.com/cdn/shop/files/7194b69c-8da5-4161-9509-be50378f4cc1.png",
+        "bytes": 90362
+      },
+      {
+        "name": "https://www.autoradiocanario.com/it",
+        "bytes": 89600
+      },
+      {
+        "name": "https://www.autoradiocanario.com/cdn/wpm/b610a19cewf693d529pf324840bm6169d9b4m.js",
+        "bytes": 85747
+      },
+      {
+        "name": "https://cdn.shopify.com/extensions/01a19a43-1b51-7c07-a896-e846e58bd2dd/cwilltrustoo-reviews-294/assets/seal-review.min.js",
+        "bytes": 84248
+      },
+      {
+        "name": "https://www.autoradiocanario.com/cdn/shop/files/7b8a5318-24f9-4682-9bd1-5094927c1e13.jpg",
+        "bytes": 42866
+      }
+    ],
+    "documents": [
+      {
+        "url": "https://www.autoradiocanario.com/it",
+        "status": 200,
+        "protocol": "h3",
+        "headers": {
+          "cache-control": "private, max-age=0, must-revalidate",
+          "cf-cache-status": "DYNAMIC",
+          "content-encoding": "zstd",
+          "content-type": "text/html; charset=utf-8",
+          "server": "cloudflare"
+        }
+      },
+      {
+        "url": "https://www.autoradiocanario.com/services/login_with_shop/buyer/callback",
+        "status": 200,
+        "protocol": "h3",
+        "headers": {
+          "cache-control": "no-store",
+          "cf-cache-status": "DYNAMIC",
+          "content-encoding": "zstd",
+          "content-type": "text/html; charset=utf-8",
+          "server": "cloudflare"
+        }
+      }
+    ],
+    "request_count": 153,
+    "resource_bytes": 2286041,
+    "configurator": [],
+    "slowest": [
+      {
+        "name": "https://cdn.younet.network/jquery.min.js",
+        "duration": 692.8999996185303,
+        "bytes": 0,
+        "transfer": 0
+      },
+      {
+        "name": "https://www.autoradiocanario.com/cdn/shop/collections/CHEVROLET_db2350df-b647-4c40-86a1-9e552f3f21da.png",
+        "duration": 640.0999999046326,
+        "bytes": 3452,
+        "transfer": 3752
+      },
+      {
+        "name": "https://www.autoradiocanario.com/cdn/shop/collections/logo_alfa_romeo_ok.jpg",
+        "duration": 599.1999998092651,
+        "bytes": 18370,
+        "transfer": 18670
+      },
+      {
+        "name": "https://www.autoradiocanario.com/cdn/shop/collections/logo_bmw.jpg",
+        "duration": 565.5,
+        "bytes": 10946,
+        "transfer": 11246
+      },
+      {
+        "name": "https://www.autoradiocanario.com/cdn/shop/collections/logo_audi.jpg",
+        "duration": 547.1999998092651,
+        "bytes": 6362,
+        "transfer": 6662
+      },
+      {
+        "name": "https://lg1.prefixbox.com/v1/integration/insert",
+        "duration": 547,
+        "bytes": 0,
+        "transfer": 0
+      },
+      {
+        "name": "https://shop.app/pay/hop",
+        "duration": 532.3000001907349,
+        "bytes": 0,
+        "transfer": 0
+      },
+      {
+        "name": "https://integration.prefixbox.com/34ea9e9b-af3c-4ff7-9e87-ae1ed1f45e85",
+        "duration": 462.59999990463257,
+        "bytes": 0,
+        "transfer": 0
+      }
+    ],
+    "largest": [
+      {
+        "name": "https://cdn.shopify.com/extensions/01a19a43-1b51-7c07-a896-e846e58bd2dd/cwilltrustoo-reviews-294/assets/seal-review.min.js",
+        "duration": 340.19999980926514,
+        "bytes": 301831,
+        "transfer": 84504
+      },
+      {
+        "name": "https://www.autoradiocanario.com/cdn/wpm/b610a19cewf693d529pf324840bm6169d9b4m.js",
+        "duration": 93.10000038146973,
+        "bytes": 300739,
+        "transfer": 85248
+      },
+      {
+        "name": "https://cdn.jsdelivr.net/npm/swiper@8/swiper-bundle.min.js",
+        "duration": 187.80000019073486,
+        "bytes": 143706,
+        "transfer": 34896
+      },
+      {
+        "name": "https://cdn.shopify.com/extensions/01a19a2a-d1b8-7889-acc7-6e5ab46f0ee4/appio-amazon-reviews-722/assets/appio-reviews.min.js",
+        "duration": 315.30000019073486,
+        "bytes": 142495,
+        "transfer": 37520
+      },
+      {
+        "name": "https://www.autoradiocanario.com/cdn/shop/files/7194b69c-8da5-4161-9509-be50378f4cc1.png",
+        "duration": 85.40000009536743,
+        "bytes": 89546,
+        "transfer": 89846
+      },
+      {
+        "name": "https://www.autoradiocanario.com/cdn/shopifycloud/privacy-banner/privacy-banner.js",
+        "duration": 159.10000038146973,
+        "bytes": 87481,
+        "transfer": 21305
+      }
+    ],
+    "failed": [
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_BLOCKED_BY_ORB",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED",
+      "net::ERR_ABORTED"
+    ]
+  },
+  "asset_rechecks": {
+    "italiano_app_js": {
+      "ttfb_seconds": 0.279,
+      "total_seconds": 0.516,
+      "bytes": 422725,
+      "content_encoding": null
+    },
+    "italiano_index_js": {
+      "ttfb_seconds": 0.836,
+      "total_seconds": 5.425,
+      "bytes": 292029,
+      "content_encoding": null
+    },
+    "italiano_hero_webp": {
+      "ttfb_seconds": 0.286,
+      "total_seconds": 2.579,
+      "bytes": 159564
+    },
+    "italiano_css": {
+      "total_seconds": 0.23,
+      "bytes": 8081,
+      "content_encoding": "gzip"
+    }
+  },
+  "changes_to_production": false
+}

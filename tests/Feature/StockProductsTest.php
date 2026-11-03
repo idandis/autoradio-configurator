@@ -97,7 +97,9 @@ class StockProductsTest extends TestCase
         $this->withoutMiddleware(BlockOutsideEurope::class);
         foreach (['autoradioitaliano.it', 'www.autoradioitaliano.it'] as $host) {
             $this->get('https://'.$host.'/')->assertInertia(fn (Assert $page) => $page
-                ->component('Configurator')->where('homeBeta', true)->where('locale', 'it'));
+                ->component('ItalianHome')->where('homeBeta', true)->where('locale', 'it')
+                ->missing('vehicleCompatibility')->missing('vehicleImageMappings')->missing('installationZones')->missing('translations'))
+                ->assertSee('<link rel="preload" as="image" href="/images/home-beta/hero.webp" fetchpriority="high">', false);
             $this->get('https://'.$host.'/configurator')->assertInertia(fn (Assert $page) => $page->missing('homeBeta'));
             $this->get('https://'.$host.'/?form=autoradio')->assertInertia(fn (Assert $page) => $page->missing('homeBeta'));
         }
@@ -196,7 +198,7 @@ class StockProductsTest extends TestCase
         StockProduct::create(['product_handle' => $empty->handle, 'quantity' => 0]);
         StockProduct::create(['product_handle' => 'deleted-product', 'quantity' => 4]);
         $this->withoutMiddleware(BlockOutsideEurope::class)->get(route('home.beta'))
-            ->assertInertia(fn (Assert $page) => $page->component('Configurator')
+            ->assertInertia(fn (Assert $page) => $page->component('ItalianHome')
                 ->where('homeBeta', true)->where('locale', 'it')->has('stockProducts', 1)
                 ->where('stockProducts.0.id', $product->id)->where('stockProducts.0.title', 'Autoradio italiana')
                 ->where('stockProducts.0.price', 199));

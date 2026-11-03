@@ -4,18 +4,14 @@ import './bootstrap';
 import { createInertiaApp } from '@inertiajs/vue3';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createApp, h } from 'vue';
-import AppLayout from '@/layouts/AppLayout.vue';
-import AuthLayout from '@/layouts/AuthLayout.vue';
-import SettingsLayout from '@/layouts/settings/Layout.vue';
 import { initializeTheme } from '@/composables/useAppearance';
 import { initializeFlashToast } from '@/lib/flashToast';
-import Configurator from '@/pages/Configurator.vue';
 
 const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 
 // Keep a visible build revision in the entry bundle so CDN/browser caches
 // receive a new asset URL after frontend releases.
-document.documentElement.dataset.frontendBuild = '2026-08-27-2';
+document.documentElement.dataset.frontendBuild = '2026-11-03-1';
 
 const keepNavigationInWindow = (event) => {
     const link = event.target instanceof Element ? event.target.closest('a, area') : null;
@@ -31,17 +27,20 @@ document.addEventListener('submit', keepNavigationInWindow, true);
 createInertiaApp({
     title: (title) => title || appName,
     resolve: async (name) => {
-        const page = name === 'Configurator'
-            ? { default: Configurator }
-            : await resolvePageComponent(
-                `./pages/${name}.vue`,
-                import.meta.glob('./pages/**/*.vue'),
-            );
+        const page = await resolvePageComponent(
+            `./pages/${name}.vue`,
+            import.meta.glob('./pages/**/*.vue'),
+        );
 
         if (!page.default.layout) {
             if (name.startsWith('Auth/')) {
+                const { default: AuthLayout } = await import('@/layouts/AuthLayout.vue');
                 page.default.layout = AuthLayout;
             } else if (name.startsWith('settings/')) {
+                const [{ default: AppLayout }, { default: SettingsLayout }] = await Promise.all([
+                    import('@/layouts/AppLayout.vue'),
+                    import('@/layouts/settings/Layout.vue'),
+                ]);
                 page.default.layout = (createElement, pageNode) =>
                     createElement(AppLayout, null, {
                         default: () =>
@@ -49,7 +48,8 @@ createInertiaApp({
                                 default: () => pageNode,
                             }),
                     });
-            } else if (!['Welcome', 'Configurator', 'ItalianStorePage'].includes(name)) {
+            } else if (!['Welcome', 'Configurator', 'ItalianStorePage', 'ItalianHome'].includes(name)) {
+                const { default: AppLayout } = await import('@/layouts/AppLayout.vue');
                 page.default.layout = AppLayout;
             }
         }

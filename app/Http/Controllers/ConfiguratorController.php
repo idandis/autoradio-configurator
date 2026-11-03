@@ -98,9 +98,11 @@ class ConfiguratorController extends Controller
         app()->setLocale('it');
         $request->session()->put('locale', 'it');
 
-        return $this($request, $vehicleImageResolver)
-            ->with('homeBeta', true)
-            ->with('stockProducts', \App\Models\StockProduct::publicProducts());
+        return Inertia::render('ItalianHome', [
+            'locale' => 'it',
+            'homeBeta' => true,
+            'stockProducts' => \App\Models\StockProduct::publicProducts(),
+        ])->withViewData(['preloadHero' => true]);
     }
 
     public function __invoke(Request $request, VehicleImageResolver $vehicleImageResolver): Response

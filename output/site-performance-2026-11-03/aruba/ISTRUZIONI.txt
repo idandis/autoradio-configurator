@@ -1,0 +1,37 @@
+AUTORADIOITALIANO — OTTIMIZZAZIONE CARICAMENTO
+
+Pacchetto pronto per Aruba, non ancora pubblicato. Non sono richieste migrazioni del database né SSH.
+
+CARICAMENTO IN DUE FASI
+1. Estrarre 01-assets.zip sul computer e caricarne il contenuto nella radice Laravel, mantenendo i percorsi public/build/assets/, public/build/.htaccess, public/images/ e public/. Attendere il completamento di tutti i trasferimenti.
+2. Solo dopo, estrarre 02-attivazione.zip e caricare prima public/build/manifest.json, poi resources/views/app.blade.php e infine app/Http/Controllers/ConfiguratorController.php.
+3. Se il sito usa una cartella pubblica separata, i percorsi public/ corrispondono alla document root già usata per gli altri aggiornamenti. Non aggiungere un secondo livello public.
+4. Conservare i vecchi asset durante il caricamento: le pagine già aperte possono ancora richiederli. Non caricare public/hot.
+5. Dalla Dashboard premere “Aggiorna database” per svuotare le cache Laravel/PHP con il flusso già presente. Non sono aggiunte migrazioni.
+6. Riaprire la homepage con ricarica completa. Dopo il caricamento è necessario verificare online Content-Encoding: gzip per i JS e Cache-Control: public, max-age=31536000, immutable per gli asset con hash. Il manifest non deve essere immutable.
+
+FILE
+FILE-DA-CARICARE.json contiene i percorsi esatti divisi per fase. I due ZIP contengono solo file runtime; non caricare output, test, .env, database o node_modules.
+
+MODIFICHE
+- Homepage ItalianHome separata dal configuratore completo: mantiene gli stessi componenti per grafica, offerte, menu e footer, gli stessi collegamenti e l’evento statistiche configurator_entered con lingua it.
+- Configuratore e layout amministrativi caricati solo quando richiesti; template del preventivo caricato alla generazione.
+- Immagine principale richiesta subito tramite preload nell’HTML iniziale.
+- Logo e favicon ridimensionati per l’uso web. Gli originali restano disponibili per documenti e altri usi.
+- Compressione e cache limitate a public/build/.htaccess. Il .htaccess principale del sito non viene sostituito. La regola viene rigenerata nelle build future da resources/deploy/build.htaccess tramite vite.config.js.
+- Cache lunga solo sui file con hash; HTML, dati personali e manifest non ricevono questa regola.
+
+RISULTATI E CONTROLLI
+- JS iniziale osservato sul sito precedente: circa 745 KB non compressi. Nuova homepage: circa 342 KB non compressi, circa 119 KB gzip. Il manifest conferma che configuratore, layout amministrativo e template preventivo sono esclusi dalle dipendenze iniziali della homepage.
+- Logo: circa 914 KB → 3,6 KB; favicon: circa 618 KB → 5,3 KB.
+- Build di produzione riuscita. Restano soltanto avvisi sulle annotazioni PURE di una dipendenza, senza errori.
+- Regole Apache verificate con un’istanza locale: JS restituito realmente gzip, contenuto decodificato identico, cache immutable sugli asset e assente sul manifest.
+- 34 test PHP passati. Due test sulle statistiche falliscono anche caricando il controller originale: gestione IP proxy e conteggio checkout. Non sono stati modificati in questa attività.
+- Browser: homepage → configuratore, pagina contatti e login verificati; nessuna eccezione JavaScript. Evento statistiche verificato, senza inviarlo realmente durante il collaudo. Anteprima in ANTEPRIMA-HOME.png.
+- I tempi localhost non sono una previsione dei tempi su Aruba: la conferma finale richiede una nuova misura dopo il caricamento.
+
+CANARIO
+AutoRadioCanario è un tema Shopify separato: nessuna modifica è stata applicata al tema o alle sue app. Il tema non è presente in questo repository. Per intervenire su ricerca, recensioni e tracciamenti serve la sorgente del tema o il relativo accesso.
+
+RIPRISTINO
+Prima del caricamento salvare una copia dei tre file della fase 2 e dell’eventuale public/build/.htaccess già presente sul server. Per tornare alla versione precedente ripristinare manifest, vista e controller insieme, lasciando i vecchi asset disponibili. Se solo la distribuzione degli asset restituisce errori 500, ripristinare o rimuovere il nuovo public/build/.htaccess e segnalarlo per la verifica hosting.
