@@ -1,0 +1,17 @@
+Caricare il contenuto di aruba-post-import.zip nella radice Laravel su Aruba mantenendo i percorsi. Il pacchetto contiene soltanto:
+
+public/images/vehicles-dark/peugeot-partner-2019-2024.webp
+public/images/vehicles-dark/opel-combo-2019-2024.webp
+
+Poi premere “Aggiorna database” e ricaricare la Dashboard. Non servono SSH, migrazioni nuove o una build frontend. Il resolver già presente rileva i nuovi file e li riusa per tutti gli anni 2019–2024; la lista dei file aggiorna anche la chiave della cache delle mappature. Le immagini delle generazioni precedenti restano invariate.
+
+Non caricare test, database locale, .env, output o i documenti di verifica.
+
+RISULTATI
+- Due fotografie WEBP 1536×1024: Peugeot Partner K9 e Opel Combo E, con frontali specifici dei rispettivi marchi. Generazione con imagegen integrato; prompt in PROMPT-IMMAGINI.md.
+- Nessuna traduzione mancante nel database locale: 564 prodotti (428 schermi, 118 camere, 18 altoparlanti) hanno già titoli e descrizioni IT/EN. Tutte le 564 descrizioni locali trovano sorgenti corrispondenti nei cataloghi IT/EN. Nessun originale spagnolo modificato e nessun aggiornamento delle traduzioni necessario.
+- Tutti i 12 JSON di titoli/descrizioni delle tre categorie sono validi. Non occorre ricaricarli: non sono stati modificati in questa attività.
+- 27 test passati, 502 asserzioni. Verificati risoluzione delle nuove immagini per ogni anno 2019–2024, mantenimento della fotografia Partner precedente, gestione di un prodotto multimarche e attività azzerate nella Dashboard dopo “Aggiorna database”.
+- Passano anche i test di reimportazione: descrizione originale conservata, traduzioni mantenute a sorgente invariato e invalidate quando cambia.
+- Dashboard locale: zero immagini mancanti e zero associazioni veicolo non interpretabili.
+- Integrità WEBP verificata, originali locali invariati tramite hash, git diff --check superato.

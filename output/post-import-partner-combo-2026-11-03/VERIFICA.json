@@ -1,0 +1,28 @@
+{
+  "date": "2026-11-03",
+  "image_generator": "imagegen built-in",
+  "image_format": "WEBP",
+  "image_dimensions": [
+    1536,
+    1024
+  ],
+  "files": [
+    "public/images/vehicles-dark/peugeot-partner-2019-2024.webp",
+    "public/images/vehicles-dark/opel-combo-2019-2024.webp"
+  ],
+  "catalogs_valid": 12,
+  "local_products": {
+    "screen": 428,
+    "camera": 118,
+    "speaker": 18
+  },
+  "local_missing_translations": 0,
+  "matching_description_translations": 1128,
+  "spanish_originals_unchanged": true,
+  "catalog_changes": false,
+  "tests_passed": 27,
+  "assertions": 502,
+  "dashboard_tasks_cleared_in_test": true,
+  "local_missing_images": 0,
+  "local_unresolved_vehicles": 0
+}

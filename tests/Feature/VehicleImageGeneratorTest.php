@@ -11,6 +11,33 @@ class VehicleImageGeneratorTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_partner_and_combo_images_clear_multibrand_dashboard_tasks(): void
+    {
+        \Illuminate\Support\Facades\Http::preventStrayRequests();
+        config(['services.openai.api_key' => null]);
+        ConfiguratorProduct::create([
+            'handle' => 'partner-combo-post-import', 'category' => 'screen',
+            'title' => 'Radio original', 'title_it' => 'Radio italiana', 'title_en' => 'English radio',
+            'brand' => 'PEUGEOT | OPEL', 'model' => '1:Partner | 2:Combo',
+            'year_from' => 2019, 'year_to' => 2024,
+        ]);
+        $resolver = app(\App\Services\VehicleImageResolver::class);
+        foreach (['PEUGEOT' => 'Partner', 'OPEL' => 'Combo'] as $brand => $model) {
+            foreach (range(2019, 2024) as $year) {
+                $this->assertSame(strtolower($brand.'-'.$model).'-2019-2024.webp', $resolver->resolveFilename($brand, $model, $year));
+            }
+        }
+        $this->assertSame('peugeot-partner-2002-2019.webp', $resolver->resolveFilename('PEUGEOT', 'Partner', 2008));
+        $this->assertCount(0, app(VehicleImageGenerator::class)->missingVehicles());
+        $this->actingAs(\App\Models\User::factory()->create(['is_admin' => true]))
+            ->post(route('dashboard.database.migrate'))->assertRedirect()->assertSessionHasNoErrors();
+        $this->get(route('dashboard'))->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->where('postImportTasks.translationCount', 0)
+            ->where('postImportTasks.descriptionTranslationCount', 0)
+            ->where('postImportTasks.imageCount', 0)
+            ->where('postImportTasks.vehicleDataIssueCount', 0));
+    }
+
     public function test_october_22_volkswagen_images_clear_missing_vehicle_tasks(): void
     {
         $resolver = app(\App\Services\VehicleImageResolver::class);
