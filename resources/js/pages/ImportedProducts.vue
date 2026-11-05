@@ -100,7 +100,7 @@ const saveVehicle = () => {
 };
 const titleProduct = ref<(typeof props.products.data)[number] | null>(null);
 const titlesOpen = ref(false);
-const titleForm = useForm({ title_it: '', title_en: '' });
+const titleForm = useForm({ title: '', title_it: '', title_en: '' });
 const variantProduct = ref<(typeof props.products.data)[number] | null>(null);
 const variantsOpen = ref(false);
 const variantForm = useForm({ variants: [] as Array<{ id: number; price: string }> });
@@ -151,6 +151,7 @@ const saveVariants = () => {
 const startTitleEdit = (product: (typeof props.products.data)[number]) => {
     titleProduct.value = product;
     titleForm.clearErrors();
+    titleForm.title = product.title;
     titleForm.title_it = product.title_it ?? '';
     titleForm.title_en = product.title_en ?? '';
     titlesOpen.value = true;
@@ -447,6 +448,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
         <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-2xl" @interact-outside="titleForm.processing && $event.preventDefault()" @escape-key-down="titleForm.processing && $event.preventDefault()">
             <DialogHeader><DialogTitle>Modifica titolo</DialogTitle><DialogDescription>{{ titleProduct?.title }}</DialogDescription></DialogHeader>
             <form class="grid gap-4" @submit.prevent="saveTitles">
+                <label class="grid gap-1 text-sm">Spagnolo<textarea v-model="titleForm.title" required rows="3" maxlength="255" class="w-full rounded-lg border border-sidebar-border/70 bg-background p-3" :disabled="titleForm.processing" /></label>
                 <label class="grid gap-1 text-sm">Italiano<textarea v-model="titleForm.title_it" rows="3" maxlength="1000" class="w-full rounded-lg border border-sidebar-border/70 bg-background p-3" :disabled="titleForm.processing" /></label>
                 <label class="grid gap-1 text-sm">Inglese<textarea v-model="titleForm.title_en" rows="3" maxlength="1000" class="w-full rounded-lg border border-sidebar-border/70 bg-background p-3" :disabled="titleForm.processing" /></label>
                 <p v-for="(error, key) in titleForm.errors" :key="key" role="alert" class="text-sm text-red-400">{{ error }}</p>

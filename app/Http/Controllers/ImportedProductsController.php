@@ -71,10 +71,15 @@ class ImportedProductsController extends Controller
         return back()->with('status', 'Prezzi delle varianti aggiornati.');
     }
 
-    private function sourceUrl(?string $url): ?string
+    private function sourceUrl(ConfiguratorProduct $product): ?string
     {
-        return $url && filter_var($url, FILTER_VALIDATE_URL) && in_array(parse_url($url, PHP_URL_SCHEME), ['https', 'http'], true)
-            && ! parse_url($url, PHP_URL_USER) && ! parse_url($url, PHP_URL_PASS) ? $url : null;
+        $urls = [$product->meta['autogenesi']['source_url'] ?? null, $product->meta['source_url'] ?? null];
+        if (preg_match('/-ae-([0-9]+)$/', $product->handle, $match)) $urls[] = 'https://es.aliexpress.com/item/'.$match[1].'.html';
+        foreach ($urls as $url) {
+            if (is_string($url) && filter_var($url, FILTER_VALIDATE_URL) && in_array(parse_url($url, PHP_URL_SCHEME), ['https', 'http'], true)
+                && ! parse_url($url, PHP_URL_USER) && ! parse_url($url, PHP_URL_PASS)) return $url;
+        }
+        return null;
     }
 
     private function productImages(ConfiguratorProduct $product): array
@@ -125,16 +130,18 @@ class ImportedProductsController extends Controller
     public function updateTitles(Request $request, ConfiguratorProduct $product): RedirectResponse
     {
         $validated = $request->validate([
+            'title' => ['sometimes', 'required', 'string', 'max:255'],
             'title_it' => ['nullable', 'string', 'max:1000'],
             'title_en' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $product->update([
+            ...(array_key_exists('title', $validated) ? ['title' => trim($validated['title'])] : []),
             'title_it' => filled($validated['title_it'] ?? null) ? trim($validated['title_it']) : null,
             'title_en' => filled($validated['title_en'] ?? null) ? trim($validated['title_en']) : null,
         ]);
 
-        return back()->with('status', 'Traduzioni del titolo aggiornate.');
+        return back()->with('status', 'Titoli aggiornati.');
     }
 
     public function updateDescription(Request $request, ConfiguratorProduct $product): RedirectResponse
@@ -202,7 +209,7 @@ class ImportedProductsController extends Controller
                     'sku' => $variant->sku,
                     'price' => $variant->price,
                 ]),
-                'source_url' => $this->sourceUrl($product->meta['autogenesi']['source_url'] ?? null),
+                'source_url' => $this->sourceUrl($product),
                 'image_url' => $product->image_url,
                 'images' => $this->productImages($product),
                 'dashboard_image_url' => $product->meta['original_dashboard_images'][0]['url'] ?? null,

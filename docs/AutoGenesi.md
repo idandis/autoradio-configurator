@@ -268,3 +268,6 @@ Tutti gli Excel esportano Status = Active, sia dalle bozze sia dai prodotti impo
 
 ### Recupero migrazione batches su MySQL Aruba
 La migrazione 2026_11_04_180000 rileva tipo e attributo unsigned di users.id e li applica a autogenesi_batches.user_id, senza modificare users. Può essere rieseguita dopo un errore DDL MySQL: riutilizza tabelle esistenti e aggiunge le foreign key mancanti conservando i dati. Per un aggiornamento fallito in produzione sostituire il file della migrazione e ripremere Aggiorna database. Verificato in SQLite il recupero e mediante metadata simulati i tipi INT/BIGINT MySQL; nessuna connessione al database remoto effettuata.
+
+### Link fornitore dopo import Excel
+Prodotti importati mostra il link salvato in meta.autogenesi.source_url o meta.source_url. Per i prodotti AutoGenesi AliExpress il cui Excel non contiene il metafield fornitore, recupera il link dall’ID nel suffisso -ae-ID dell’Handle. Nessuna colonna aggiunta all’Excel Shopify e nessun link inventato per i prodotti di altri siti.

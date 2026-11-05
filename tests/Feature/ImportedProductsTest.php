@@ -233,4 +233,31 @@ class ImportedProductsTest extends TestCase
         $this->actingAs(User::factory()->create(['is_admin' => false]))->get($url.'?date=2026-11-05')->assertForbidden();
     }
 
+    public function test_supplier_link_is_recovered_from_aliexpress_handle_after_excel_import(): void
+    {
+        ConfiguratorProduct::create(['handle' => 'kia-stonic-ae-1005012798484336', 'category' => 'screen', 'title' => 'Radio', 'meta' => []]);
+        ConfiguratorProduct::create(['handle' => 'generic-web-91234', 'category' => 'screen', 'title' => 'Other', 'meta' => ['autogenesi' => ['source_url' => 'https://supplier.example.com/radio']]]);
+        ConfiguratorProduct::create(['handle' => 'no-supplier-link', 'category' => 'screen', 'title' => 'No link']);
+        $this->actingAs(User::factory()->create(['is_admin' => true]))->get(route('imported-products.index'))
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->where('products.data', function ($rows) {
+                $rows = collect($rows)->keyBy('handle');
+                return $rows['kia-stonic-ae-1005012798484336']['source_url'] === 'https://es.aliexpress.com/item/1005012798484336.html'
+                    && $rows['generic-web-91234']['source_url'] === 'https://supplier.example.com/radio'
+                    && $rows['no-supplier-link']['source_url'] === null;
+            }));
+    }
+
+    public function test_admin_can_edit_spanish_italian_and_english_titles_together(): void
+    {
+        $p = ConfiguratorProduct::create(['handle' => 'three-languages', 'category' => 'screen', 'title' => 'Título anterior']);
+        $this->actingAs(User::factory()->create(['is_admin' => true]))->patch(route('imported-products.titles', $p), [
+            'title' => 'Autoradio para Volvo XC40', 'title_it' => 'Autoradio per Volvo XC40', 'title_en' => 'Car radio for Volvo XC40',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('Autoradio para Volvo XC40', $p->fresh()->title);
+        $this->assertSame('Autoradio per Volvo XC40', $p->fresh()->title_it);
+        $this->assertSame('Car radio for Volvo XC40', $p->fresh()->title_en);
+        $this->patch(route('imported-products.titles', $p), ['title' => '', 'title_it' => '', 'title_en' => ''])->assertSessionHasErrors('title');
+        $this->assertSame('Autoradio para Volvo XC40', $p->fresh()->title);
+    }
+
 }
