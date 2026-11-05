@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8"><title>AutoGenesi</title><style>
+body{font:14px system-ui;width:320px;padding:16px;background:#111;color:#eee}button{padding:12px;border:0;border-radius:8px;width:100%;cursor:pointer}p{line-height:1.5}#status{white-space:pre-wrap}button:disabled{opacity:.5}
+</style></head><body>
+<h2>AutoGenesi</h2>
+<p>Apri una scheda prodotto AliExpress o di un altro negozio con prezzi in euro. Espandi descrizione e specifiche prima di acquisire.</p>
+<button id="enable">Abilita altri siti</button>
+<p>Per altri negozi, abilita l’accesso alle immagini. Sono supportate schede con dati prodotto strutturati (JSON-LD).</p>
+<button id="capture">Acquisisci questo prodotto</button>
+<p id="status" role="status">Al termine scarica un file JSON da caricare in AutoGenesi. Puoi chiudere il popup: l’acquisizione continua sulla scheda aperta.</p>
+<p>Per interrompere, chiudi la scheda prodotto.</p>
+<script src="popup.js"></script></body></html>

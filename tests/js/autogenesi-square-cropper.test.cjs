@@ -1,0 +1,50 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { parse, compileScript } = require('@vue/compiler-sfc');
+const ts = require('typescript');
+const { chromium } = require('playwright');
+
+test('crop selector stays square when dragged and resized and emits natural-pixel coordinates', async () => {
+  const root = path.resolve(__dirname, '../..');
+  const sfc = parse(fs.readFileSync(path.join(root, 'resources/js/components/SquareImageCropper.vue'), 'utf8'), { filename: 'SquareImageCropper.vue' });
+  const compiled = compileScript(sfc.descriptor, { id: 'crop-test', inlineTemplate: true });
+  let script = ts.transpileModule(compiled.content, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } }).outputText;
+  script = script.replace(/import\s*\{([^}]+)\}\s*from\s*['"]vue['"];?/g, (_, imports) => `const {${imports.replace(/\s+as\s+/g, ': ')}} = Vue;`).replace('export default', 'window.CropComponent =');
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'public/build/manifest.json'), 'utf8'));
+  const css = fs.readFileSync(path.join(root, 'public/build', manifest['resources/css/app.css'].file), 'utf8');
+  const browser = await chromium.launch({ executablePath: process.env.AUTOGENESI_CHROME || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1200, height: 1000 } });
+    await page.setContent(`<style>${css}</style><div id="app"></div>`);
+    await page.addScriptTag({ path: path.join(root, 'node_modules/vue/dist/vue.global.js') });
+    await page.addScriptTag({ content: script });
+    await page.evaluate(() => {
+      const src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="600"><rect width="1000" height="600" fill="red"/></svg>');
+      Vue.createApp({ render: () => Vue.h(window.CropComponent, { src, busy: false, onSave: rect => { window.savedRect = rect; } }) }).mount('#app');
+    });
+    const selection = page.getByRole('group', { name: 'Area quadrata: trascina o usa le frecce' });
+    await selection.waitFor();
+    const before = await selection.boundingBox();
+    assert.ok(Math.abs(before.width - before.height) < 1);
+    await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(before.x + before.width / 2 + 40, before.y + before.height / 2 + 20);
+    await page.mouse.up();
+    const moved = await selection.boundingBox();
+    assert.ok(moved.x > before.x && moved.y > before.y);
+    const handle = await page.getByRole('button', { name: 'Ridimensiona quadrato' }).boundingBox();
+    await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(handle.x - 40, handle.y - 40);
+    await page.mouse.up();
+    const resized = await selection.boundingBox();
+    assert.ok(resized.width < moved.width);
+    assert.ok(Math.abs(resized.width - resized.height) < 1);
+    await page.getByRole('button', { name: 'Applica taglio' }).click();
+    const rect = await page.evaluate(() => window.savedRect);
+    assert.ok(Number.isInteger(rect.x) && Number.isInteger(rect.y) && Number.isInteger(rect.size));
+    assert.ok(rect.x >= 0 && rect.y >= 0 && rect.x + rect.size <= 1000 && rect.y + rect.size <= 600);
+  } finally { await browser.close(); }
+});

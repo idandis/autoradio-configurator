@@ -72,6 +72,7 @@ const mainNavItems: NavItem[] = [
     { title: 'Statistiche', href: '/configuration-statistics', icon: Activity },
     { title: 'Visitatori', href: '/visitor-statistics', icon: UserRoundSearch },
     { title: 'Assistente WhatsApp', href: '/dashboard/whatsapp', icon: MessageCircle },
+    { title: 'AutoGenesi · Bozze', href: '/autogenesi', icon: PackageSearch },
 ];
 
 const footerNavItems: NavItem[] = [

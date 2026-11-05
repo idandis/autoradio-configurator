@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Auth\PasswordController;
+use App\Http\Controllers\AutogenesiController;
 use App\Http\Controllers\BrandsController;
 use App\Http\Controllers\ConfigurationStatisticController;
 use App\Http\Controllers\ConfigurationStatisticsController;
@@ -16,17 +17,20 @@ use App\Http\Controllers\InstallationZonesController;
 use App\Http\Controllers\ItalianCheckoutController;
 use App\Http\Controllers\ItalianCheckoutMaintenanceController;
 use App\Http\Controllers\ItalianOrdersController;
+use App\Http\Controllers\ItalianStorePageController;
 use App\Http\Controllers\MissingVehicleRequestsController;
 use App\Http\Controllers\ModelsController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\QuoteNumberController;
 use App\Http\Controllers\Settings\SecurityController;
 use App\Http\Controllers\SharedConfigurationController;
-use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\StockProductsController;
+use App\Http\Controllers\StripeWebhookController;
 use App\Http\Controllers\VisitorStatisticsController;
 use App\Http\Controllers\WhatsAppAssistantController;
+use App\Http\Controllers\WhatsAppChatsController;
 use Illuminate\Foundation\Application;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -39,7 +43,10 @@ use Inertia\Inertia;
     ]);
 });*/
 
-Route::match(['get', 'post'], '/checkout/italiano/{path?}', function (\Illuminate\Http\Request $request, ?string $path = null) {
+Route::get('/storage/autogenesi/catalog/{source}/{filename}', \App\Http\Controllers\AutogenesiPublicImageController::class)
+    ->where(['source' => '[0-9]+', 'filename' => '[a-f0-9]{64}\\.(?:png|jpg|webp)'])->name('autogenesi.public-image');
+
+Route::match(['get', 'post'], '/checkout/italiano/{path?}', function (Request $request, ?string $path = null) {
     $path = strtr($path ?? '', ['preventivo/' => 'quote/', '/conferma' => '/confirmation', '/pagamento' => '/payment']);
     $query = $request->getQueryString();
 
@@ -62,7 +69,7 @@ Route::middleware('extra-eu')->group(function () {
     Route::get('/', [ConfiguratorController::class, 'home'])->name('home');
     Route::get('/home-beta', [ConfiguratorController::class, 'homeBeta'])->name('home.beta');
     Route::redirect('/marche', '/configurator?lang=it&mode=specific&pick=brand')->name('store.brands');
-    Route::get('/{slug}', \App\Http\Controllers\ItalianStorePageController::class)
+    Route::get('/{slug}', ItalianStorePageController::class)
         ->whereIn('slug', ['chi-siamo', 'privacy', 'resi-e-rimborsi', 'termini-del-servizio', 'spedizioni', 'contatti', 'note-legali'])
         ->name('store.page');
 
@@ -126,12 +133,12 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');
     Route::get('/dashboard/whatsapp', [WhatsAppAssistantController::class, 'index'])->name('whatsapp-assistant.index');
     Route::put('/dashboard/whatsapp', [WhatsAppAssistantController::class, 'update'])->name('whatsapp-assistant.update');
-    Route::get('/dashboard/whatsapp/chats', [\App\Http\Controllers\WhatsAppChatsController::class, 'index'])->name('whatsapp-chats.index');
-    Route::get('/dashboard/whatsapp/chats/labels', [\App\Http\Controllers\WhatsAppChatsController::class, 'labels'])->name('whatsapp-chats.labels');
-    Route::post('/dashboard/whatsapp/chats/sync', [\App\Http\Controllers\WhatsAppChatsController::class, 'sync'])->middleware('throttle:60,1')->name('whatsapp-chats.sync');
-    Route::delete('/dashboard/whatsapp/chats', [\App\Http\Controllers\WhatsAppChatsController::class, 'destroyAll'])->name('whatsapp-chats.destroy-all');
-    Route::delete('/dashboard/whatsapp/chats/{chat}', [\App\Http\Controllers\WhatsAppChatsController::class, 'destroy'])->whereNumber('chat')->name('whatsapp-chats.destroy');
-    Route::patch('/dashboard/whatsapp/chats/{chat}', [\App\Http\Controllers\WhatsAppChatsController::class, 'update'])->whereNumber('chat')->name('whatsapp-chats.update');
+    Route::get('/dashboard/whatsapp/chats', [WhatsAppChatsController::class, 'index'])->name('whatsapp-chats.index');
+    Route::get('/dashboard/whatsapp/chats/labels', [WhatsAppChatsController::class, 'labels'])->name('whatsapp-chats.labels');
+    Route::post('/dashboard/whatsapp/chats/sync', [WhatsAppChatsController::class, 'sync'])->middleware('throttle:60,1')->name('whatsapp-chats.sync');
+    Route::delete('/dashboard/whatsapp/chats', [WhatsAppChatsController::class, 'destroyAll'])->name('whatsapp-chats.destroy-all');
+    Route::delete('/dashboard/whatsapp/chats/{chat}', [WhatsAppChatsController::class, 'destroy'])->whereNumber('chat')->name('whatsapp-chats.destroy');
+    Route::patch('/dashboard/whatsapp/chats/{chat}', [WhatsAppChatsController::class, 'update'])->whereNumber('chat')->name('whatsapp-chats.update');
     Route::get('/dashboard/whatsapp/status', [WhatsAppAssistantController::class, 'status'])->name('whatsapp-assistant.status');
     Route::post('/dashboard/whatsapp/preview', [WhatsAppAssistantController::class, 'preview'])->middleware('throttle:10,1')->name('whatsapp-assistant.preview');
     Route::get('/dashboard/whatsapp/quotes/{id}/pdf', [WhatsAppAssistantController::class, 'quotePdf'])->whereUuid('id')->name('whatsapp-assistant.quote-pdf');
@@ -160,6 +167,37 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/models/edit', [ModelsController::class, 'edit'])->name('models.edit');
     Route::put('/models', [ModelsController::class, 'update'])->name('models.update');
     Route::get('/imported-products', ImportedProductsController::class)->name('imported-products.index');
+    Route::get('/autogenesi', [AutogenesiController::class, 'index'])->name('autogenesi.index');
+    Route::get('/autogenesi/chrome-extension', [AutogenesiController::class, 'chromeExtension'])->name('autogenesi.chrome-extension');
+    Route::get('/autogenesi/export-all', [AutogenesiController::class, 'exportAll'])->name('autogenesi.export-all');
+    Route::post('/autogenesi/import-all-configurator', [AutogenesiController::class, 'importAllConfigurator'])->name('autogenesi.import-all-configurator');
+    Route::post('/autogenesi/{product}/import-configurator', [AutogenesiController::class, 'importConfigurator'])->whereNumber('product')->name('autogenesi.import-configurator');
+    Route::post('/autogenesi/import-chrome', [AutogenesiController::class, 'importChrome'])->middleware('throttle:autogenesi')->name('autogenesi.import-chrome');
+    Route::post('/autogenesi/stop', [AutogenesiController::class, 'stopAll'])->name('autogenesi.stop');
+    Route::post('/autogenesi/search', [AutogenesiController::class, 'search'])->middleware('throttle:autogenesi')->name('autogenesi.search');
+    Route::delete('/autogenesi/search', [AutogenesiController::class, 'clearSearch'])->name('autogenesi.clear-search');
+    Route::post('/autogenesi/batches', [AutogenesiController::class, 'importList'])->middleware('throttle:autogenesi')->name('autogenesi.import-list');
+    Route::post('/autogenesi/browser', [AutogenesiController::class, 'openBrowser'])->name('autogenesi.open-browser');
+    Route::delete('/autogenesi/batches/{batch}/items/{item}', [AutogenesiController::class, 'deleteBatchItems'])->whereNumber(['batch', 'item'])->name('autogenesi.delete-batch-item');
+    Route::delete('/autogenesi/batches/{batch}/completed', [AutogenesiController::class, 'deleteBatchItems'])->whereNumber('batch')->name('autogenesi.delete-completed-items');
+    Route::post('/autogenesi/batches/{batch}/items/{item}/retry', [AutogenesiController::class, 'retryItem'])->whereNumber(['batch', 'item'])->name('autogenesi.retry-item');
+    Route::post('/autogenesi/batches/{batch}/retry', [AutogenesiController::class, 'retryList'])->whereNumber('batch')->name('autogenesi.retry-list');
+    Route::delete('/autogenesi/{product}', [AutogenesiController::class, 'destroy'])->whereNumber('product')->name('autogenesi.destroy');
+    Route::post('/autogenesi/import', [AutogenesiController::class, 'store'])->middleware('throttle:autogenesi')->name('autogenesi.import');
+    Route::patch('/autogenesi/{product}', [AutogenesiController::class, 'update'])->whereNumber('product')->name('autogenesi.update');
+    Route::post('/autogenesi/{product}/description', [AutogenesiController::class, 'regenerate'])->whereNumber('product')->middleware('throttle:autogenesi')->name('autogenesi.description');
+    Route::delete('/autogenesi/{product}/variants', [AutogenesiController::class, 'destroyVariant'])->whereNumber('product')->name('autogenesi.destroy-variant');
+    Route::post('/autogenesi/{product}/dashboard-image', [AutogenesiController::class, 'generateDashboard'])->whereNumber('product')->middleware('throttle:autogenesi')->name('autogenesi.dashboard-image');
+    Route::patch('/autogenesi/{product}/images/layout', [AutogenesiController::class, 'imageLayout'])->whereNumber('product')->name('autogenesi.image-layout');
+    Route::get('/autogenesi/{product}/images/{index}', [AutogenesiController::class, 'image'])->whereNumber(['product', 'index'])->name('autogenesi.image');
+    Route::delete('/autogenesi/{product}/images/{index}', [AutogenesiController::class, 'removeImage'])->whereNumber(['product', 'index'])->name('autogenesi.remove-image');
+    Route::post('/autogenesi/{product}/images/{index}/ai', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.edit-image');
+    Route::post('/autogenesi/{product}/images', [AutogenesiController::class, 'uploadImages'])->whereNumber('product')->name('autogenesi.upload-images');
+    Route::post('/autogenesi/{product}/images/{index}/crop', [AutogenesiController::class, 'cropImage'])->whereNumber(['product', 'index'])->name('autogenesi.crop-image');
+    Route::post('/autogenesi/{product}/images/{index}/clean', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.clean-image');
+    Route::post('/autogenesi/{product}/images/{index}/white', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.white-image');
+    Route::post('/autogenesi/{product}/images/{index}/restore', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->name('autogenesi.restore-image');
+    Route::get('/autogenesi/{product}/export', [AutogenesiController::class, 'export'])->whereNumber('product')->name('autogenesi.export');
     Route::get('/customers', [CustomersController::class, 'index'])->name('customers.index');
     Route::post('/customers/import', [CustomersController::class, 'import'])->name('customers.import');
     Route::post('/customers/import-orders', [CustomersController::class, 'importOrders'])->name('customers.import-orders');
@@ -178,9 +216,12 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/missing-vehicle-requests', MissingVehicleRequestsController::class)->name('missing-vehicle-requests.index');
     Route::get('/missing-vehicle-requests/{missingVehicleRequest}/photo', [MissingVehicleRequestsController::class, 'photo'])->name('missing-vehicle-requests.photo');
     Route::delete('/missing-vehicle-requests/{missingVehicleRequest}', [MissingVehicleRequestsController::class, 'destroy'])->name('missing-vehicle-requests.destroy');
+    Route::get('/imported-products/export-shopify', [ImportedProductsController::class, 'exportShopify'])->name('imported-products.export-shopify');
     Route::patch('/imported-products/{product}/price', [ImportedProductsController::class, 'updatePrice'])->name('imported-products.price');
     Route::patch('/imported-products/{product}/variants', [ImportedProductsController::class, 'updateVariants'])->name('imported-products.variants');
     Route::patch('/imported-products/{product}/description', [ImportedProductsController::class, 'updateDescription'])->name('imported-products.description');
+    Route::patch('/imported-products/{product}/dashboard-image', [ImportedProductsController::class, 'updateDashboard'])->name('imported-products.dashboard-image');
+    Route::patch('/imported-products/{product}/vehicle', [ImportedProductsController::class, 'updateVehicle'])->name('imported-products.vehicle');
     Route::patch('/imported-products/{product}/titles', [ImportedProductsController::class, 'updateTitles'])->name('imported-products.titles');
     Route::delete('/imported-products/{product}', [ImportedProductsController::class, 'destroy'])->name('imported-products.destroy');
     Route::get('/installation-zones', [InstallationZonesController::class, 'index'])->name('installation-zones.index');

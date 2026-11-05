@@ -1,0 +1,20 @@
+AUTOGENESI - IMPORTAZIONE DAL TUO CHROME
+
+1. Estrai lo ZIP in una cartella permanente.
+2. Nel tuo Chrome normale apri chrome://extensions.
+3. Attiva Modalita sviluppatore e premi Carica estensione non pacchettizzata.
+4. Seleziona la cartella che contiene manifest.json.
+5. Apri un prodotto AliExpress o di un altro negozio HTTPS, con prezzi in euro. Per altri siti premi prima Abilita altri siti e concedi a Chrome l’accesso richiesto alle immagini.
+6. Espandi descrizione e specifiche; premi l'icona AutoGenesi e Acquisisci questo prodotto.
+7. Non modificare le varianti durante la raccolta. Al termine salva il file JSON.
+8. Su localhost, AutoGenesi > Importa dal tuo Chrome: carica il file, specifica vettura e anni, importa come bozza.
+
+Il prototipo legge solo la scheda scelta dopo un clic. Non legge cookie, password o altre schede; non avvia Chrome e non ricerca altri prodotti.
+Durante l'acquisizione seleziona le varianti disponibili, poi ripristina quella iniziale. Esclude le opzioni 360 e gli accessori venduti da soli.
+Massimo 12 combinazioni di varianti. AliExpress mantiene l’acquisizione dedicata; gli altri siti richiedono dati strutturati Product/JSON-LD, prezzo esatto in EUR, descrizione e almeno tre immagini. Se mancano dati essenziali viene mostrato un errore. Non tutti i siti espongono tutte le varianti. Le immagini vengono scaricate senza cookie o credenziali; se compare un blocco non vengono effettuati tentativi per superarlo.
+Per interrompere l'acquisizione nell'estensione chiudi la scheda prodotto. Il pulsante Ferma tutto di localhost controlla i processi locali e non questa estensione indipendente.
+Il pacchetto resta sul computer fino a quando lo carichi volontariamente in AutoGenesi. L'importazione usa la lettura AI gia configurata e le regole di prezzi, descrizioni, immagini e bozza privata.
+
+AGGIORNAMENTO: versione 0.2.1. Scarica di nuovo lo ZIP, sostituisci i file nella cartella installata e premi Ricarica su chrome://extensions.
+
+AliExpress: supportati anche prodotti senza selettore varianti (Versión única) e con una sola opzione fissa. Prezzi aggregati/intervalli, opzioni 360 e soli accessori restano esclusi.

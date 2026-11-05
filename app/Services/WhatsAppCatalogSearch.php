@@ -202,8 +202,7 @@ class WhatsAppCatalogSearch
                 }
             }
             if (! empty($vehicle['year']) && (! empty($vehicle['model']))) {
-                return $p->year_from !== null && $p->year_to !== null
-                    && $p->year_from <= $vehicle['year'] && $p->year_to >= $vehicle['year'];
+                return $p->supportsVehicleYear($vehicle['brand'] ?? '', $vehicle['model'], (int) $vehicle['year']);
             }
 
             return true;

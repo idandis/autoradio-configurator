@@ -14,6 +14,16 @@ use Inertia\Response;
 
 class ImportedProductsController extends Controller
 {
+    public function exportShopify(Request $request, \App\Services\ImportedProductsExport $exporter)
+    {
+        $data = $request->validate(['date' => ['required', 'date_format:Y-m-d']]);
+        try {
+            return response()->download($exporter->write($data['date']), 'prodotti-importati-'.$data['date'].'-shopify.xlsx');
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['export_date' => $e->getMessage()]);
+        }
+    }
+
     public function destroy(ConfiguratorProduct $product): RedirectResponse
     {
         DB::transaction(function () use ($product): void {
@@ -61,6 +71,51 @@ class ImportedProductsController extends Controller
         return back()->with('status', 'Prezzi delle varianti aggiornati.');
     }
 
+    private function productImages(ConfiguratorProduct $product): array
+    {
+        return collect([$product->image_url, ...($product->meta['gallery_images'] ?? []),
+            ...$product->variants->pluck('image_url')->all(),
+            ...array_column($product->meta['original_dashboard_images'] ?? [], 'url')])
+            ->filter(fn ($url) => is_string($url) && ((str_starts_with($url, '/') && ! str_starts_with($url, '//'))
+                || (filter_var($url, FILTER_VALIDATE_URL) && in_array(parse_url($url, PHP_URL_SCHEME), ['https', 'http'], true))))
+            ->unique()->values()->all();
+    }
+
+    public function updateDashboard(Request $request, ConfiguratorProduct $product): RedirectResponse
+    {
+        $data = $request->validate(['image_url' => ['present', 'nullable', 'string', 'max:4096']]);
+        DB::transaction(function () use ($product, $data) {
+            $current = ConfiguratorProduct::whereKey($product->id)->lockForUpdate()->firstOrFail();
+            $url = $data['image_url'];
+            if ($url !== null && ! in_array($url, $this->productImages($current), true)) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['image_url' => 'Scegli una delle immagini di questo prodotto.']);
+            }
+            $meta = $current->meta ?? [];
+            $meta['original_dashboard_images'] = $url === null ? [] : [['url' => $url, 'variant' => null]];
+            $current->update(['meta' => $meta]);
+        });
+
+        return back()->with('status', 'Foto cruscotto aggiornata.');
+    }
+
+    public function updateVehicle(Request $request, ConfiguratorProduct $product): RedirectResponse
+    {
+        $data = $request->validate([
+            'brand' => ['required', 'string', 'max:255'], 'model' => ['required', 'string', 'max:2000'],
+            'year_from' => ['required', 'integer', 'min:1', 'max:65535'],
+            'year_to' => ['required', 'integer', 'gte:year_from', 'max:65535'],
+        ]);
+        $data['brand'] = mb_strtoupper(trim($data['brand']));
+        $data['model'] = mb_strtoupper(trim($data['model']));
+        $entries = app(\App\Services\VehicleImageResolver::class)->vehicleEntries($data['brand'], $data['model']);
+        if (! $entries) throw \Illuminate\Validation\ValidationException::withMessages(['model' => 'Controlla le associazioni: ogni numero deve corrispondere a una marca.']);
+        $meta = $product->meta ?? [];
+        unset($meta['vehicle_compatibilities']);
+        $product->update($data + ['meta' => $meta]);
+
+        return back()->with('status', 'Compatibilità veicolo aggiornata.');
+    }
+
     public function updateTitles(Request $request, ConfiguratorProduct $product): RedirectResponse
     {
         $validated = $request->validate([
@@ -96,7 +151,7 @@ class ImportedProductsController extends Controller
         $search = trim($request->string('search')->toString());
 
         $products = ConfiguratorProduct::query()
-            ->with('variants:id,configurator_product_id,title,sku,option_value,price')
+            ->with('variants:id,configurator_product_id,title,sku,option_value,price,image_url')
             ->withCount('variants')
             ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])
             ->when(in_array($category, ['screen', 'camera', 'speaker', 'accessory'], true), function ($query) use ($category) {
@@ -142,9 +197,12 @@ class ImportedProductsController extends Controller
                     'price' => $variant->price,
                 ]),
                 'image_url' => $product->image_url,
+                'images' => $this->productImages($product),
+                'dashboard_image_url' => $product->meta['original_dashboard_images'][0]['url'] ?? null,
             ]);
 
         return Inertia::render('ImportedProducts', [
+            'importDates' => fn () => app(\App\Services\ImportedProductsExport::class)->dates(),
             'filters' => [
                 'category' => $category,
                 'search' => $search,

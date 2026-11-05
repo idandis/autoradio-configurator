@@ -1,0 +1,101 @@
+posizione_fonte,marca,modello,vendite,periodo,fonte
+1,Volkswagen,Golf,203123,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+2,Renault,Clio,184431,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+3,Opel,Corsa,142117,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+4,Peugeot,208,141673,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+5,Volkswagen,Tiguan,134791,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+6,Skoda,Octavia,130699,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+7,Ford,Focus,129811,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+8,Renault,Captur,125690,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+9,Volkswagen,Polo,125567,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+10,Toyota,Yaris,121903,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+11,Dacia,Sandero,119599,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+12,Ford,Fiesta,117420,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+13,Mercedes,Classe A,115397,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+14,Volkswagen,T-Roc,112610,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+15,Citroen,C3,107525,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+16,Peugeot,2008,104822,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+17,Toyota,Corolla,102215,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+18,Dacia,Duster,100156,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+19,Nissan,Qashqai,100144,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+20,Fiat,Panda,99772,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+21,Fiat,500,98418,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+22,Peugeot,3008,91172,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+23,Hyundai,Kona,85979,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+24,Volkswagen,T-Cross,82442,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+25,BMW,Serie 3,82152,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+26,MINI,Hatch,80296,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+27,SEAT,Leon,80101,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+28,Volkswagen,Passat,78899,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+29,Ford,Puma,78387,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+30,Toyota,C-HR,77441,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+31,Skoda,Fabia,72971,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+32,Volvo,XC40,72364,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+33,BMW,Serie 1,75257,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+34,Mercedes,GLC,70926,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+35,Opel,Crossland,69979,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+36,Hyundai,Tucson,67487,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+37,Audi,Q3,66138,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+38,Peugeot,308,65763,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+39,Audi,A3,64989,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+40,Toyota,RAV4,64150,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+41,Renault,Zoe,63350,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+42,Kia,Niro,63049,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+43,Mercedes,Classe C,62084,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+44,Toyota,Aygo,61340,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+45,SEAT,Arona,60775,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+46,BMW,X1,60715,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+47,Skoda,Karoq,59826,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+48,Audi,A4,59331,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+49,Ford,Kuga,56527,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+50,Citroen,C3 Aircross,56277,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+51,Tesla,Model 3,56168,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+52,Kia,Sportage,55275,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+53,Skoda,Kamiq,54743,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+54,Renault,Megane,53643,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+55,Renault,Twingo,53339,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+56,Kia,Ceed,52767,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+57,SEAT,Ateca,52590,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+58,Opel,Grandland X,52228,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+59,Skoda,Kodiaq,51286,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+60,Opel,Astra,50403,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+61,Volvo,XC60,49653,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+62,Mercedes,CLA,49582,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+63,Renault,Kadjar,49224,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+64,Citroen,C5 Aircross,49113,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+65,Hyundai,i20,48713,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+66,Mercedes,Classe E,48419,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+67,SEAT,Ibiza,47864,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+68,BMW,X3,45540,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+69,BMW,Serie 5,44360,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+70,Audi,Q2,44197,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+71,Skoda,Superb,42244,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+72,Audi,A1,42163,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+73,Nissan,Juke,41999,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+74,Fiat,500X,41625,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+75,Ford,EcoSport,41440,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+76,Audi,A6,41304,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+77,Kia,Stonic,40975,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+78,Jeep,Renegade,40419,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+79,Skoda,Scala,39620,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+80,Volkswagen,Up,39516,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+81,Peugeot,5008,38817,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+82,Fiat,Tipo,38756,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+83,Hyundai,i30,37723,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+84,Volvo,V60,37501,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+85,Kia,Picanto,37322,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+86,Suzuki,Swift,36724,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+87,Mazda,CX-30,36493,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+88,Hyundai,i10,36613,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+89,Audi,Q5,34789,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+90,Mercedes,GLA,33902,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+91,Kia,XCeed,33669,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+92,Volkswagen,Touran,33559,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+93,Mercedes,Classe B,33514,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+94,Peugeot,108,33215,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+95,Jeep,Compass,31525,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+96,Suzuki,Vitara,31444,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+97,MINI,Countryman,30782,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+98,Nissan,Micra,30657,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+99,Citroen,C1,30014,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/
+100,Mitsubishi,Space Star,29410,2020-01/2020-09,https://www.autonocion.com/top100-modelos-europa-9meses/

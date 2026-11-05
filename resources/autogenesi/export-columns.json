@@ -1,0 +1,23 @@
+[
+    "Title",
+    "Image Src",
+    "Option1 Value",
+    "Handle",
+    "ID",
+    "Variant ID",
+    "Type",
+    "Variant Price",
+    "Variant SKU",
+    "Body HTML",
+    "Price / Italia",
+    "Price / Resto del Mondo",
+    "Price / USA-CANADA",
+    "Price / spagna",
+    "Metafield: custom.radio_type [single_line_text_field]",
+    "Metafield: custom.dimensioni_schermo [single_line_text_field]",
+    "Metafield: custom.altavoces [single_line_text_field]",
+    "Metafield: custom.modello_auto [single_line_text_field]",
+    "Metafield: custom.anno [single_line_text_field]",
+    "Metafield: shopify.vehicle-coaxial-speaker-nominal-size [list.metaobject_reference]",
+    "Metafield: custom.foto_cruscotto_originale [list.file_reference]"
+]

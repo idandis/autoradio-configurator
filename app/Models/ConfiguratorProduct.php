@@ -37,6 +37,15 @@ class ConfiguratorProduct extends Model
         'price_min' => 'decimal:2',
     ];
 
+    public function supportsVehicleYear(string $brand, string $model, int $year): bool
+    {
+        $ranges = $this->meta['vehicle_compatibilities'] ?? [];
+        if (! $ranges) return $this->year_from !== null && $this->year_to !== null && $this->year_from <= $year && $this->year_to >= $year;
+        return collect($ranges)->contains(fn ($entry) => \Illuminate\Support\Str::slug($entry['brand']) === \Illuminate\Support\Str::slug($brand)
+            && \Illuminate\Support\Str::slug($entry['model']) === \Illuminate\Support\Str::slug($model)
+            && $entry['year_from'] <= $year && $entry['year_to'] >= $year);
+    }
+
     public function variants(): HasMany
     {
         return $this->hasMany(ConfiguratorVariant::class);

@@ -137,4 +137,100 @@ class ImportedProductsTest extends TestCase
 
         $this->assertModelExists($product);
     }
+    public function test_admin_can_edit_vehicle_and_multibrand_associations(): void
+    {
+        $p = ConfiguratorProduct::create(['handle' => 'vehicle-edit', 'category' => 'screen', 'title' => 'Radio', 'brand' => 'KIA', 'model' => 'STONIC', 'year_from' => 2020, 'year_to' => 2020]);
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->patch(route('imported-products.vehicle', $p), ['brand' => ' kia | hyundai ', 'model' => '1:stonic | 2:kona | 1:rio', 'year_from' => 2017, 'year_to' => 2026])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $fresh = $p->fresh();
+        $this->assertSame('KIA | HYUNDAI', $fresh->brand);
+        $this->assertSame('1:STONIC | 2:KONA | 1:RIO', $fresh->model);
+        $this->assertSame(2026, (int) $fresh->year_to);
+        $this->assertSame('Radio', $fresh->title);
+        $this->assertSame([
+            ['brand' => 'KIA', 'model' => 'STONIC'], ['brand' => 'HYUNDAI', 'model' => 'KONA'], ['brand' => 'KIA', 'model' => 'RIO'],
+        ], app(\App\Services\VehicleImageResolver::class)->vehicleEntries($fresh->brand, $fresh->model));
+    }
+
+    public function test_vehicle_edit_rejects_invalid_years_and_brand_indices_and_non_admins(): void
+    {
+        $p = ConfiguratorProduct::create(['handle' => 'vehicle-protected', 'category' => 'screen', 'title' => 'Radio', 'brand' => 'KIA', 'model' => 'STONIC']);
+        $data = ['brand' => 'KIA', 'model' => '1:STONIC', 'year_from' => 2020, 'year_to' => 2026];
+        $this->actingAs(User::factory()->create(['is_admin' => false]))->patch(route('imported-products.vehicle', $p), $data)->assertForbidden();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->patch(route('imported-products.vehicle', $p), array_replace($data, ['year_to' => 2019]))->assertSessionHasErrors('year_to');
+        $this->patch(route('imported-products.vehicle', $p), array_replace($data, ['model' => '2:KONA']))->assertSessionHasErrors('model');
+        $this->assertSame('STONIC', $p->fresh()->model);
+    }
+
+    public function test_admin_can_choose_change_and_clear_dashboard_from_product_images(): void
+    {
+        $p = ConfiguratorProduct::create(['handle' => 'dashboard-editor', 'category' => 'screen', 'title' => 'Radio',
+            'image_url' => '/storage/main.png', 'meta' => ['din' => '1DIN', 'gallery_images' => ['/storage/main.png', '/storage/dashboard.png']]]);
+        $p->variants()->create(['title' => '8GB', 'price' => 200, 'image_url' => '/storage/variant.png']);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->get(route('imported-products.index'))->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page
+            ->where('products.data.0.dashboard_image_url', null)
+            ->where('products.data.0.images', ['/storage/main.png', '/storage/dashboard.png', '/storage/variant.png']));
+        $url = route('imported-products.dashboard-image', $p);
+        $this->patch($url, ['image_url' => '/storage/dashboard.png'])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame([['url' => '/storage/dashboard.png', 'variant' => null]], $p->fresh()->meta['original_dashboard_images']);
+        $this->assertSame('1DIN', $p->fresh()->meta['din']);
+        $this->assertSame('/storage/main.png', $p->fresh()->image_url);
+        $this->patch($url, ['image_url' => '/storage/variant.png'])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame('/storage/variant.png', $p->fresh()->meta['original_dashboard_images'][0]['url']);
+        $this->patch($url, ['image_url' => null])->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame([], $p->fresh()->meta['original_dashboard_images']);
+    }
+
+    public function test_dashboard_selection_rejects_foreign_images_and_non_admins(): void
+    {
+        $p = ConfiguratorProduct::create(['handle' => 'dashboard-protected', 'category' => 'screen', 'title' => 'Radio', 'image_url' => '/storage/main.png']);
+        $url = route('imported-products.dashboard-image', $p);
+        $this->actingAs(User::factory()->create(['is_admin' => false]))->patch($url, ['image_url' => '/storage/main.png'])->assertForbidden();
+        $this->actingAs(User::factory()->create(['is_admin' => true]))->patch($url, ['image_url' => '/storage/another-product.png'])->assertSessionHasErrors('image_url');
+        $this->assertNull($p->fresh()->meta);
+    }
+
+    public function test_export_by_import_date_uses_italian_day_and_current_catalog_after_drafts_are_deleted(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $p = ConfiguratorProduct::create(['handle' => 'date-export', 'category' => 'screen', 'title' => 'Radio Kia Stonic', 'body_html' => '<p>Descrizione attuale</p>',
+            'brand' => 'KIA', 'model' => '1:STONIC', 'year_from' => 2017, 'year_to' => 2026, 'image_url' => '/storage/autogenesi/catalog/123/main.png',
+            'meta' => ['din' => '1DIN', 'autogenesi' => ['imported_at' => '2026-11-04T23:30:00+00:00'], 'gallery_images' => ['/storage/autogenesi/catalog/123/main.png', '/storage/autogenesi/catalog/123/dashboard.png']]]);
+        $p->variants()->create(['title' => '4GB 64GB', 'option_value' => '4GB 64GB', 'sku' => 'AE-123-1', 'price' => 299]);
+        $p->variants()->create(['title' => '8GB 128GB', 'option_value' => '8GB 128GB', 'sku' => 'AE-123-2', 'price' => 399]);
+        $p->update(['created_at' => '2025-01-01 12:00:00']);
+        ConfiguratorProduct::create(['handle' => 'other-date', 'category' => 'screen', 'title' => 'Other', 'meta' => ['imported_at' => '2026-11-05T23:30:00+00:00']]);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->get(route('imported-products.export-shopify', ['date' => '2026-11-05']))->assertDownload('prodotti-importati-2026-11-05-shopify.xlsx');
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load(\Illuminate\Support\Facades\Storage::disk('local')->path('imported-products/exports/prodotti-importati-2026-11-05-shopify.xlsx'));
+        $rows = $book->getSheetByName('Products')->toArray();
+        $this->assertSame(['Products'], $book->getSheetNames());
+        $headers = array_shift($rows);
+        $rows = array_map(fn ($row) => array_combine($headers, $row), $rows);
+        $this->assertCount(2, $rows);
+        $this->assertSame(['date-export', 'date-export'], array_column($rows, 'Handle'));
+        $this->assertSame('<p>Descrizione attuale</p>', $rows[0]['Body HTML']);
+        $this->assertNull($rows[1]['Body HTML']);
+        $this->assertSame(['299.00', '399.00'], array_column($rows, 'Variant Price'));
+        $this->assertSame('1:STONIC', $rows[0][\App\Services\AutogenesiTemplateExport::MODEL]);
+        $this->assertSame('https://www.autoradioitaliano.it/storage/autogenesi/catalog/123/main.png', $rows[0]['Image Src']);
+        $this->assertNotContains(\App\Services\AutogenesiTemplateExport::SOURCE, $headers);
+        $this->assertSame(['Draft', 'Draft'], array_column($rows, 'Status'));
+        $this->assertDatabaseCount('autogenesi_products', 0);
+    }
+
+    public function test_date_export_validates_date_empty_results_and_admin_access(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $url = route('imported-products.export-shopify');
+        $this->get($url.'?date=2026-02-30')->assertSessionHasErrors('date');
+        $this->get($url.'?date=2026-11-05')->assertSessionHasErrors('export_date');
+        $this->assertSame([], \Illuminate\Support\Facades\Storage::disk('local')->allFiles());
+        $this->actingAs(User::factory()->create(['is_admin' => false]))->get($url.'?date=2026-11-05')->assertForbidden();
+    }
+
 }

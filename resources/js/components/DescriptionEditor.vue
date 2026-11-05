@@ -33,5 +33,6 @@ watch([editor, () => props.modelValue], sync, { flush: 'post' });
 </template>
 
 <style scoped>
+.description-editor :deep(h2),.description-editor :deep(h3),.description-editor :deep(h4){margin:1em 0 .5em;font-weight:600}.description-editor :deep(h2){font-size:1.25em}.description-editor :deep(h3){font-size:1.125em}
 .description-editor :deep(p){margin:.6em 0}.description-editor :deep(ul){list-style:disc;padding-left:1.5em}.description-editor :deep(ol){list-style:decimal;padding-left:1.5em}.description-editor :deep(img){max-width:100%;height:auto}.description-editor :deep(a){text-decoration:underline}.description-editor :deep(table){max-width:100%}
 </style>

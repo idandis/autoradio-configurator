@@ -85,6 +85,9 @@ class ConfiguratorCsvImporter
 
         foreach ($rows as $row) {
             $mapped = $this->mapRow($headers, $row);
+            if (mb_strtolower(trim((string) $this->value($mapped, ['Status']))) === 'draft') {
+                throw new RuntimeException('Il file contiene prodotti in bozza: gestiscili nella sezione AutoGenesi prima di inserirli nel catalogo pubblico.');
+            }
             $productHandle = trim((string) $this->value($mapped, ['Handle', 'Product Handle']));
 
             if ($productHandle === '') {
@@ -156,6 +159,7 @@ class ConfiguratorCsvImporter
                     ] : []),
                 ];
 
+                $productData['meta']['imported_at'] = now()->toIso8601String();
                 $configProduct = ConfiguratorProduct::updateOrCreate(
                     ['handle' => $handle],
                     $productData,
@@ -486,18 +490,25 @@ class ConfiguratorCsvImporter
 
     private function resolveFileUrl(string $value, ?string $primaryImageUrl, array $galleryImages = []): string
     {
-        if ($value === '' || filter_var($value, FILTER_VALIDATE_URL)) return $value;
+        if ($value === '' || filter_var($value, FILTER_VALIDATE_URL)) {
+            return $value;
+        }
 
         $name = rawurldecode(basename((string) (parse_url($value, PHP_URL_PATH) ?? $value)));
         $stem = preg_quote(pathinfo($name, PATHINFO_FILENAME), '/');
         $ext = preg_quote(pathinfo($name, PATHINFO_EXTENSION), '/');
         $matches = collect($galleryImages)->filter(function ($url) use ($name, $stem, $ext) {
             $file = rawurldecode(basename((string) parse_url($url, PHP_URL_PATH)));
+
             return $file === $name || preg_match('/^'.$stem.'_[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\\.'.$ext.'$/i', $file);
         })->values();
         $exact = $matches->first(fn ($url) => rawurldecode(basename((string) parse_url($url, PHP_URL_PATH))) === $name);
-        if ($exact) return $exact;
-        if ($matches->count() === 1) return $matches->first();
+        if ($exact) {
+            return $exact;
+        }
+        if ($matches->count() === 1) {
+            return $matches->first();
+        }
 
         if ($value === '' || filter_var($value, FILTER_VALIDATE_URL)) {
             return $value;
@@ -839,7 +850,9 @@ class ConfiguratorCsvImporter
 
     private function refreshImageUrl(?string $url, string $revision): ?string
     {
-        if (! filled($url)) return $url;
+        if (! filled($url)) {
+            return $url;
+        }
         [$url, $fragment] = array_pad(explode('#', $url, 2), 2, null);
         $url = preg_replace('/([?&])ac_rev=[^&]*(?:&|$)/', '$1', $url);
         $url = rtrim($url, '?&');

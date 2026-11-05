@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "AutoGenesi \u00b7 Importa dal tuo Chrome",
+  "version": "0.2.1",
+  "description": "Acquisisce schede prodotto AliExpress e altri negozi HTTPS, con immagini e descrizione, per AutoGenesi locale.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://*.alicdn.com/*",
+    "https://*.aliexpress-media.com/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "optional_host_permissions": [
+    "https://*/*"
+  ]
+}

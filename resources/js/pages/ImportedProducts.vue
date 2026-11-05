@@ -6,6 +6,8 @@ import DescriptionEditor from '@/components/DescriptionEditor.vue';
 import StockProductsManager from '@/components/StockProductsManager.vue';
 
 const props = defineProps<{
+    importDates?: string[];
+    errors?: Record<string, string>;
     filters: {
         category: string;
         search: string;
@@ -30,6 +32,8 @@ const props = defineProps<{
             variants_count: number;
             variants: Array<{ id: number; title: string | null; sku: string | null; price: string | null }>;
             image_url: string | null;
+            images: string[];
+            dashboard_image_url: string | null;
         }>;
         links: Array<{
             url: string | null;
@@ -39,6 +43,7 @@ const props = defineProps<{
     };
 }>();
 
+const exportDate = ref(props.importDates?.[0] || '');
 const filters = reactive({
     category: props.filters.category || '',
     search: props.filters.search || '',
@@ -47,6 +52,51 @@ const editingPrice = ref<number | null>(null);
 const priceDraft = ref('');
 const savingPrice = ref(false);
 const deletingProduct = ref<number | null>(null);
+const dashboardProduct = ref<(typeof props.products.data)[number] | null>(null);
+const dashboardOpen = ref(false);
+const dashboardForm = useForm({ image_url: null as string | null });
+const openDashboard = (product: (typeof props.products.data)[number]) => {
+    dashboardProduct.value = product;
+    dashboardForm.clearErrors();
+    dashboardForm.image_url = product.dashboard_image_url;
+    dashboardOpen.value = true;
+};
+const saveDashboard = () => {
+    if (!dashboardProduct.value || dashboardForm.processing) return;
+    dashboardForm.patch(`/imported-products/${dashboardProduct.value.id}/dashboard-image`, { preserveScroll: true, onSuccess: () => { dashboardOpen.value = false; } });
+};
+const vehicleProduct = ref<(typeof props.products.data)[number] | null>(null);
+const vehicleOpen = ref(false);
+const vehicleForm = useForm({ brand: '', model: '', year_from: null as number | null, year_to: null as number | null });
+const vehicleRows = ref<{ brand: string; model: string }[]>([]);
+const openVehicle = (product: (typeof props.products.data)[number]) => {
+    vehicleProduct.value = product;
+    vehicleForm.clearErrors();
+    vehicleForm.brand = product.brand || '';
+    vehicleForm.model = product.model || '';
+    vehicleForm.year_from = product.year_from;
+    vehicleForm.year_to = product.year_to;
+    const brands = (product.brand || '').split(/\s*\|\s*/).filter(Boolean);
+    vehicleRows.value = (product.model || '').split(/\s*\|\s*/).filter(Boolean).flatMap(value => {
+        const match = value.match(/^\s*(\d+)\s*[:：]\s*(.+)$/);
+        if (match) return [{ brand: brands[Number(match[1]) - 1] || '', model: match[2] }];
+        return brands.map(brand => ({ brand, model: value }));
+    });
+    if (!vehicleRows.value.length) vehicleRows.value = [{ brand: '', model: '' }];
+    vehicleOpen.value = true;
+};
+const transformVehicle = () => {
+    const rows = vehicleRows.value.map(row => ({ brand: row.brand.trim().toUpperCase(), model: row.model.trim().toUpperCase() }));
+    if (rows.some(row => !row.brand || !row.model)) { vehicleForm.setError('model', 'Compila marca e modello in ogni riga.'); return; }
+    const brands = [...new Set(rows.map(row => row.brand))];
+    vehicleForm.brand = brands.join(' | ');
+    vehicleForm.model = [...new Set(rows.map(row => `${brands.indexOf(row.brand) + 1}:${row.model}`))].join(' | ');
+    vehicleForm.clearErrors('brand', 'model');
+};
+const saveVehicle = () => {
+    if (!vehicleProduct.value || vehicleForm.processing) return;
+    vehicleForm.patch(`/imported-products/${vehicleProduct.value.id}/vehicle`, { preserveScroll: true, onSuccess: () => { vehicleOpen.value = false; } });
+};
 const titleProduct = ref<(typeof props.products.data)[number] | null>(null);
 const titlesOpen = ref(false);
 const titleForm = useForm({ title_it: '', title_en: '' });
@@ -241,6 +291,12 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
             </div>
         </div>
 
+        <form action="/imported-products/export-shopify" method="get" class="flex flex-wrap items-end gap-3 border-b border-sidebar-border/70 px-6 py-4">
+            <label class="grid gap-1 text-sm">Esporta prodotti importati in data<input v-model="exportDate" name="date" type="date" required class="rounded-lg border border-sidebar-border/70 bg-background px-3 py-2" /></label>
+            <button type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Esporta Excel Shopify</button>
+            <p class="w-full text-xs text-muted-foreground">Tutti i prodotti importati quel giorno, in ora italiana, indipendentemente dai filtri. Per gli import storici senza data registrata si usa la data di creazione. Trasferisci le foto su Aruba prima dell’importazione Shopify.</p>
+            <p v-if="errors?.date || errors?.export_date" role="alert" class="w-full text-sm text-red-400">{{ errors?.date || errors?.export_date }}</p>
+        </form>
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-sidebar-border/70 text-sm">
                 <thead class="bg-muted/40 text-left text-muted-foreground">
@@ -265,7 +321,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                                     class="h-12 w-12 rounded-md border border-sidebar-border/70 object-cover"
                                 />
                                 <div class="min-w-0">
-                                    <p class="font-medium">{{ product.title }}</p>
+                                    <div class="flex flex-wrap items-center gap-3"><p class="font-medium">{{ product.title }}</p><button type="button" class="shrink-0 rounded-md border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium transition hover:border-primary hover:text-primary" :aria-label="`Modifica titolo ${product.title}`" @click="startTitleEdit(product)">Modifica titolo</button></div>
                                     <p v-if="product.title_it" class="mt-1 text-xs text-muted-foreground"><span class="font-semibold">IT:</span> {{ product.title_it }}</p>
                                     <p v-if="product.title_en" class="mt-1 text-xs text-muted-foreground"><span class="font-semibold">EN:</span> {{ product.title_en }}</p>
                                     <p class="mt-1 break-all text-xs text-muted-foreground">
@@ -289,6 +345,8 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                         </td>
                         <td class="px-6 py-4 align-top text-muted-foreground">
                             {{ formatVehicle(product) }}
+                            <button type="button" class="mt-2 block rounded-md border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium hover:border-primary hover:text-primary" @click="openVehicle(product)">Modifica veicolo</button>
+                            <button type="button" class="mt-2 block rounded-md border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium hover:border-primary hover:text-primary" @click="openDashboard(product)">{{ product.dashboard_image_url ? 'Modifica foto cruscotto' : 'Imposta foto cruscotto' }}</button>
                         </td>
                         <td class="px-6 py-4 align-top">
                             <div v-if="editingPrice === product.id" class="flex items-center gap-2">
@@ -303,7 +361,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                             <button type="button" class="rounded-md border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium hover:border-primary hover:text-primary disabled:opacity-50" :disabled="!product.variants_count" @click="openVariants(product)">Varianti ({{ product.variants_count }})</button>
                         </td>
                         <td class="px-6 py-4 text-right align-top">
-                            <button type="button" class="mr-2 rounded-md border border-sidebar-border/70 px-3 py-1.5 text-xs font-medium transition hover:border-primary hover:text-primary" :aria-label="`Modifica titolo ${product.title}`" @click="startTitleEdit(product)">Modifica titolo</button>
+
                             <button
                                 type="button"
                                 class="rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive transition hover:bg-destructive hover:text-destructive-foreground disabled:cursor-not-allowed disabled:opacity-50"
@@ -344,6 +402,45 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
             />
         </div>
     </section>
+    <Dialog v-model:open="dashboardOpen">
+        <DialogContent class="sm:max-w-3xl max-h-[90vh] overflow-y-auto" @interact-outside="dashboardForm.processing && $event.preventDefault()" @escape-key-down="dashboardForm.processing && $event.preventDefault()">
+            <DialogHeader><DialogTitle>Foto cruscotto originale</DialogTitle><DialogDescription>{{ dashboardProduct?.title }} · Scegli l’immagine che mostra il cruscotto originale della vettura.</DialogDescription></DialogHeader>
+            <form class="space-y-4" @submit.prevent="saveDashboard">
+                <label class="flex items-center gap-2 text-sm"><input v-model="dashboardForm.image_url" type="radio" :value="null" :disabled="dashboardForm.processing" />Nessuna foto cruscotto</label>
+                <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                    <label v-for="(url, i) in dashboardProduct?.images || []" :key="url" class="cursor-pointer rounded-lg border p-2" :class="dashboardForm.image_url === url ? 'border-primary ring-2 ring-primary' : 'border-sidebar-border/70'">
+                        <img :src="url" :alt="`Foto prodotto ${i + 1}`" loading="lazy" class="h-36 w-full rounded object-contain" />
+                        <span class="mt-2 flex items-center gap-2 text-sm"><input v-model="dashboardForm.image_url" type="radio" :value="url" :disabled="dashboardForm.processing" />Foto {{ i + 1 }}</span>
+                    </label>
+                </div>
+                <p v-if="!dashboardProduct?.images.length" class="text-sm text-muted-foreground">Il prodotto non ha immagini disponibili.</p>
+                <p v-for="(error, key) in dashboardForm.errors" :key="key" role="alert" class="text-sm text-red-400">{{ error }}</p>
+                <div class="flex justify-end gap-2"><button type="button" :disabled="dashboardForm.processing" class="rounded border px-4 py-2" @click="dashboardOpen = false">Annulla</button><button type="submit" :disabled="dashboardForm.processing" class="rounded bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50">{{ dashboardForm.processing ? 'Salvataggio…' : 'Salva foto cruscotto' }}</button></div>
+            </form>
+        </DialogContent>
+    </Dialog>
+    <Dialog v-model:open="vehicleOpen">
+        <DialogContent class="sm:max-w-2xl max-h-[90vh] overflow-y-auto" @interact-outside="vehicleForm.processing && $event.preventDefault()" @escape-key-down="vehicleForm.processing && $event.preventDefault()">
+            <DialogHeader><DialogTitle>Modifica veicolo</DialogTitle><DialogDescription>{{ vehicleProduct?.title }}</DialogDescription></DialogHeader>
+            <form class="space-y-4" @submit.prevent="saveVehicle">
+                <div class="space-y-2 rounded-lg border p-3">
+                    <p class="text-sm">Una riga per ogni coppia marca / modello compatibile.</p>
+                    <div v-for="(row, i) in vehicleRows" :key="i" class="flex gap-2">
+                        <input v-model="row.brand" :disabled="vehicleForm.processing" placeholder="Marca" :aria-label="`Marca ${i + 1}`" class="min-w-0 flex-1 rounded border bg-background px-3 py-2" />
+                        <input v-model="row.model" :disabled="vehicleForm.processing" placeholder="Modello" :aria-label="`Modello ${i + 1}`" class="min-w-0 flex-1 rounded border bg-background px-3 py-2" />
+                        <button type="button" :disabled="vehicleRows.length === 1 || vehicleForm.processing" class="rounded border px-2 disabled:opacity-50" @click="vehicleRows.splice(i, 1)">Rimuovi</button>
+                    </div>
+                    <div class="flex gap-2"><button type="button" :disabled="vehicleForm.processing" class="rounded border px-3 py-2 text-sm" @click="vehicleRows.push({ brand: '', model: '' })">Aggiungi marca / modello</button><button type="button" :disabled="vehicleForm.processing" class="rounded border px-3 py-2 text-sm" @click="transformVehicle">Trasforma</button></div>
+                </div>
+                <label class="block text-sm">Marche<input v-model="vehicleForm.brand" required class="mt-1 w-full rounded border bg-background px-3 py-2" /></label>
+                <label class="block text-sm">Modelli<input v-model="vehicleForm.model" required class="mt-1 w-full rounded border bg-background px-3 py-2" /></label>
+                <p class="text-xs text-muted-foreground">Premi Trasforma per trasferire le righe nei campi: KIA | HYUNDAI e 1:STONIC | 2:KONA. Puoi anche modificare direttamente questi campi.</p>
+                <div class="grid grid-cols-2 gap-3"><label class="text-sm">Dal<input v-model.number="vehicleForm.year_from" required type="number" min="1" class="mt-1 w-full rounded border bg-background px-3 py-2" /></label><label class="text-sm">Al<input v-model.number="vehicleForm.year_to" required type="number" :min="vehicleForm.year_from || 1" class="mt-1 w-full rounded border bg-background px-3 py-2" /></label></div>
+                <p v-for="(error, key) in vehicleForm.errors" :key="key" role="alert" class="text-sm text-red-400">{{ error }}</p>
+                <div class="flex justify-end gap-2"><button type="button" :disabled="vehicleForm.processing" class="rounded border px-4 py-2" @click="vehicleOpen = false">Annulla</button><button type="submit" :disabled="vehicleForm.processing" class="rounded bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50">{{ vehicleForm.processing ? 'Salvataggio…' : 'Salva veicolo' }}</button></div>
+            </form>
+        </DialogContent>
+    </Dialog>
     <Dialog v-model:open="titlesOpen">
         <DialogContent class="max-h-[90vh] overflow-y-auto sm:max-w-2xl" @interact-outside="titleForm.processing && $event.preventDefault()" @escape-key-down="titleForm.processing && $event.preventDefault()">
             <DialogHeader><DialogTitle>Modifica titolo</DialogTitle><DialogDescription>{{ titleProduct?.title }}</DialogDescription></DialogHeader>

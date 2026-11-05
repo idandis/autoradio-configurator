@@ -161,7 +161,7 @@ class ConfiguratorController extends Controller
                 ->get();
 
         $screenProducts = ConfiguratorProduct::query()
-            ->select(['id', 'brand', 'model', 'year_from', 'year_to'])
+            ->select(['id', 'brand', 'model', 'year_from', 'year_to', 'meta'])
             ->where('category', 'screen')
             ->where(fn ($query) => $query->whereNull('meta->type')->orWhere('meta->type', '!=', 'DASHCAM'))
             ->whereNotNull('brand')
@@ -218,15 +218,19 @@ class ConfiguratorController extends Controller
         $vehicleOptions = $this->screenOptions($initialSpecificScreenProducts);
         $vehicleCompatibility = $screenProducts
             ->merge($cameraProducts->reject(fn (ConfiguratorProduct $product) => in_array($product->handle, self::STANDARD_CAMERA_HANDLES, true)))
-            ->map(function (ConfiguratorProduct $product) {
+            ->flatMap(function (ConfiguratorProduct $product) {
+                if ($ranges = ($product->meta['vehicle_compatibilities'] ?? [])) {
+                    return array_map(fn ($entry) => ['brand' => $entry['brand'], 'model' => $entry['model'],
+                        'yearFrom' => $entry['year_from'], 'yearTo' => $entry['year_to']], $ranges);
+                }
                 $vehicleFields = $this->vehicleFields($product);
 
-                return [
+                return [[
                     'brand' => $vehicleFields['brand'],
                     'model' => $vehicleFields['model'],
                     'yearFrom' => $product->year_from,
                     'yearTo' => $product->year_to,
-                ];
+                ]];
             })
             ->unique(fn (array $vehicle) => implode('|', $vehicle))
             ->values();
@@ -340,6 +344,7 @@ class ConfiguratorController extends Controller
                 return collect($vehicleImageResolver->vehicleEntries($vehicle['brand'], $vehicle['model']))
                     ->contains(fn (array $entry) => Str::slug($entry['brand']) === Str::slug($data['brand'])
                         && Str::slug($entry['model']) === Str::slug($data['model'])
+                        && $product->supportsVehicleYear($entry['brand'], $entry['model'], (int) $data['year'])
                     );
             })
             ->values();
