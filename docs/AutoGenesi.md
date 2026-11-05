@@ -265,3 +265,6 @@ La route pubblica, autonoma in routes/web.php senza controller aggiuntivi, GET/H
 
 ### Stato prodotti negli export
 Tutti gli Excel esportano Status = Active, sia dalle bozze sia dai prodotti importati per data. La permanenza della scheda in bozza locale non impone lo stato bozza al file esportato. Scaricare nuovamente il file dopo questa modifica; i vecchi Excel con Status Draft continuano a essere respinti dall’importatore del configuratore.
+
+### Recupero migrazione batches su MySQL Aruba
+La migrazione 2026_11_04_180000 rileva tipo e attributo unsigned di users.id e li applica a autogenesi_batches.user_id, senza modificare users. Può essere rieseguita dopo un errore DDL MySQL: riutilizza tabelle esistenti e aggiunge le foreign key mancanti conservando i dati. Per un aggiornamento fallito in produzione sostituire il file della migrazione e ripremere Aggiorna database. Verificato in SQLite il recupero e mediante metadata simulati i tipi INT/BIGINT MySQL; nessuna connessione al database remoto effettuata.
