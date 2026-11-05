@@ -71,6 +71,12 @@ class ImportedProductsController extends Controller
         return back()->with('status', 'Prezzi delle varianti aggiornati.');
     }
 
+    private function sourceUrl(?string $url): ?string
+    {
+        return $url && filter_var($url, FILTER_VALIDATE_URL) && in_array(parse_url($url, PHP_URL_SCHEME), ['https', 'http'], true)
+            && ! parse_url($url, PHP_URL_USER) && ! parse_url($url, PHP_URL_PASS) ? $url : null;
+    }
+
     private function productImages(ConfiguratorProduct $product): array
     {
         return collect([$product->image_url, ...($product->meta['gallery_images'] ?? []),
@@ -196,6 +202,7 @@ class ImportedProductsController extends Controller
                     'sku' => $variant->sku,
                     'price' => $variant->price,
                 ]),
+                'source_url' => $this->sourceUrl($product->meta['autogenesi']['source_url'] ?? null),
                 'image_url' => $product->image_url,
                 'images' => $this->productImages($product),
                 'dashboard_image_url' => $product->meta['original_dashboard_images'][0]['url'] ?? null,

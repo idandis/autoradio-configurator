@@ -36,7 +36,7 @@ class AutogenesiTemplateExport
             'Title' => $p->title, 'Handle' => $p->handle, 'ID' => $p->metadata['shopify_product_id'] ?? '',
             'Type' => 'Radio AM/FM', 'Body HTML' => $p->body_html, self::BRAND => mb_strtoupper($p->brand),
             self::DIN => $this->din($p), self::MODEL => preg_match('/^\s*\d+\s*[:：]/u', $p->model) ? $p->model : '1:'.$p->model, self::YEAR => $p->year_from.'-'.$p->year_to,
-            self::DASHBOARD => $this->dashboard($p), 'Status' => 'Draft',
+            self::DASHBOARD => $this->dashboard($p), 'Status' => 'Active',
         ]);
         $rows = [];
         for ($i = 0; $i < max(count($p->variants), count($images), 1); $i++) {
@@ -87,7 +87,7 @@ class AutogenesiTemplateExport
             self::MODEL => ['Vettura', '1: associa il modello alla prima marca, come nel formato allegato.'],
             self::YEAR => ['Vettura', 'Intervallo anni salvato nella bozza.'],
             self::DASHBOARD => ['Shopify Files', 'Foto scelta con il flag Cruscotto originale. Nome file o GID Shopify; caricare prima la foto in Shopify Files, non usare un URL Aruba.'],
-            'Status' => ['Aggiunta necessaria', 'Draft: mantiene il prodotto non pubblicato. Il modello non includeva lo stato.'],
+            'Status' => ['Aggiunta necessaria', 'Active: il prodotto viene importato come attivo, come richiesto.'],
         ];
         $audit = [];
         foreach ($this->columns() as $column) {

@@ -31,6 +31,7 @@ const props = defineProps<{
             price_min: string | null;
             variants_count: number;
             variants: Array<{ id: number; title: string | null; sku: string | null; price: string | null }>;
+            source_url: string | null;
             image_url: string | null;
             images: string[];
             dashboard_image_url: string | null;
@@ -327,6 +328,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                                     <p class="mt-1 break-all text-xs text-muted-foreground">
                                         {{ product.handle }}
                                     </p>
+                                    <a v-if="product.source_url" :href="product.source_url" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block text-xs text-primary underline underline-offset-2">Apri prodotto fornitore ↗</a>
                                 </div>
                             </div>
                         </td>

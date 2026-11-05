@@ -40,7 +40,7 @@ class ImportedProductsExport
             $base = array_replace(array_fill_keys($template->columns(), ''), [
                 'Title' => $p->title, 'Handle' => $p->handle, 'ID' => $p->meta['shopify_product_id'] ?? '',
                 'Type' => ($p->meta['type'] ?? null) ?: match ($p->category) { 'screen' => 'Radio AM/FM', 'camera' => 'Cámara', 'speaker' => 'Altavoces', default => 'Accesorios' },
-                'Body HTML' => $p->body_html ?? '', 'Status' => 'Draft', AutogenesiTemplateExport::BRAND => $p->brand ?? '',
+                'Body HTML' => $p->body_html ?? '', 'Status' => 'Active', AutogenesiTemplateExport::BRAND => $p->brand ?? '',
                 AutogenesiTemplateExport::MODEL => empty($p->model) ? '' : (preg_match('/^\s*\d+\s*[:：]/u', $p->model) ? $p->model : '1:'.$p->model),
                 AutogenesiTemplateExport::YEAR => $p->year_from && $p->year_to ? $p->year_from.'-'.$p->year_to : '',
                 AutogenesiTemplateExport::DIN => $p->meta['din'] ?? '', AutogenesiTemplateExport::DASHBOARD => $reference,

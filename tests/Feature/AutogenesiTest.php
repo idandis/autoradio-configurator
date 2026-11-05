@@ -637,7 +637,7 @@ class AutogenesiTest extends TestCase
         $p = $this->import();
         $e = app(AutogenesiExport::class);
         $rows = $e->rows($p);
-        $this->assertSame('Draft', $rows[0]['Status']);
+        $this->assertSame('Active', $rows[0]['Status']);
         $this->assertArrayNotHasKey(AutogenesiTemplateExport::SOURCE, $rows[0]);
         $this->assertSame('2017-2020', $rows[0][AutogenesiTemplateExport::YEAR]);
         $this->assertSame('1DIN', $rows[0][AutogenesiTemplateExport::DIN]);
@@ -663,7 +663,7 @@ class AutogenesiTest extends TestCase
         $this->assertSame(['Products'], $book->getSheetNames());
         $sheet = $book->getSheetByName('Products')->toArray();
         $this->assertSame($columns, array_slice($sheet[0], 0, 21));
-        $this->assertContains('Draft', $sheet[1]);
+        $this->assertContains('Active', $sheet[1]);
         $images = $p->images;
         $images[1]['role'] = 'cruscotto_da_verificare';
         $p->images = $images;
@@ -714,6 +714,11 @@ class AutogenesiTest extends TestCase
         $p = $this->import();
         $file = $this->dir.'/catalog.xlsx';
         app(AutogenesiExport::class)->xlsx($p, $file);
+        $book = IOFactory::load($file);
+        $column = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(array_search('Status', app(AutogenesiTemplateExport::class)->columns(), true) + 1);
+        $book->getSheetByName('Products')->setCellValue($column.'2', 'Draft');
+        (new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($book))->save($file);
+        $book->disconnectWorksheets();
         try {
             app(ConfiguratorCsvImporter::class)->import($file, false);
             $this->fail('Draft imported into public catalog');
@@ -949,6 +954,6 @@ class AutogenesiTest extends TestCase
         $book = IOFactory::load(Storage::disk('local')->path($files[0]));
         $rows = $book->getSheetByName('Products')->toArray();
         $this->assertNotContains($p->source_url, $rows[1]);
-        $this->assertContains('Draft', $rows[1]);
+        $this->assertContains('Active', $rows[1]);
     }
 }

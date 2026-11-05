@@ -218,7 +218,7 @@ class ImportedProductsTest extends TestCase
         $this->assertSame('1:STONIC', $rows[0][\App\Services\AutogenesiTemplateExport::MODEL]);
         $this->assertSame('https://www.autoradioitaliano.it/storage/autogenesi/catalog/123/main.png', $rows[0]['Image Src']);
         $this->assertNotContains(\App\Services\AutogenesiTemplateExport::SOURCE, $headers);
-        $this->assertSame(['Draft', 'Draft'], array_column($rows, 'Status'));
+        $this->assertSame(['Active', 'Active'], array_column($rows, 'Status'));
         $this->assertDatabaseCount('autogenesi_products', 0);
     }
 

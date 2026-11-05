@@ -13,6 +13,78 @@ class ConfiguratorProductDescriptionTranslationTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_dashboard_imports_november_fifth_catalogs_without_external_requests(): void
+    {
+        Http::preventStrayRequests();
+        config(['services.openai.api_key' => null]);
+        $handles = [
+            'citroen-c3-aircross-2020-2020-ae-1005010319633755',
+            'citroen-c5-aircross-2020-2020-ae-1005007967046585',
+            'fiat-500x-2020-2020-ae-1005012092589765',
+            'ford-ecosport-2020-2020-ae-1005013503429812',
+            'hyundai-kona-2017-2020-ae-1005009132362965',
+            'kia-ceed-2020-2020-ae-1005013496785363',
+            'kia-stonic-2020-2020-ae-1005012798484336',
+            'opel-crossland-2020-2020-ae-1005012180979983',
+            'peugeot-2008-2013-2019-ae-1005008593938688',
+            'renault-zoe-2020-2020-ae-1005011682508067',
+            'skoda-karoq-2020-2020-ae-1005013101848740',
+            'tesla-model-3-2020-2020-ae-1005012567416988',
+            'volvo-xc40-2020-2020-ae-1005013211923100',
+        ];
+        $catalogs = [];
+        foreach (['it', 'en'] as $locale) {
+            foreach (['titles', 'descriptions'] as $kind) {
+                $catalogs[$locale][$kind] = json_decode(file_get_contents(resource_path("data/screen-{$kind}-{$locale}.json")), true, 512, JSON_THROW_ON_ERROR);
+            }
+        }
+        foreach ($handles as $handle) {
+            ConfiguratorProduct::create([
+                'handle' => $handle, 'category' => 'screen',
+                'title' => $catalogs['it']['titles'][$handle]['source'],
+                'body_html' => $catalogs['it']['descriptions'][$handle]['source'],
+            ]);
+        }
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->post(route('dashboard.database.migrate'))->assertRedirect()->assertSessionHasNoErrors();
+        foreach (ConfiguratorProduct::all() as $product) {
+            foreach (['it', 'en'] as $locale) {
+                foreach (['titles' => 'title', 'descriptions' => 'body_html'] as $kind => $column) {
+                    $entry = $catalogs[$locale][$kind][$product->handle];
+                    $this->assertSame($entry['source'], $product->$column);
+                    $this->assertSame($entry['translation'], $product->{$column.'_'.$locale});
+                }
+                preg_match_all('/<[^>]*>/', $product->body_html, $a);
+                preg_match_all('/<[^>]*>/', $product->{'body_html_'.$locale}, $b);
+                $this->assertSame($a[0], $b[0]);
+                preg_match_all('/\d+(?:[.,]\d+)*/', $product->body_html, $a);
+                preg_match_all('/\d+(?:[.,]\d+)*/', $product->{'body_html_'.$locale}, $b);
+                $this->assertSame($a[0], $b[0]);
+            }
+        }
+        $resolver = app(\App\Services\VehicleImageResolver::class);
+        foreach ([
+            ['PEUGEOT', '2008', 2013, 'peugeot-2008-2013-2019.webp'],
+            ['HYUNDAI', 'KONA', 2017, 'hyundai-kona-2017-2020.webp'],
+            ['VOLVO', 'XC40', 2020, 'volvo-xc40-2020-2020.webp'],
+            ['OPEL', 'CROSSLAND', 2020, 'opel-crossland-2020-2020.webp'],
+            ['RENAULT', 'ZOE', 2020, 'renault-zoe-2020-2020.webp'],
+            ['SKODA', 'KAROQ', 2020, 'skoda-karoq-2020-2020.webp'],
+            ['CITROEN', 'C3 AIRCROSS', 2020, 'citroen-c3-aircross-2020-2020.webp'],
+            ['TESLA', 'MODEL 3', 2020, 'tesla-model-3-2020-2020.webp'],
+            ['KIA', 'CEED', 2020, 'kia-ceed-2020-2020.webp'],
+            ['CITROEN', 'C5 AIRCROSS', 2020, 'citroen-c5-aircross-2020-2020.webp'],
+            ['FIAT', '500X', 2020, 'fiat-500x-2020-2020.webp'],
+            ['FORD', 'ECOSPORT', 2020, 'ford-ecosport-2020-2020.webp'],
+            ['KIA', 'STONIC', 2020, 'kia-stonic-2020-2020.webp'],
+        ] as [$brand, $model, $year, $filename]) {
+            $this->assertSame($filename, $resolver->resolveFilename($brand, $model, $year));
+        }
+        $this->get(route('dashboard'))->assertInertia(fn (Assert $page) => $page
+            ->where('postImportTasks.translationCount', 0)
+            ->where('postImportTasks.descriptionTranslationCount', 0));
+    }
+
     public function test_dashboard_imports_november_catalogs_with_copied_spaces_and_clears_tasks(): void
     {
         Http::preventStrayRequests();

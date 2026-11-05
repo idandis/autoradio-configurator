@@ -140,7 +140,7 @@ class AutogenesiCatalogImportTest extends TestCase
         $this->assertSame([$first->handle, $first->handle, $second->handle, $second->handle], array_column($rows, 'Handle'));
         $this->assertSame([$first->body_html, null, $second->body_html, null], array_column($rows, 'Body HTML'));
         $this->assertSame(['PEUGEOT', null, 'PEUGEOT', null], array_column($rows, AutogenesiTemplateExport::BRAND));
-        $this->assertSame(['Draft', 'Draft', 'Draft', 'Draft'], array_column($rows, 'Status'));
+        $this->assertSame(['Active', 'Active', 'Active', 'Active'], array_column($rows, 'Status'));
         $this->assertSame(['Products'], $book->getSheetNames());
         Http::assertNothingSent();
     }
