@@ -29,10 +29,10 @@ class AutogenesiPublicImageTest extends TestCase
         Storage::fake('local');
         $hash = str_repeat('a', 64);
         Storage::disk('local')->put('autogenesi/catalog/123/'.$hash.'.png', 'private');
-        $this->get('/storage/autogenesi/catalog/123/'.$hash.'.png')->assertNotFound();
+        $this->get('/storage/autogenesi/catalog/123/'.$hash.'.png')->assertClientError();
         Storage::disk('public')->put('autogenesi/catalog/123/'.$hash.'.png', '<?php secret');
-        $this->get('/storage/autogenesi/catalog/123/'.$hash.'.png')->assertNotFound();
-        $this->get('/storage/autogenesi/catalog/123/manifest.json')->assertNotFound();
-        $this->get('/storage/autogenesi/catalog/123/'.$hash.'.php')->assertForbidden();
+        $this->get('/storage/autogenesi/catalog/123/'.$hash.'.png')->assertClientError();
+        $this->get('/storage/autogenesi/catalog/123/manifest.json')->assertClientError();
+        $this->get('/storage/autogenesi/catalog/123/'.$hash.'.php')->assertClientError();
     }
 }

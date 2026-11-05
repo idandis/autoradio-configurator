@@ -259,3 +259,6 @@ In Prodotti importati, selezionare una data e premere Esporta Excel Shopify. Son
 
 ### Excel Shopify: solo Products
 Tutti gli export (singola bozza, tutte le bozze e prodotti importati per data) contengono esclusivamente il foglio Products. Il foglio Analisi AutoGenesi non viene più incluso. Per ottenere il formato aggiornato scaricare nuovamente l’Excel.
+
+### Foto Aruba senza collegamento public/storage
+La route pubblica GET/HEAD /storage/autogenesi/catalog/{source}/{sha256}.{png|jpg|webp} legge direttamente storage/app/public/autogenesi/catalog/. Funziona anche senza collegamento simbolico e senza record della bozza. Serve esclusivamente immagini valide con nome SHA256 corrispondente e percorso dentro la directory catalogo; nessun accesso agli originali privati. Per attivarla su Aruba aggiornare routes/web.php e app/Http/Controllers/AutogenesiPublicImageController.php, poi aggiornare l’eventuale cache rotte tramite il normale aggiornamento dell’app. Le foto restano nel percorso già trasferito con FileZilla.
