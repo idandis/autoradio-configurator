@@ -284,7 +284,9 @@ class AutogenesiTest extends TestCase
 
             return $r->isMultipart() && $r->hasFile('image') && $form['size'] === '1024x1024' && $form['model'] === 'gpt-image-1-mini'
                 && str_contains($form['prompt'], 'Canary Islands') && str_contains($form['prompt'], 'stone platform')
-                && str_contains($form['prompt'], 'clear blue sky') && str_contains($form['prompt'], 'No writing');
+                && str_contains($form['prompt'], 'clear blue sky') && str_contains($form['prompt'], 'No writing')
+                && str_contains($form['prompt'], 'width-to-height ratio') && str_contains($form['prompt'], 'ONE uniform scale factor')
+                && str_contains($form['prompt'], 'square OUTPUT CANVAS does NOT mean a square radio');
         });
         $this->post('/autogenesi/'.$p->id.'/images/0/restore', ['image_id' => $edited['sha256']])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame($before, $p->fresh()->images);
@@ -913,7 +915,7 @@ class AutogenesiTest extends TestCase
         $this->assertNotContains('debugger', $manifest['permissions']);
         $this->assertNotFalse($zip->getFromName('capture.js'));
         $this->assertNotFalse($zip->getFromName('generic.js'));
-        $this->assertSame('0.2.1', $manifest['version']);
+        $this->assertSame('0.2.2', $manifest['version']);
         $this->assertContains('https://*/*', $manifest['optional_host_permissions']);
         $zip->close();
     }
@@ -956,4 +958,40 @@ class AutogenesiTest extends TestCase
         $this->assertNotContains($p->source_url, $rows[1]);
         $this->assertContains('Active', $rows[1]);
     }
+    public function test_draft_vehicle_editor_saves_multibrand_models_and_individual_year_ranges(): void
+    {
+        $p = $this->import();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $data = ['title' => $p->title, 'body_html' => $p->body_html, 'variants' => $p->variants,
+            'vehicles' => [['brand' => 'Fiat', 'model' => '500X', 'year_from' => 2014, 'year_to' => 2020],
+                ['brand' => 'Hyundai', 'model' => 'Kona', 'year_from' => 2017, 'year_to' => 2026]]];
+        $this->patch('/autogenesi/'.$p->id, $data)->assertRedirect()->assertSessionHasNoErrors();
+        $fresh = $p->fresh();
+        $this->assertSame('FIAT | HYUNDAI', $fresh->brand);
+        $this->assertSame('1:500X | 2:KONA', $fresh->model);
+        $this->assertSame(2014, (int) $fresh->year_from);
+        $this->assertSame(2026, (int) $fresh->year_to);
+        $this->assertSame(2020, $fresh->metadata['vehicle_compatibilities'][0]['year_to']);
+        $this->assertSame('manual', $fresh->metadata['vehicle_compatibilities'][0]['origin']);
+        $this->assertSame($p->source_url, $fresh->source_url);
+        $this->assertSame($p->handle, $fresh->handle);
+        $this->assertSame('1:500X | 2:KONA', app(AutogenesiTemplateExport::class)->rows($fresh)[0][AutogenesiTemplateExport::MODEL]);
+        $data['vehicles'][0]['year_to'] = 2010;
+        $this->patch('/autogenesi/'.$p->id, $data)->assertSessionHasErrors('vehicles.0.year_to');
+        $this->assertSame(2020, $p->fresh()->metadata['vehicle_compatibilities'][0]['year_to']);
+    }
+
+    public function test_import_accepts_twenty_variants_and_rejects_twenty_one(): void
+    {
+        $manifest = json_decode(file_get_contents($this->dir.'/manifest.json'), true);
+        $variant = $manifest['variants'][0];
+        $manifest['variants'] = array_map(fn ($i) => array_replace($variant, ['label' => 'Version '.$i, 'supplier_price' => (string) (100 + $i)]), range(1, 20));
+        file_put_contents($this->dir.'/manifest.json', json_encode($manifest));
+        $this->assertCount(20, $this->import()->variants);
+        $manifest['variants'][] = array_replace($variant, ['label' => 'Version 21']);
+        file_put_contents($this->dir.'/manifest.json', json_encode($manifest));
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $this->import();
+    }
+
 }

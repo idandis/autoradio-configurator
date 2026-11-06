@@ -50,6 +50,14 @@ class AutogenesiController extends Controller
             })]);
     }
 
+    public function importLog()
+    {
+        abort_unless(app()->environment('local'), 403);
+        $disk = Storage::disk('local');
+        abort_unless($disk->exists('autogenesi/diagnostics/import.log'), 404, 'Nessuna importazione registrata.');
+        return response()->download($disk->path('autogenesi/diagnostics/import.log'), 'autogenesi-ultima-importazione.log', ['Content-Type' => 'text/plain; charset=UTF-8', 'Cache-Control' => 'no-store']);
+    }
+
     public function store(Request $request, AutogenesiImport $importer)
     {
         abort_unless(app()->environment('local'), 403);
@@ -68,7 +76,7 @@ class AutogenesiController extends Controller
                 ? 'AliExpress ha rilevato traffico insolito. Importazione fermata: riprova più tardi.'
                 : (str_contains($e->getMessage(), 'Verification required')
                 ? 'AliExpress richiede una verifica umana: importazione interrotta.'
-                : 'Importazione non completata. Controlla che la pagina sia accessibile e riprova.')]);
+                : 'Importazione non completata. Scarica il log dell’ultima importazione per vedere la fase e l’errore preciso.')]);
         }
     }
 
@@ -274,6 +282,8 @@ class AutogenesiController extends Controller
     public function update(Request $request, AutogenesiProduct $product)
     {
         $data = $request->validate(['title' => 'required|string|max:2000', 'body_html' => 'required|string|max:150000',
+            'vehicles' => 'sometimes|required|array|min:1|max:100', 'vehicles.*.brand' => 'required|string|max:80', 'vehicles.*.model' => 'required|string|max:120',
+            'vehicles.*.year_from' => 'required|integer|min:1|max:65535', 'vehicles.*.year_to' => 'required|integer|gte:vehicles.*.year_from|max:65535',
             'variants' => 'required|array|size:'.count($product->variants), 'variants.*.sku' => 'sometimes|required|string', 'variants.*.label' => 'sometimes|required|string|max:500', 'variants.*.selling_price' => 'nullable|numeric|gt:0|max:999999']);
         $variants = $product->variants;
         foreach ($variants as $i => &$variant) {
@@ -289,7 +299,20 @@ class AutogenesiController extends Controller
         }
         unset($variant);
         $variants = app(AutogenesiVariants::class)->normalize($variants);
-        $product->update(['title' => $data['title'], 'body_html' => ProductHtml::sanitize($data['body_html']), 'variants' => $variants]);
+        $vehicleData = [];
+        if (isset($data['vehicles'])) {
+            $entries = array_values(array_map(fn ($v) => ['brand' => mb_strtoupper(trim($v['brand'])), 'model' => mb_strtoupper(trim($v['model'])),
+                'year_from' => (int) $v['year_from'], 'year_to' => (int) $v['year_to'], 'origin' => 'manual'], $data['vehicles']));
+            $brands = array_values(array_unique(array_column($entries, 'brand')));
+            $models = array_values(array_unique(array_map(fn ($v) => (array_search($v['brand'], $brands, true) + 1).':'.$v['model'], $entries)));
+            $brand = implode(' | ', $brands);
+            if (mb_strlen($brand) > 255) throw ValidationException::withMessages(['vehicles' => 'Elenco marche troppo lungo.']);
+            $meta = $product->metadata;
+            $meta['vehicle_compatibilities'] = $entries;
+            $vehicleData = ['brand' => $brand, 'model' => count($models) === 1 ? $entries[0]['model'] : implode(' | ', $models),
+                'year_from' => min(array_column($entries, 'year_from')), 'year_to' => max(array_column($entries, 'year_to')), 'metadata' => $meta];
+        }
+        $product->update($vehicleData + ['title' => $data['title'], 'body_html' => ProductHtml::sanitize($data['body_html']), 'variants' => $variants]);
         app(AutogenesiExport::class)->writeFiles($product->fresh());
 
         return back()->with('status', 'Bozza aggiornata.');

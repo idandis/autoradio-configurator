@@ -43,7 +43,7 @@
       variants.push({ label, supplier_price: money(offer.price ?? offer.priceSpecification?.price), currency: 'EUR', observed_at: new Date().toISOString(), options: [] });
     }
   }
-  if (!variants.length || variants.length > 12) throw new Error('Servono da 1 a 12 varianti con prezzi esatti leggibili.');
+  if (!variants.length || variants.length > 20) throw new Error('Servono da 1 a 20 varianti con prezzi esatti leggibili.');
   const absolute = raw => {
     const value = typeof raw === 'string' ? raw : raw?.contentUrl || raw?.url;
     if (!value) return null;

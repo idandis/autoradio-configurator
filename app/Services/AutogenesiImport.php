@@ -16,20 +16,32 @@ class AutogenesiImport
         if (! app()->environment('local')) {
             throw new RuntimeException('Importazione browser disponibile solo in locale.');
         }
-        $control = app(AutogenesiRunControl::class);
-        $runId = $control->state()['run_id'];
-        $control->assertActive($runId);
-        $this->validateSource($url);
-        $id = $this->sourceId($url);
-        if ($existing = AutogenesiProduct::where('source_id', $id)->first()) {
-            return $existing;
+        $log = app(AutogenesiImportLog::class);
+        $attempt = $log->start($url);
+        try {
+            $control = app(AutogenesiRunControl::class);
+            $runId = $control->state()['run_id'];
+            $control->assertActive($runId);
+            $this->validateSource($url);
+            $id = $this->sourceId($url);
+            if ($existing = AutogenesiProduct::where('source_id', $id)->first()) {
+                $log->write($attempt, 'completata', ['product_id' => $existing->id, 'existing' => true]);
+                return $existing;
+            }
+            $dir = Storage::disk('local')->path('autogenesi/captures/'.Str::uuid());
+            $log->write($attempt, 'acquisizione_browser');
+            Process::env(['AUTOGENESI_IMPORT_LOG_DIR' => $log->directory(), 'AUTOGENESI_IMPORT_LOG_ID' => $attempt])
+                ->timeout(360)->run(['node', base_path('scripts/autogenesi/capture-product.cjs'), $url, $dir])->throw();
+            $control->assertActive($runId);
+            $log->write($attempt, 'lettura_descrizione_ai_e_salvataggio');
+            $product = $this->import($dir.'/manifest.json', $vehicle);
+            $log->write($attempt, 'completata', ['product_id' => $product->id, 'images' => count($product->images), 'variants' => count($product->variants),
+                'image_warnings' => array_values(array_filter($product->metadata['warnings'] ?? [], fn ($warning) => str_contains($warning, 'Immagine aggiuntiva')))]);
+            return $product;
+        } catch (\Throwable $e) {
+            $log->write($attempt, 'errore', ['type' => get_class($e), 'message' => mb_substr($e->getMessage(), 0, 14000)]);
+            throw $e;
         }
-        $dir = Storage::disk('local')->path('autogenesi/captures/'.Str::uuid());
-        Process::timeout(360)->run(['node', base_path('scripts/autogenesi/capture-product.cjs'), $url, $dir])->throw();
-
-        $control->assertActive($runId);
-
-        return $this->import($dir.'/manifest.json', $vehicle);
     }
 
     public function regenerate(AutogenesiProduct $product): AutogenesiProduct
@@ -66,7 +78,7 @@ class AutogenesiImport
             'year_from' => 'required|integer|min:1', 'year_to' => 'required|integer|gte:year_from'])->validate();
         $data = json_decode(file_get_contents($manifest), true, flags: JSON_THROW_ON_ERROR);
         Validator::make($data, ['source_id' => 'required|regex:/^\d+$/', 'source_url' => 'required|url',
-            'source_title' => 'required|string|max:2000', 'variants' => 'required|array|min:1|max:12',
+            'source_title' => 'required|string|max:2000', 'variants' => 'required|array|min:1|max:20',
             'variants.*.label' => 'required|string|max:500', 'variants.*.supplier_price' => 'required|numeric|gt:0|max:999999',
             'variants.*.currency' => 'required|in:EUR', 'images' => 'required|array|min:3|max:12',
             'images.*.file' => 'required|regex:/^image-\d+\.bin$/', 'images.*.source_url' => 'required|url'])->validate();

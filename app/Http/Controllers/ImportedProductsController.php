@@ -162,11 +162,13 @@ class ImportedProductsController extends Controller
     {
         $category = $request->string('category')->toString();
         $search = trim($request->string('search')->toString());
+        $date = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']])['date'] ?? '';
 
         $products = ConfiguratorProduct::query()
             ->with('variants:id,configurator_product_id,title,sku,option_value,price,image_url')
             ->withCount('variants')
             ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])
+            ->when($date !== '', fn ($query) => $query->whereIn('id', app(\App\Services\ImportedProductsExport::class)->idsOnDate($date)))
             ->when(in_array($category, ['screen', 'camera', 'speaker', 'accessory'], true), function ($query) use ($category) {
                 $query->where('category', $category);
             })
@@ -220,6 +222,7 @@ class ImportedProductsController extends Controller
             'filters' => [
                 'category' => $category,
                 'search' => $search,
+                'date' => $date,
             ],
             'products' => $products,
         ]);

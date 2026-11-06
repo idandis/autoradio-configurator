@@ -62,6 +62,19 @@ class AutogenesiDescriptionTest extends TestCase
             && str_contains($request['instructions'], 'intero range del prodotto'));
     }
 
+    public function test_ai_image_selection_is_restricted_to_captured_files_and_invalid_names_do_not_abort_description(): void
+    {
+        $this->copy['accessories_image'] = 'description-999.bin';
+        $this->copy['before_after_image'] = 'description-1.bin';
+        $this->respond($this->copy);
+        $result = app(AutogenesiDescription::class)->generate($this->source, ['brand' => 'Hyundai', 'model' => 'Kona', 'year_from' => 2017, 'year_to' => 2020], $this->dir);
+        $this->assertNull($result['accessories_image']);
+        $this->assertSame('description-1.bin', $result['before_after_image']);
+        $this->assertNotEmpty($result['body_html']);
+        $this->assertTrue(collect($result['notes'])->contains(fn ($note) => str_contains($note, 'description-999.bin')));
+        Http::assertSent(fn ($request) => $request['text']['format']['schema']['properties']['accessories_image']['enum'] === ['image-1.bin', 'description-1.bin', null]);
+    }
+
     public function test_generation_reads_original_text_specifications_and_images_with_private_notes(): void
     {
         $this->respond($this->copy);

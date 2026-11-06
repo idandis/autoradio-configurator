@@ -167,13 +167,20 @@ const selectedId = ref<number | null>(null);
 const selected = computed(() => props.products.find(p => p.id === selectedId.value));
 const automatic = props.search?.mode === 'best_price' && props.search.selected ? props.search : null;
 const importing = useForm({ source_url: props.directImport?.source_url ?? automatic?.selected?.source_url ?? '', brand: automatic?.vehicle.brand ?? '', model: automatic?.vehicle.model ?? '', year_from: (automatic?.vehicle.year_from ?? '') as number | string, year_to: (automatic?.vehicle.year_to ?? '') as number | string });
-const editing = useForm({ title: '', body_html: '', variants: [] as { sku: string; label: string; selling_price: string | null }[] });
+const editing = useForm({ title: '', body_html: '', vehicles: [] as { brand: string; model: string; year_from: number; year_to: number }[], variants: [] as { sku: string; label: string; selling_price: string | null }[] });
 const open = (p: Product) => {
     if (selectedId.value !== p.id) { uploading.reset(); uploading.clearErrors(); uploadKey.value++; }
     selectedId.value = p.id;
     removingVariant.clearErrors();
     editing.title = p.title;
     editing.body_html = p.body_html;
+    const brands = p.brand.split(' | ');
+    editing.vehicles = p.metadata.vehicle_compatibilities?.length
+        ? p.metadata.vehicle_compatibilities.map(v => ({ brand: v.brand, model: v.model, year_from: v.year_from, year_to: v.year_to }))
+        : p.model.split(' | ').flatMap(value => {
+            const match = value.match(/^\s*(\d+)\s*[:：]\s*(.+)$/);
+            return (match ? [brands[Number(match[1]) - 1] || ''] : brands).map(brand => ({ brand, model: match ? match[2] : value, year_from: p.year_from, year_to: p.year_to }));
+        });
     editing.variants = p.variants.map(v => ({ sku: v.sku, label: v.label, selling_price: v.selling_price === null ? null : String(Math.ceil(Number(v.selling_price))) }));
     editing.clearErrors();
 };
@@ -204,6 +211,10 @@ const importConfigurator = () => {
     } });
 };
 const save = () => selected.value && editing.patch(`/autogenesi/${selected.value.id}`, { preserveScroll: true, onSuccess: () => { if (selected.value) open(selected.value); } });
+const readyToImport = computed(() => Boolean(importing.source_url.trim() && importing.brand.trim() && importing.model.trim()
+    && Number.isInteger(Number(importing.year_from)) && Number(importing.year_from) > 0
+    && Number.isInteger(Number(importing.year_to)) && Number(importing.year_to) >= Number(importing.year_from)));
+const submitPreparedImport = () => { if (!importing.processing) importForm.value?.requestSubmit(); };
 const importProduct = () => importing.post('/autogenesi/import', { preserveScroll: true, onSuccess: () => importing.reset('source_url') });
 const removeImage = (index: number, id: string) => {
     if (!selected.value || removing.value || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing) return;
@@ -276,7 +287,7 @@ const imageRole = (role: string) => imageRoles[role] ?? 'Da verificare';
             <div class="flex flex-wrap items-center justify-between gap-3"><h2 class="font-semibold">{{ search.query }} · {{ search.origin === 'EU' ? 'Unione Europea' : 'Tutti' }}</h2><button type="button" :disabled="searching.processing" class="rounded-lg border px-3 py-2 text-sm disabled:opacity-50" @click="clearSearch">Cancella ricerca</button></div>
             <a :href="search.url" target="_blank" rel="noreferrer" class="text-sm text-blue-600 underline">Apri ricerca AliExpress</a>
             <div v-if="search.mode === 'best_price'" class="space-y-2 text-sm">
-                <template v-if="search.selected"><p class="font-medium">Prodotto selezionato: {{ search.selected.title }}</p><a :href="search.selected.source_url" target="_blank" rel="noreferrer" class="text-blue-600 underline">Verifica prodotto AliExpress</a><p>{{ search.selected.price_text }} · Prezzo della variante esaminata.</p><p>L’importazione è già compilata: premi «Importa come bozza».</p></template>
+                <template v-if="search.selected"><p class="font-medium">Prodotto selezionato: {{ search.selected.title }}</p><a :href="search.selected.source_url" target="_blank" rel="noreferrer" class="text-blue-600 underline">Verifica prodotto AliExpress</a><p>{{ search.selected.price_text }} · Prezzo della variante esaminata.</p><div v-if="importing.source_url === search.selected.source_url && readyToImport" class="flex flex-wrap items-center gap-3 rounded-lg border border-emerald-500 bg-emerald-500/10 p-3"><span class="font-semibold text-emerald-600 dark:text-emerald-400">Prodotto pronto da importare</span><button type="button" :disabled="importing.processing" class="rounded-lg bg-emerald-600 px-5 py-3 font-semibold text-white shadow hover:bg-emerald-700 disabled:opacity-50" @click="submitPreparedImport">{{ importing.processing ? 'Importazione in corso…' : 'Importa come bozza' }}</button></div><p v-else>Completa i dati nel modulo per importare il prodotto come bozza.</p></template>
                 <p v-else>Nessun prodotto specifico verificato nelle pagine analizzate. Prova a modificare marca, modello o anni.</p>
                 <p class="text-xs text-muted-foreground">Schede esaminate: {{ search.inspected_count || 0 }}. Selezione del primo prodotto utile nell’ordine di prezzo AliExpress; prezzo e disponibilità delle varianti vengono riletti all’importazione.</p>
             </div>
@@ -308,8 +319,9 @@ const imageRole = (role: string) => imageRoles[role] ?? 'Da verificare';
                 <button :disabled="chromeImport.processing || !chromeImport.package" class="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50">{{ chromeImport.processing ? 'Lettura immagini e generazione scheda…' : 'Importa acquisizione come bozza' }}</button>
             </form>
         </details>
-        <form v-if="local" ref="importForm" class="space-y-3 rounded-xl border bg-card p-5" @submit.prevent="importProduct">
+        <form v-if="local" ref="importForm" class="space-y-3 rounded-xl border p-5 transition-colors" :class="readyToImport ? 'border-yellow-400/60 bg-yellow-400/10 ring-1 ring-yellow-400/20' : 'bg-card'" @submit.prevent="importProduct">
             <h2 class="font-semibold">Importa da una scheda AliExpress</h2>
+            <a href="/autogenesi/import-log" class="inline-block text-sm underline underline-offset-2">Scarica log ultima importazione</a><p class="text-xs text-muted-foreground">Il log viene azzerato automaticamente a ogni nuovo tentativo di importazione.</p>
             <p v-if="directImport" class="text-sm">Link riconosciuto. Completa marca, modello e anni compatibili, poi premi «Importa come bozza».</p>
             <label class="block text-sm">Link prodotto AliExpress<input v-model="importing.source_url" required type="url" placeholder="https://es.aliexpress.com/item/…html" class="mt-1 w-full rounded-md border bg-background px-3 py-2" /></label>
             <div class="grid gap-3 sm:grid-cols-4">
@@ -319,7 +331,8 @@ const imageRole = (role: string) => imageRoles[role] ?? 'Da verificare';
                 <label class="text-sm">Al<input v-model.number="importing.year_to" required type="number" :min="importing.year_from" class="mt-1 w-full rounded-md border bg-background px-3 py-2" /></label>
             </div>
             <p v-for="(error, key) in importing.errors" :key="key" role="alert" class="text-sm text-red-600">{{ error }}</p>
-            <button :disabled="importing.processing" class="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50">{{ importing.processing ? 'Raccolta varianti e immagini in corso…' : 'Importa come bozza' }}</button>
+            <p v-if="readyToImport && !importing.processing" class="text-sm font-semibold text-emerald-600 dark:text-emerald-400">Prodotto pronto: premi il pulsante verde per importarlo.</p>
+            <button :disabled="importing.processing" class="rounded-lg px-5 py-3 text-sm font-semibold transition-colors disabled:opacity-50" :class="readyToImport ? 'bg-emerald-600 text-white shadow ring-2 ring-emerald-500/40 ring-offset-2 ring-offset-background hover:bg-emerald-700' : 'bg-foreground text-background'">{{ importing.processing ? 'Raccolta varianti e immagini in corso…' : 'Importa come bozza' }}</button>
         </form>
         <div class="overflow-x-auto rounded-xl border">
             <table class="w-full text-left text-sm">
@@ -330,11 +343,25 @@ const imageRole = (role: string) => imageRoles[role] ?? 'Da verificare';
         <section v-if="selected" id="autogenesi-review" class="space-y-5 rounded-xl border bg-card p-5">
             <div class="flex flex-wrap items-center justify-between gap-3"><h2 class="text-lg font-semibold">Verifica bozza #{{ selected.id }}</h2><a :href="selected.source_url" class="text-sm text-blue-600 underline" rel="noreferrer">Verifica sul sito originale</a></div>
             <p class="text-sm text-muted-foreground">{{ selected.metadata.seller || 'Venditore da verificare' }} · {{ selected.metadata.captured_at }}</p>
+            <a v-if="selected.source_url" :href="selected.source_url" target="_blank" rel="noopener noreferrer" class="block break-all text-sm text-blue-600 underline underline-offset-2">{{ selected.source_url }} ↗</a>
             <details v-if="selected.metadata.description_source" class="rounded-lg border p-3 text-sm">
                 <summary class="cursor-pointer font-medium">Testo originale e specifiche lette · {{ selected.metadata.description_source.specifications.length }} voci · {{ selected.metadata.description_source.images.length }} immagini della descrizione</summary>
                 <p class="mt-3 whitespace-pre-line">{{ selected.metadata.description_source.text }}</p>
                 <dl class="mt-3 grid gap-2 sm:grid-cols-2"><div v-for="(spec, i) in selected.metadata.description_source.specifications" :key="i"><dt class="font-medium">{{ spec.name }}</dt><dd>{{ spec.value }}</dd></div></dl>
             </details>
+            <section class="space-y-3 rounded-lg border p-4">
+                <h3 class="font-semibold">Auto compatibili · marca, modello e anni</h3>
+                <div v-for="(vehicle, i) in editing.vehicles" :key="i" class="grid gap-3 sm:grid-cols-[1fr_1fr_110px_110px_auto]">
+                    <label class="text-sm">Marca<input v-model="vehicle.brand" maxlength="80" class="mt-1 w-full rounded border bg-background px-3 py-2" /></label>
+                    <label class="text-sm">Modello<input v-model="vehicle.model" maxlength="120" class="mt-1 w-full rounded border bg-background px-3 py-2" /></label>
+                    <label class="text-sm">Dal<input v-model.number="vehicle.year_from" type="number" min="1" class="mt-1 w-full rounded border bg-background px-3 py-2" /></label>
+                    <label class="text-sm">Al<input v-model.number="vehicle.year_to" type="number" :min="vehicle.year_from || 1" class="mt-1 w-full rounded border bg-background px-3 py-2" /></label>
+                    <button type="button" :disabled="editing.vehicles.length === 1 || editing.processing" class="self-end rounded border px-3 py-2 text-sm disabled:opacity-50" @click="editing.vehicles.splice(i, 1)">Rimuovi</button>
+                </div>
+                <div class="flex flex-wrap gap-3"><button type="button" :disabled="editing.processing" class="rounded border px-3 py-2 text-sm" @click="editing.vehicles.push({ brand: '', model: '', year_from: selected.year_from, year_to: selected.year_to })">Aggiungi auto / modello</button><button type="button" :disabled="editing.processing || removingVariant.processing" class="rounded bg-foreground px-3 py-2 text-sm font-medium text-background disabled:opacity-50" @click="save">Salva modifiche alla bozza</button></div>
+                <p class="text-xs text-muted-foreground">Ogni riga mantiene i propri anni. Le associazioni multimarca vengono formattate automaticamente.</p>
+                <p v-for="(error, key) in editing.errors" :key="key" role="alert" class="text-sm text-red-600">{{ error }}</p>
+            </section>
             <p v-for="(error, key) in imageAi.errors" :key="key" role="alert" class="text-sm text-red-600">{{ error }}</p>
             <form v-if="local" class="space-y-3 rounded-lg border p-3" @submit.prevent="uploadPhotos">
                 <h3 class="text-sm font-medium">Aggiungi foto dal computer</h3>

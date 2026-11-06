@@ -17,6 +17,8 @@ class AutogenesiImageEditor
 
     public const CLEAN_PROMPT = 'Clean and enhance this vehicle dashboard or product photograph. Remove added advertising text, promotional graphics, arrows, decorative borders, frames and graphic overlays. Improve definition, focus, clarity and compression noise naturally without oversharpening or changing the subject. Preserve the exact dashboard, radio, screen geometry, vents, physical buttons, steering wheel, trim, materials, colors and proportions. Keep the original camera viewpoint and all visible hardware; do not replace the radio, invent controls, change the vehicle model or add accessories. Preserve authentic physical control labels and the existing screen interface; remove only promotional writing superimposed on the photograph. Conservatively reconstruct areas obscured by overlays using adjacent materials, without inventing new equipment. Do not add new lettering, logos, decorations, white padding or a new background. Produce one realistic, clean, high-definition photograph with the subject fully visible.';
 
+    public const GEOMETRY_PROMPT = 'HIGHEST PRIORITY: the supplied radio and its display are an immutable geometric reference. Preserve the exact ORIGINAL width-to-height ratio of the entire radio, the active display, bezel, fascia and every control. Never stretch, squash, widen, narrow, lengthen, shorten, warp or redesign the product on either axis. Resize the whole product with ONE uniform scale factor only, identical horizontally and vertically. Keep the original camera viewpoint, orientation and perspective; do not rotate the product or introduce a new viewing angle. A square OUTPUT CANVAS does NOT mean a square radio: a wide radio must remain equally wide relative to its height. Fit the complete unchanged product inside the frame and extend only the surrounding background to fill the square. Never fill the square by reshaping the screen, enlarging its height, reducing its width or cropping the product. Preserve all edges, screen corners, bezel thickness and relative button positions. If composition or styling conflicts with original product geometry, original product geometry takes priority.';
+
     public function edit(AutogenesiProduct $product, string $id, string $mode = 'scene'): void
     {
         if (! app()->environment('local')) {
@@ -35,6 +37,7 @@ class AutogenesiImageEditor
         $prompt = match ($mode) {
             'white' => self::WHITE_PROMPT, 'clean' => self::CLEAN_PROMPT, default => self::PROMPT
         };
+        $prompt = self::GEOMETRY_PROMPT."\n\n".$prompt;
         $info = is_file($path) && ! is_link($path) ? @getimagesize($path) : false;
         if (! $info || ! in_array($info['mime'], ['image/png', 'image/jpeg', 'image/webp'], true) || filesize($path) > 8 * 1024 * 1024) {
             throw new RuntimeException('Immagine originale non disponibile o non valida.');

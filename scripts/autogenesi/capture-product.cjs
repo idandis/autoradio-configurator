@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const readDescription = require('./read-description.cjs');
 const { eligibleOption } = require('./product-filter.cjs');
 const assertAccessible = require('./assert-accessible.cjs');
+const log = require('./import-log.cjs');
 
 const [source, out] = process.argv.slice(2);
 const allowed = host => ['alicdn.com', 'aliexpress-media.com'].some(d => host === d || host.endsWith('.' + d));
@@ -22,6 +23,7 @@ const imageUrl = value => {
   const url = new URL(source);
   if (url.protocol !== 'https:' || !/^(?:es|www)\.aliexpress\.com$/.test(url.hostname) || !/^\/item\/\d+\.html$/.test(url.pathname)) throw new Error('Invalid AliExpress product URL');
   fs.mkdirSync(out, { recursive: true });
+  log('connessione_browser');
   const { context, disconnect } = await connect();
   const opened = [];
   let complete = false;
@@ -30,9 +32,12 @@ const imageUrl = value => {
     opened.push(page);
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.bringToFront();
+    log('apertura_pagina', { url: url.origin + url.pathname });
     const response = await page.goto(url.href, { waitUntil: 'domcontentloaded', timeout: 45000 });
+    log('risposta_pagina', { status: response?.status() });
     if (!response?.ok()) throw new Error('Product page unavailable');
     await assertAccessible(page);
+    log('attesa_varianti');
     await page.locator('[data-sku-col]').first().waitFor({ timeout: 20000 });
     await page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {});
     for (const text of ['Rechazar cookies', 'No permitir']) {
@@ -49,29 +54,35 @@ const imageUrl = value => {
       })),
     }));
     const combinations = initial.groups.reduce((list, group) => list.flatMap(row => group.options.filter(o => !o.disabled && eligibleOption(o.label)).map(option => [...row, { name: group.name, ...option }])), [[]]);
-    if (!combinations.length || combinations.length > 12) throw new Error('This prototype supports up to 12 variant combinations');
+    log('varianti_rilevate', { groups: initial.groups.length, combinations: combinations.length, gallery: initial.gallery.length });
+    if (!combinations.length || combinations.length > 20) throw new Error('This prototype supports up to 20 variant combinations');
     const variants = [];
     for (const options of combinations) {
       for (const option of options) {
         await assertAccessible(page);
+        log('selezione_variante', { key: option.key, label: option.label });
         const el = page.locator(`[data-sku-col="${option.key}"]`);
         await el.click({ timeout: 8000 });
         await page.waitForFunction(key => document.querySelector(`[data-sku-col="${key}"]`)?.className.includes('selected'), option.key, { timeout: 8000 });
       }
       await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
+      log('lettura_prezzo', { variant: options.map(o => o.label).join(' / ') });
       const priceText = await page.locator('[class*="price-default--current--"]').first().innerText();
       const raw = priceText.replace(/[^\d,.]/g, '');
       const value = raw.includes(',') && raw.lastIndexOf(',') > raw.lastIndexOf('.') ? raw.replace(/\./g, '').replace(',', '.') : raw.replace(/,/g, '');
       if (!priceText.includes('€') || !/^\d+(?:\.\d{1,2})?$/.test(value)) throw new Error('Variant price or currency not readable');
       variants.push({ label: options.map(o => o.label).join(' / '), options, supplier_price: value, currency: 'EUR', selling_price: null, observed_at: new Date().toISOString() });
     }
+    log('lettura_descrizione');
     const description = await readDescription(page);
+    log('descrizione_letta', { characters: description.text.length, specifications: description.specifications.length, images: description.image_urls.length });
     await assertAccessible(page);
+    log('download_immagini');
     const images = [];
     const hashes = new Set();
     for (const src of [...new Set(initial.gallery.map(imageUrl))].slice(0, 12)) {
       const response = await page.request.get(src, { timeout: 20000, maxRedirects: 0 });
-      if (!response.ok()) continue;
+      if (!response.ok()) { log('immagine_non_disponibile', { status: response.status(), url: src }); continue; }
       const bytes = await response.body();
       if (!bytes.length || bytes.length > 8 * 1024 * 1024 || !response.headers()['content-type']?.startsWith('image/')) continue;
       const hash = crypto.createHash('sha256').update(bytes).digest('hex');
@@ -106,9 +117,10 @@ const imageUrl = value => {
     fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify(manifest, null, 2));
     await page.screenshot({ path: path.join(out, 'source.png') });
     console.log(JSON.stringify({ source_id: manifest.source_id, variants: variants.length, images: images.length, manifest: path.join(out, 'manifest.json') }));
+    log('acquisizione_completata', { variants: variants.length, images: images.length, description_images: descriptionImages.length });
     complete = true;
   } finally {
     if (complete) await Promise.all(opened.map(p => p.close().catch(() => {})));
     await disconnect();
   }
-})().catch(error => { console.error(error.message); process.exitCode = 1; });
+})().catch(error => { log('errore_browser', { message: error.message }); console.error(error.message); process.exitCode = 1; });

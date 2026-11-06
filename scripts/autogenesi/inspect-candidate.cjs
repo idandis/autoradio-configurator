@@ -22,7 +22,7 @@ module.exports = async (page, candidate, vehicle) => {
   if (!relevant(data.title, vehicle, false)) return null;
   if (new Set(data.gallery.filter(Boolean)).size < 3) return null;
   const groups = data.groups.map(group => group.filter(o => !o.disabled && eligibleOption(o.label)));
-  if (!groups.length || groups.some(g => !g.length) || groups.reduce((n, g) => n * g.length, 1) > 12) return null;
+  if (!groups.length || groups.some(g => !g.length) || groups.reduce((n, g) => n * g.length, 1) > 20) return null;
   for (const group of groups) {
     await assertAccessible(page);
     const option = group[0];

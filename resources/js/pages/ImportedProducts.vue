@@ -11,6 +11,7 @@ const props = defineProps<{
     filters: {
         category: string;
         search: string;
+        date: string;
     };
     products: {
         data: Array<{
@@ -44,10 +45,11 @@ const props = defineProps<{
     };
 }>();
 
-const exportDate = ref(props.importDates?.[0] || '');
+const exportDate = ref(props.filters.date || props.importDates?.[0] || '');
 const filters = reactive({
     category: props.filters.category || '',
     search: props.filters.search || '',
+    date: props.filters.date || '',
 });
 const editingPrice = ref<number | null>(null);
 const priceDraft = ref('');
@@ -196,11 +198,13 @@ const deleteProduct = (product: (typeof props.products.data)[number]) => {
 };
 
 const applyFilters = () => {
+    if (filters.date) exportDate.value = filters.date;
     router.get(
         '/imported-products',
         {
             category: filters.category || undefined,
             search: filters.search || undefined,
+            date: filters.date || undefined,
         },
         {
             preserveState: true,
@@ -213,6 +217,7 @@ const applyFilters = () => {
 const resetFilters = () => {
     filters.category = '';
     filters.search = '';
+    filters.date = '';
     applyFilters();
 };
 
@@ -253,7 +258,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                 </p>
             </div>
 
-            <div class="grid gap-3 sm:grid-cols-[180px_260px_auto]">
+            <div class="grid gap-3 sm:grid-cols-2 xl:grid-cols-[180px_260px_160px_auto]">
                 <select
                     v-model="filters.category"
                     class="rounded-lg border border-sidebar-border/70 bg-background px-4 py-2.5 text-sm"
@@ -273,6 +278,8 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                     class="rounded-lg border border-sidebar-border/70 bg-background px-4 py-2.5 text-sm"
                     @keydown.enter.prevent="applyFilters"
                 />
+
+                <input v-model="filters.date" type="date" aria-label="Data importazione" title="Data importazione" class="rounded-lg border border-sidebar-border/70 bg-background px-3 py-2.5 text-sm" @change="applyFilters" />
 
                 <div class="flex gap-2">
                     <button

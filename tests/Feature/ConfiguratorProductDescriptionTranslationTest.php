@@ -18,6 +18,7 @@ class ConfiguratorProductDescriptionTranslationTest extends TestCase
         Http::preventStrayRequests();
         config(['services.openai.api_key' => null]);
         $handles = [
+            '9-7inch-android-for-renault-clio5-clio-5-2019-2021-car-radio-multimedia-navigation-wireless-bt-carplay-multimedia-screen-stereo',
             'citroen-c3-aircross-2020-2020-ae-1005010319633755',
             'citroen-c5-aircross-2020-2020-ae-1005007967046585',
             'fiat-500x-2020-2020-ae-1005012092589765',

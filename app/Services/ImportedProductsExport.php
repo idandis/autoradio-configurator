@@ -20,10 +20,15 @@ class ImportedProductsExport
             ->map(fn ($p) => $this->date($p))->unique()->sortDesc()->values()->all();
     }
 
+    public function idsOnDate(string $date): array
+    {
+        return ConfiguratorProduct::whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])->get(['id', 'meta', 'created_at'])
+            ->filter(fn ($p) => $this->date($p) === $date)->pluck('id')->all();
+    }
+
     public function write(string $date): string
     {
-        $ids = ConfiguratorProduct::whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])->get(['id', 'meta', 'created_at'])
-            ->filter(fn ($p) => $this->date($p) === $date)->pluck('id');
+        $ids = $this->idsOnDate($date);
         $products = ConfiguratorProduct::with('variants')->whereIn('id', $ids)->orderBy('id')->get();
         if ($products->isEmpty()) throw new \RuntimeException('Nessun prodotto importato nella data selezionata.');
         $template = app(AutogenesiTemplateExport::class);

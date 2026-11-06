@@ -181,6 +181,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::put('/models', [ModelsController::class, 'update'])->name('models.update');
     Route::get('/imported-products', ImportedProductsController::class)->name('imported-products.index');
     Route::get('/autogenesi', [AutogenesiController::class, 'index'])->name('autogenesi.index');
+    Route::get('/autogenesi/import-log', [AutogenesiController::class, 'importLog'])->name('autogenesi.import-log');
     Route::get('/autogenesi/chrome-extension', [AutogenesiController::class, 'chromeExtension'])->name('autogenesi.chrome-extension');
     Route::get('/autogenesi/export-all', [AutogenesiController::class, 'exportAll'])->name('autogenesi.export-all');
     Route::post('/autogenesi/import-all-configurator', [AutogenesiController::class, 'importAllConfigurator'])->name('autogenesi.import-all-configurator');

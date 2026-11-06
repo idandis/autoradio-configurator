@@ -263,4 +263,16 @@ class ImportedProductsTest extends TestCase
         $this->assertSame('Autoradio para Volvo XC40', $p->fresh()->title);
     }
 
+    public function test_import_date_filter_combines_with_search_and_category_using_italian_day(): void
+    {
+        foreach ([['first', 'screen', 'Radio Kia', '2026-11-05T23:30:00+00:00'], ['second', 'screen', 'Radio Kia', '2026-11-05T10:00:00+00:00'], ['third', 'camera', 'Camera Kia', '2026-11-05T23:30:00+00:00']] as [$handle, $category, $title, $date]) {
+            ConfiguratorProduct::create(['handle' => $handle, 'category' => $category, 'title' => $title, 'meta' => ['imported_at' => $date]]);
+        }
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->get(route('imported-products.index', ['date' => '2026-11-06', 'category' => 'screen', 'search' => 'Kia']))
+            ->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->where('filters.date', '2026-11-06')->has('products.data', 1)->where('products.data.0.handle', 'first')->where('products.total', 1));
+        $this->get(route('imported-products.index'))->assertInertia(fn (\Inertia\Testing\AssertableInertia $page) => $page->has('products.data', 3));
+        $this->get(route('imported-products.index', ['date' => 'invalid']))->assertSessionHasErrors('date');
+    }
+
 }

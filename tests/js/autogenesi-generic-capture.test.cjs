@@ -24,6 +24,14 @@ test('generic capture reads exact EUR variants, descriptions and CDN images, rej
     assert.match(data.description.text, /Descrizione completa/);
     assert.equal(data.description.image_urls.length, 1);
     assert.deepEqual(data.description.specifications, [{ name: 'DIN', value: '1 DIN' }]);
+    const original = product.hasVariant;
+    product.hasVariant = Array.from({ length: 20 }, (_, i) => ({ ...original[0], name: `Variant ${i + 1}` }));
+    await page.setContent(`<script type="application/ld+json">${JSON.stringify(product)}</script>`);
+    assert.equal((await page.evaluate(script)).variants.length, 20);
+    product.hasVariant.push({ ...original[0], name: 'Variant 21' });
+    await page.setContent(`<script type="application/ld+json">${JSON.stringify(product)}</script>`);
+    await assert.rejects(page.evaluate(script), /20 varianti/);
+    product.hasVariant = original;
     product.hasVariant[0].offers.priceCurrency = 'USD';
     await page.setContent(`<script type="application/ld+json">${JSON.stringify(product)}</script>`);
     await assert.rejects(page.evaluate(script), /EUR/);

@@ -30,7 +30,7 @@
   }));
   const combinations = groups.reduce((rows, group) => rows.flatMap(row => group.options.map(o => [...row, { name: group.name, ...o } ])), [[]]);
   if ((!groups.length && ([...document.querySelectorAll('[class*="sku-item--property--"], [data-sku-col]')].some(visible) || !eligible(sourceTitle)))
-    || !combinations.length || combinations.length > 12) throw new Error('Acquisizione supportata per prodotti con 1–12 combinazioni di varianti leggibili.');
+    || !combinations.length || combinations.length > 20) throw new Error('Acquisizione supportata per prodotti con 1–20 combinazioni di varianti leggibili.');
   const original = [...document.querySelectorAll('[data-sku-col]')].filter(el => /selected/.test(el.className)).map(el => el.getAttribute('data-sku-col'));
   const variants = [];
   try {

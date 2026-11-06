@@ -47,6 +47,8 @@ class AutogenesiDescription
         }
         $rules = file_get_contents(base_path('docs/autogenesi/regole-scheda-prodotto.md'));
         $strings = ['type' => 'array', 'items' => ['type' => 'string']];
+        $imageFiles = array_values(array_unique(array_column(array_merge($data['images'], $source['images'] ?? []), 'file')));
+        $imageChoice = ['type' => ['string', 'null'], 'enum' => [...$imageFiles, null]];
         $schema = ['type' => 'object', 'properties' => [
             'title' => ['type' => 'string'], 'intro' => ['type' => 'string'],
             'sections' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => ['heading' => ['type' => 'string'], 'items' => $strings],
@@ -56,7 +58,7 @@ class AutogenesiDescription
                 'brand' => ['type' => 'string'], 'model' => ['type' => 'string'], 'year_from' => ['type' => 'integer'], 'year_to' => ['type' => 'integer'],
                 'evidence' => ['type' => 'string'], 'source_file' => ['type' => ['string', 'null']],
             ], 'required' => ['brand', 'model', 'year_from', 'year_to', 'evidence', 'source_file']]],
-            'accessories_image' => ['type' => ['string', 'null']], 'before_after_image' => ['type' => ['string', 'null']],
+            'accessories_image' => $imageChoice, 'before_after_image' => $imageChoice,
             'variant_specs' => ['type' => 'array', 'items' => ['type' => 'object', 'properties' => [
                 'label' => ['type' => 'string'], 'cores' => ['type' => ['integer', 'null'], 'enum' => [4, 8, null]], 'evidence' => ['type' => 'string'],
             ], 'required' => ['label', 'cores', 'evidence'], 'additionalProperties' => false]],
@@ -92,6 +94,12 @@ class AutogenesiDescription
                 'closing' => 'required|string', 'notes' => 'present|array', 'notes.*' => 'string', 'coverage' => 'required|array',
                 'coverage.*.spec_index' => 'required|integer', 'coverage.*.section_index' => 'present|nullable|integer|min:0',
                 'coverage.*.item_index' => 'present|nullable|integer|min:0', 'coverage.*.note_index' => 'present|nullable|integer|min:0'])->validate();
+            foreach (['accessories_image', 'before_after_image'] as $key) {
+                if (isset($copy[$key]) && ! in_array($copy[$key], $imageFiles, true)) {
+                    $copy['notes'][] = 'Immagine aggiuntiva non associata: '.$key.' = '.$copy[$key].'. File non presente nelle fonti acquisite; scegliere la foto manualmente.';
+                    $copy[$key] = null;
+                }
+            }
             $copy = $this->separateUncertain($copy, $sources);
             $errors = [];
             if (count(preg_split('/\s+/u', trim($copy['title']))) > 10 || count(preg_split('/\s+/u', trim($copy['intro']))) > 30) {
