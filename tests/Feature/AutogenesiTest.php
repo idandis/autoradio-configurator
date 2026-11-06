@@ -856,7 +856,7 @@ class AutogenesiTest extends TestCase
         $this->assertTrue($edited['dashboard_selected']);
         $this->assertNotSame($id, $edited['sha256']);
         $this->assertArrayNotHasKey('shopify_file_reference', $edited);
-        $this->assertSame('', app(AutogenesiTemplateExport::class)->rows($p->fresh())[0][AutogenesiTemplateExport::DASHBOARD]);
+        $this->assertSame($edited['sha256'].'.png', app(AutogenesiTemplateExport::class)->rows($p->fresh())[0][AutogenesiTemplateExport::DASHBOARD]);
         $this->post('/autogenesi/'.$p->id.'/images/0/restore', ['image_id' => $edited['sha256']])->assertRedirect()->assertSessionHasNoErrors();
         $restored = \App\Services\AutogenesiImageLayout::dashboard($p->fresh());
         $this->assertSame($id, $restored['sha256']);

@@ -34,8 +34,9 @@ class ImportedProductsExport
             $images = collect([$p->image_url, ...($p->meta['gallery_images'] ?? []), ...$p->variants->pluck('image_url')->all(), ...array_column($p->meta['original_dashboard_images'] ?? [], 'url')])->filter()->unique()->values()->all();
             $dashboard = $p->meta['original_dashboard_images'][0] ?? null;
             $reference = $dashboard['shopify_file_reference'] ?? '';
-            if (! $reference && isset($dashboard['url']) && preg_match('/(?:^|\.)shopify\.com$/i', parse_url($dashboard['url'], PHP_URL_HOST) ?? '')) {
-                $reference = rawurldecode(basename(parse_url($dashboard['url'], PHP_URL_PATH)));
+            if (! $reference && isset($dashboard['url'])) {
+                $dashboardUrl = $this->imageUrl($dashboard['url']);
+                if ($dashboardUrl) $reference = rawurldecode(basename(parse_url($dashboardUrl, PHP_URL_PATH)));
             }
             $base = array_replace(array_fill_keys($template->columns(), ''), [
                 'Title' => $p->title, 'Handle' => $p->handle, 'ID' => $p->meta['shopify_product_id'] ?? '',

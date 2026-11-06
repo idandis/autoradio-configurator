@@ -198,7 +198,7 @@ class ImportedProductsTest extends TestCase
         \Illuminate\Support\Facades\Storage::fake('local');
         $p = ConfiguratorProduct::create(['handle' => 'date-export', 'category' => 'screen', 'title' => 'Radio Kia Stonic', 'body_html' => '<p>Descrizione attuale</p>',
             'brand' => 'KIA', 'model' => '1:STONIC', 'year_from' => 2017, 'year_to' => 2026, 'image_url' => '/storage/autogenesi/catalog/123/main.png',
-            'meta' => ['din' => '1DIN', 'autogenesi' => ['imported_at' => '2026-11-04T23:30:00+00:00'], 'gallery_images' => ['/storage/autogenesi/catalog/123/main.png', '/storage/autogenesi/catalog/123/dashboard.png']]]);
+            'meta' => ['din' => '1DIN', 'original_dashboard_images' => [['url' => '/storage/autogenesi/catalog/123/dashboard.png', 'variant' => null]], 'autogenesi' => ['imported_at' => '2026-11-04T23:30:00+00:00'], 'gallery_images' => ['/storage/autogenesi/catalog/123/main.png', '/storage/autogenesi/catalog/123/dashboard.png']]]);
         $p->variants()->create(['title' => '4GB 64GB', 'option_value' => '4GB 64GB', 'sku' => 'AE-123-1', 'price' => 299]);
         $p->variants()->create(['title' => '8GB 128GB', 'option_value' => '8GB 128GB', 'sku' => 'AE-123-2', 'price' => 399]);
         $p->update(['created_at' => '2025-01-01 12:00:00']);
@@ -216,6 +216,9 @@ class ImportedProductsTest extends TestCase
         $this->assertNull($rows[1]['Body HTML']);
         $this->assertSame(['299.00', '399.00'], array_column($rows, 'Variant Price'));
         $this->assertSame('1:STONIC', $rows[0][\App\Services\AutogenesiTemplateExport::MODEL]);
+        $this->assertSame('dashboard.png', $rows[0][\App\Services\AutogenesiTemplateExport::DASHBOARD]);
+        $this->assertSame('https://www.autoradioitaliano.it/storage/autogenesi/catalog/123/dashboard.png', $rows[1]['Image Src']);
+        $this->assertNull($rows[1][\App\Services\AutogenesiTemplateExport::DASHBOARD]);
         $this->assertSame('https://www.autoradioitaliano.it/storage/autogenesi/catalog/123/main.png', $rows[0]['Image Src']);
         $this->assertNotContains(\App\Services\AutogenesiTemplateExport::SOURCE, $headers);
         $this->assertSame(['Active', 'Active'], array_column($rows, 'Status'));

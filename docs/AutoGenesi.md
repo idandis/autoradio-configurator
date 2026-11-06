@@ -271,3 +271,6 @@ La migrazione 2026_11_04_180000 rileva tipo e attributo unsigned di users.id e l
 
 ### Link fornitore dopo import Excel
 Prodotti importati mostra il link salvato in meta.autogenesi.source_url o meta.source_url. Per i prodotti AutoGenesi AliExpress il cui Excel non contiene il metafield fornitore, recupera il link dall’ID nel suffisso -ae-ID dell’Handle. Nessuna colonna aggiunta all’Excel Shopify e nessun link inventato per i prodotti di altri siti.
+
+### Foto cruscotto nell’export locale: associazione automatica
+Se una foto cruscotto è selezionata, l’export include il suo URL completo Aruba in Image Src e compila custom.foto_cruscotto_originale [list.file_reference] con il nome dello stesso file, secondo il formato Matrixify. Un nome/GID Shopify impostato manualmente ha precedenza. Non richiede un riferimento manuale per preparare il file locale. Prima dell’importazione le foto devono essere pubbliche su Aruba; Shopify deve avere acquisito il file prima di poter risolvere il riferimento. Un URL diretto non è un valore documentato per file_reference. Rimangono solo il foglio Products e lo stato Active.

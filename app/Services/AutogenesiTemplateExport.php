@@ -86,7 +86,7 @@ class AutogenesiTemplateExport
             self::DIN => ['Titolo / specifiche', 'Questo metafield contiene il DIN (1DIN/2DIN), non i pollici, come nel modello e nell’importatore.'],
             self::MODEL => ['Vettura', '1: associa il modello alla prima marca, come nel formato allegato.'],
             self::YEAR => ['Vettura', 'Intervallo anni salvato nella bozza.'],
-            self::DASHBOARD => ['Shopify Files', 'Foto scelta con il flag Cruscotto originale. Nome file o GID Shopify; caricare prima la foto in Shopify Files, non usare un URL Aruba.'],
+            self::DASHBOARD => ['Shopify Files', 'Foto scelta con il flag Cruscotto originale. Nome file della stessa foto presente in Image Src, oppure riferimento Shopify manuale. Il file deve essere disponibile in Shopify per risolvere il metafield.'],
             'Status' => ['Aggiunta necessaria', 'Active: il prodotto viene importato come attivo, come richiesto.'],
         ];
         $audit = [];
@@ -271,6 +271,11 @@ class AutogenesiTemplateExport
     {
         $image = AutogenesiImageLayout::dashboard($p);
         if (! empty($image['shopify_file_reference'])) return $image['shopify_file_reference'];
+        if ($image) {
+            $exportImage = collect($this->images($p))->firstWhere('sha256', $image['sha256']);
+            $url = $exportImage ? $this->publicUrl($exportImage) : '';
+            if ($url) return rawurldecode(basename(parse_url($url, PHP_URL_PATH)));
+        }
 
         return '';
     }
