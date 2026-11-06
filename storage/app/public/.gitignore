@@ -1,2 +1,6 @@
 *
 !.gitignore
+!autogenesi/
+autogenesi/*
+!autogenesi/catalog/
+!autogenesi/catalog/**

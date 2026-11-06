@@ -46,5 +46,19 @@ test('crop selector stays square when dragged and resized and emits natural-pixe
     const rect = await page.evaluate(() => window.savedRect);
     assert.ok(Number.isInteger(rect.x) && Number.isInteger(rect.y) && Number.isInteger(rect.size));
     assert.ok(rect.x >= 0 && rect.y >= 0 && rect.x + rect.size <= 1000 && rect.y + rect.size <= 600);
+    await page.getByRole('combobox').selectOption('rectangle');
+    const rectangle = page.getByRole('group', { name: 'Area rettangolare: trascina o usa le frecce' });
+    const rb = await rectangle.boundingBox();
+    const corner = await page.getByRole('button', { name: 'Ridimensiona rettangolo' }).boundingBox();
+    await page.mouse.move(corner.x + corner.width / 2, corner.y + corner.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(corner.x + corner.width / 2 + 45, corner.y + corner.height / 2 - 35);
+    await page.mouse.up();
+    const changed = await rectangle.boundingBox();
+    assert.ok(changed.width > rb.width && changed.height < rb.height);
+    await page.getByRole('button', { name: 'Applica taglio' }).click();
+    const result = await page.evaluate(() => window.savedRect);
+    assert.ok(result.width > result.height);
+    assert.ok(result.x + result.width <= 1000 && result.y + result.height <= 600);
   } finally { await browser.close(); }
 });

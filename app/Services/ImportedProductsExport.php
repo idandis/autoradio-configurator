@@ -37,12 +37,16 @@ class ImportedProductsExport
         foreach ($products as $p) {
             if (mb_strlen($p->body_html ?? '') > 32767) throw new \RuntimeException('Descrizione troppo lunga per Excel: '.$p->title);
             $images = collect([$p->image_url, ...($p->meta['gallery_images'] ?? []), ...$p->variants->pluck('image_url')->all(), ...array_column($p->meta['original_dashboard_images'] ?? [], 'url')])->filter()->unique()->values()->all();
-            $dashboard = $p->meta['original_dashboard_images'][0] ?? null;
-            $reference = $dashboard['shopify_file_reference'] ?? '';
-            if (! $reference && isset($dashboard['url'])) {
-                $dashboardUrl = $this->imageUrl($dashboard['url']);
-                if ($dashboardUrl) $reference = rawurldecode(basename(parse_url($dashboardUrl, PHP_URL_PATH)));
+            $references = [];
+            foreach ($p->meta['original_dashboard_images'] ?? [] as $dashboard) {
+                $ref = $dashboard['shopify_file_reference'] ?? '';
+                if (!$ref && isset($dashboard['url'])) {
+                    $url = $this->imageUrl($dashboard['url']);
+                    if ($url) $ref = rawurldecode(basename(parse_url($url, PHP_URL_PATH)));
+                }
+                if ($ref) $references[] = $ref;
             }
+            $reference = implode(', ', array_unique($references));
             $base = array_replace(array_fill_keys($template->columns(), ''), [
                 'Title' => $p->title, 'Handle' => $p->handle, 'ID' => $p->meta['shopify_product_id'] ?? '',
                 'Type' => ($p->meta['type'] ?? null) ?: match ($p->category) { 'screen' => 'Radio AM/FM', 'camera' => 'Cámara', 'speaker' => 'Altavoces', default => 'Accesorios' },

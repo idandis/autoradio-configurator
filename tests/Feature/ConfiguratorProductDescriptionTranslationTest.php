@@ -18,6 +18,18 @@ class ConfiguratorProductDescriptionTranslationTest extends TestCase
         Http::preventStrayRequests();
         config(['services.openai.api_key' => null]);
         $handles = [
+            'fiat-tipo-2020-2020-ae-1005013423271459',
+            'kia-ceed-2018-2022-ae-1005012763646975',
+            'mazda-cx-30-2020-2020-ae-1005013148037456',
+            'mercedes-benz-1c-clase-c-1glc-1v-clase-v-1x-x253-2019-2023-ae-1005012977866006',
+            'peugeot-13008-14008-15008-2016-2022-ae-1005010193628165',
+            'peugeot-2008-2012-2018-ae-1005013053995831',
+            'renault-kadjar-2020-2020-ae-1005013230296044',
+            'seat-ateca-2016-2021-ae-1005010250614528',
+            'skoda-fabia-2020-2020-ae-1005006808795149',
+            'skoda-kamiq-2020-2022-ae-1005011841844054',
+            'skoda-superb-3-2015-2019-ae-1005012913016913',
+            'volkswagen-polo-mk6-vi-2020-2022-ae-1005012527087733',
             '9-7inch-android-for-renault-clio5-clio-5-2019-2021-car-radio-multimedia-navigation-wireless-bt-carplay-multimedia-screen-stereo',
             'citroen-c3-aircross-2020-2020-ae-1005010319633755',
             'citroen-c5-aircross-2020-2020-ae-1005007967046585',

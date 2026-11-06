@@ -10,10 +10,16 @@ class AutogenesiImageLayout
 {
     public static function dashboard(AutogenesiProduct $product): ?array
     {
+        return self::dashboards($product)[0] ?? null;
+    }
+
+    public static function dashboards(AutogenesiProduct $product): array
+    {
         if ($product->metadata['dashboard_selection_explicit'] ?? false) {
-            return collect($product->images)->first(fn ($image) => ! empty($image['dashboard_selected']));
+            return collect($product->images)->filter(fn ($image) => !empty($image['dashboard_selected']))->values()->all();
         }
-        return collect($product->images)->first(fn ($image) => in_array($image['role'], ['cruscotto_originale', 'cruscotto_prima_dopo'], true));
+        $first = collect($product->images)->first(fn ($image) => in_array($image['role'], ['cruscotto_originale', 'cruscotto_prima_dopo'], true));
+        return $first ? [$first] : [];
     }
 
     public function update(AutogenesiProduct $product, array $data): void
@@ -21,7 +27,7 @@ class AutogenesiImageLayout
         DB::transaction(function () use ($product, $data) {
             $current = AutogenesiProduct::lockForUpdate()->findOrFail($product->id);
             $images = $current->images;
-            $selected = self::dashboard($current)['sha256'] ?? null;
+            $selected = array_column(self::dashboards($current), 'sha256');
             if (array_key_exists('order', $data)) {
                 $ids = array_column($images, 'sha256');
                 if (count($ids) !== count($data['order']) || array_diff($ids, $data['order']) || array_diff($data['order'], $ids)) {
@@ -31,8 +37,8 @@ class AutogenesiImageLayout
                 $images = array_map(fn ($id) => $byId[$id], $data['order']);
             }
             $meta = $current->metadata;
-            if (array_key_exists('order', $data) && ! ($meta['dashboard_selection_explicit'] ?? false)) {
-                foreach ($images as &$image) $image['dashboard_selected'] = $image['sha256'] === $selected;
+            if ((array_key_exists('order', $data) || array_key_exists('reference_image_id', $data)) && ! ($meta['dashboard_selection_explicit'] ?? false)) {
+                foreach ($images as &$image) $image['dashboard_selected'] = in_array($image['sha256'], $selected, true);
                 unset($image);
                 $meta['dashboard_selection_explicit'] = true;
             }
@@ -45,10 +51,19 @@ class AutogenesiImageLayout
                 unset($image);
                 $meta['dashboard_selection_explicit'] = true;
             }
+            if (array_key_exists('dashboard_image_ids', $data)) {
+                $ids = $data['dashboard_image_ids'];
+                if (array_diff($ids, array_column($images, 'sha256'))) {
+                    throw ValidationException::withMessages(['layout' => 'Una foto selezionata non appartiene alla bozza.']);
+                }
+                foreach ($images as &$image) $image['dashboard_selected'] = in_array($image['sha256'], $ids, true);
+                unset($image);
+                $meta['dashboard_selection_explicit'] = true;
+            }
             if (array_key_exists('shopify_file_reference', $data)) {
                 $found = false;
                 foreach ($images as &$image) {
-                    if (! empty($image['dashboard_selected'])) {
+                    if (! empty($image['dashboard_selected']) && (!isset($data['reference_image_id']) || $image['sha256'] === $data['reference_image_id'])) {
                         $image['shopify_file_reference'] = $data['shopify_file_reference'] ?? '';
                         $found = true;
                     }

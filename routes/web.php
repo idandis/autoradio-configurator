@@ -207,8 +207,10 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::delete('/autogenesi/{product}/images/{index}', [AutogenesiController::class, 'removeImage'])->whereNumber(['product', 'index'])->name('autogenesi.remove-image');
     Route::post('/autogenesi/{product}/images/{index}/ai', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.edit-image');
     Route::post('/autogenesi/{product}/images', [AutogenesiController::class, 'uploadImages'])->whereNumber('product')->name('autogenesi.upload-images');
+    Route::post('/autogenesi/{product}/images/{index}/paint', [AutogenesiController::class, 'paintImage'])->whereNumber(['product', 'index'])->name('autogenesi.paint-image');
     Route::post('/autogenesi/{product}/images/{index}/crop', [AutogenesiController::class, 'cropImage'])->whereNumber(['product', 'index'])->name('autogenesi.crop-image');
     Route::post('/autogenesi/{product}/images/{index}/clean', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.clean-image');
+    Route::post('/autogenesi/{product}/images/{index}/text', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.text-image');
     Route::post('/autogenesi/{product}/images/{index}/white', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.white-image');
     Route::post('/autogenesi/{product}/images/{index}/restore', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->name('autogenesi.restore-image');
     Route::get('/autogenesi/{product}/export', [AutogenesiController::class, 'export'])->whereNumber('product')->name('autogenesi.export');

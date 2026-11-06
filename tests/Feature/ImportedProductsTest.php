@@ -180,6 +180,11 @@ class ImportedProductsTest extends TestCase
         $this->assertSame('/storage/main.png', $p->fresh()->image_url);
         $this->patch($url, ['image_url' => '/storage/variant.png'])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame('/storage/variant.png', $p->fresh()->meta['original_dashboard_images'][0]['url']);
+        $this->patch($url, ['image_urls' => ['/storage/dashboard.png', '/storage/variant.png']])->assertSessionHasNoErrors();
+        $this->assertSame(['/storage/dashboard.png', '/storage/variant.png'], array_column($p->fresh()->meta['original_dashboard_images'], 'url'));
+        $this->patch($url, ['image_urls' => ['/storage/main.png', '/storage/foreign.png']])->assertSessionHasErrors('image_urls');
+        $this->assertCount(2, $p->fresh()->meta['original_dashboard_images']);
+        session()->forget('errors');
         $this->patch($url, ['image_url' => null])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame([], $p->fresh()->meta['original_dashboard_images']);
     }

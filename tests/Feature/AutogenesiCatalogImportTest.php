@@ -259,6 +259,35 @@ class AutogenesiCatalogImportTest extends TestCase
         $this->assertSame('', app(AutogenesiTemplateExport::class)->rows($draft->fresh())[0][AutogenesiTemplateExport::DASHBOARD]);
     }
 
+    public function test_multiple_dashboard_photos_export_comma_separated_and_reach_catalog(): void
+    {
+        $draft = $this->draft();
+        $ids = array_column($draft->images, 'sha256');
+        $url = '/autogenesi/'.$draft->id.'/images/layout';
+        $this->patch($url, ['dashboard_image_ids' => $ids])->assertSessionHasNoErrors();
+        $this->patch($url, ['reference_image_id' => $ids[0], 'shopify_file_reference' => 'originale-frontale.png'])->assertSessionHasNoErrors();
+        $this->assertCount(count($ids), \App\Services\AutogenesiImageLayout::dashboards($draft->fresh()));
+        $this->patch($url, ['order' => array_reverse($ids)])->assertSessionHasNoErrors();
+        $rows = app(AutogenesiTemplateExport::class)->rows($draft->fresh());
+        $this->assertSame($ids[1].'.png, originale-frontale.png', $rows[0][AutogenesiTemplateExport::DASHBOARD]);
+        $this->assertSame('', $rows[1][AutogenesiTemplateExport::DASHBOARD]);
+        $this->post('/autogenesi/'.$draft->id.'/import-configurator')->assertSessionHasNoErrors();
+        $p = ConfiguratorProduct::firstOrFail();
+        $this->assertCount(2, $p->meta['original_dashboard_images']);
+        $this->assertStringContainsString($ids[1], $p->meta['original_dashboard_images'][0]['url']);
+        $file = app(\App\Services\ImportedProductsExport::class)->write(now()->format('Y-m-d'));
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
+        $data = $book->getActiveSheet()->toArray();
+        $col = array_search(AutogenesiTemplateExport::DASHBOARD, $data[0]);
+        $this->assertSame($rows[0][AutogenesiTemplateExport::DASHBOARD], $data[1][$col]);
+        $parser = new \ReflectionMethod(\App\Services\ConfiguratorCsvImporter::class, 'parseFileList');
+        $images = ['https://example.com/'.$ids[1].'.png', 'https://example.com/originale-frontale.png'];
+        $parsed = $parser->invoke(app(\App\Services\ConfiguratorCsvImporter::class), $data[1][$col], $images[0], $images);
+        $this->assertSame($images, array_column($parsed, 'url'));
+        $this->patch($url, ['dashboard_image_ids' => []])->assertSessionHasNoErrors();
+        $this->assertSame([], \App\Services\AutogenesiImageLayout::dashboards($draft->fresh()));
+    }
+
     public function test_image_layout_rejects_missing_duplicate_and_unknown_images_and_external_references(): void
     {
         $draft = $this->draft();

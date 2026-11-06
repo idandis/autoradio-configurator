@@ -36,6 +36,7 @@ const props = defineProps<{
             image_url: string | null;
             images: string[];
             dashboard_image_url: string | null;
+            dashboard_image_urls: string[];
         }>;
         links: Array<{
             url: string | null;
@@ -57,11 +58,11 @@ const savingPrice = ref(false);
 const deletingProduct = ref<number | null>(null);
 const dashboardProduct = ref<(typeof props.products.data)[number] | null>(null);
 const dashboardOpen = ref(false);
-const dashboardForm = useForm({ image_url: null as string | null });
+const dashboardForm = useForm({ image_urls: [] as string[] });
 const openDashboard = (product: (typeof props.products.data)[number]) => {
     dashboardProduct.value = product;
     dashboardForm.clearErrors();
-    dashboardForm.image_url = product.dashboard_image_url;
+    dashboardForm.image_urls = [...product.dashboard_image_urls];
     dashboardOpen.value = true;
 };
 const saveDashboard = () => {
@@ -414,13 +415,13 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
     </section>
     <Dialog v-model:open="dashboardOpen">
         <DialogContent class="sm:max-w-3xl max-h-[90vh] overflow-y-auto" @interact-outside="dashboardForm.processing && $event.preventDefault()" @escape-key-down="dashboardForm.processing && $event.preventDefault()">
-            <DialogHeader><DialogTitle>Foto cruscotto originale</DialogTitle><DialogDescription>{{ dashboardProduct?.title }} · Scegli l’immagine che mostra il cruscotto originale della vettura.</DialogDescription></DialogHeader>
+            <DialogHeader><DialogTitle>Foto cruscotto originale</DialogTitle><DialogDescription>{{ dashboardProduct?.title }} · Seleziona le immagini che mostrano il cruscotto originale della vettura.</DialogDescription></DialogHeader>
             <form class="space-y-4" @submit.prevent="saveDashboard">
-                <label class="flex items-center gap-2 text-sm"><input v-model="dashboardForm.image_url" type="radio" :value="null" :disabled="dashboardForm.processing" />Nessuna foto cruscotto</label>
+                <label class="flex items-center gap-2 text-sm"><input type="checkbox" :checked="!dashboardForm.image_urls.length" :disabled="dashboardForm.processing" @change="dashboardForm.image_urls = []" />Nessuna foto cruscotto</label>
                 <div class="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                    <label v-for="(url, i) in dashboardProduct?.images || []" :key="url" class="cursor-pointer rounded-lg border p-2" :class="dashboardForm.image_url === url ? 'border-primary ring-2 ring-primary' : 'border-sidebar-border/70'">
+                    <label v-for="(url, i) in dashboardProduct?.images || []" :key="url" class="cursor-pointer rounded-lg border p-2" :class="dashboardForm.image_urls.includes(url) ? 'border-primary ring-2 ring-primary' : 'border-sidebar-border/70'">
                         <img :src="url" :alt="`Foto prodotto ${i + 1}`" loading="lazy" class="h-36 w-full rounded object-contain" />
-                        <span class="mt-2 flex items-center gap-2 text-sm"><input v-model="dashboardForm.image_url" type="radio" :value="url" :disabled="dashboardForm.processing" />Foto {{ i + 1 }}</span>
+                        <span class="mt-2 flex items-center gap-2 text-sm"><input v-model="dashboardForm.image_urls" type="checkbox" :value="url" :disabled="dashboardForm.processing" />Foto {{ i + 1 }}</span>
                     </label>
                 </div>
                 <p v-if="!dashboardProduct?.images.length" class="text-sm text-muted-foreground">Il prodotto non ha immagini disponibili.</p>

@@ -22,6 +22,7 @@ class AutogenesiDashboardImage
             throw new RuntimeException('Generazione cruscotto già in corso.');
         }
         try {
+            set_time_limit(600);
             $this->create($product);
         } finally {
             $lock->release();

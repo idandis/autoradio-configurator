@@ -257,9 +257,65 @@ class AutogenesiTest extends TestCase
         config(['services.openai.api_key' => 'test-key', 'services.openai.image_model' => 'gpt-image-1-mini']);
         $file = UploadedFile::fake()->image('edited.png', 1024, 1024);
         $bytes = file_get_contents($file->getRealPath());
-        Http::fake(['https://api.openai.com/v1/images/edits' => Http::response(['data' => [['b64_json' => base64_encode($bytes)]]])]);
+        Http::fake(['https://api.openai.com/v1/images/*' => Http::response(['data' => [['b64_json' => base64_encode($bytes)]]])]);
 
         return $bytes;
+    }
+
+    public function test_scene_composite_preserves_product_ratio_and_pixels_without_ai_redrawing(): void
+    {
+        $source = imagecreatetruecolor(600, 400);
+        imagefill($source, 0, 0, imagecolorallocate($source, 255, 0, 255));
+        imagefilledrectangle($source, 100, 100, 499, 299, imagecolorallocate($source, 15, 55, 95));
+        $path = $this->dir.'/composite-source.png';
+        imagepng($source, $path);
+        $bg = imagecreatetruecolor(1024, 1024);
+        imagefill($bg, 0, 0, imagecolorallocate($bg, 220, 190, 130));
+        ob_start(); imagepng($bg); $background = ob_get_clean();
+        $bytes = app(\App\Services\AutogenesiSceneComposite::class)->compose($path, $background,
+            [[100, 100], [499, 100], [499, 299], [100, 299]]);
+        $out = imagecreatefromstring($bytes);
+        $color = imagecolorat($source, 200, 200);
+        $left = 1024; $right = 0; $top = 1024; $bottom = 0;
+        for ($y = 0; $y < 1024; $y++) {
+            for ($x = 0; $x < 1024; $x++) {
+                if (imagecolorat($out, $x, $y) === $color) {
+                    $left = min($left, $x); $right = max($right, $x); $top = min($top, $y); $bottom = max($bottom, $y);
+                }
+            }
+        }
+        $this->assertSame(860, $right - $left + 1);
+        $this->assertSame(430, $bottom - $top + 1);
+        $this->assertSame(759, $bottom);
+        $this->assertNotSame(imagecolorat($bg, 512, 765), imagecolorat($out, 512, 765));
+        $this->assertSame($color, imagecolorat($out, 512, 512));
+        $this->assertSame(imagecolorat($bg, 0, 0), imagecolorat($out, 0, 0));
+        $mask = imagecreatetruecolor(600, 400);
+        imagefilledrectangle($mask, 100, 100, 499, 299, imagecolorallocate($mask, 255, 255, 255));
+        $maskPath = $this->dir.'/mask.png'; imagepng($mask, $maskPath);
+        $auto = app(\App\Services\AutogenesiSceneComposite::class)->compose($path, $background, [], $maskPath);
+        $this->assertSame($bytes, $auto);
+        imagedestroy($mask);
+        foreach ([$source, $bg, $out] as $im) imagedestroy($im);
+    }
+
+    public function test_automatic_contour_upload_uses_mask_without_sending_product_to_ai(): void
+    {
+        $p = $this->import();
+        $before = $p->images;
+        $info = getimagesize(Storage::disk('local')->path($before[1]['path']));
+        $mask = imagecreatetruecolor($info[0], $info[1]);
+        imagefilledrectangle($mask, 20, 20, 180, 100, imagecolorallocate($mask, 255, 255, 255));
+        ob_start(); imagepng($mask); $bytes = ob_get_clean(); imagedestroy($mask);
+        $this->fakeImageEdit();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->post('/autogenesi/'.$p->id.'/images/0/ai', ['image_id' => $before[1]['sha256'], 'cutout_mode' => 'auto',
+            'mask' => UploadedFile::fake()->createWithContent('mask.png', $bytes)])->assertRedirect()->assertSessionHasNoErrors();
+        $after = $p->fresh()->images;
+        $this->assertSame($before[0], $after[0]);
+        $this->assertSame($before[2], $after[2]);
+        $this->assertTrue($after[1]['ai_edited']);
+        Http::assertSent(fn ($request) => !$request->hasFile('image') && $request->url() === 'https://api.openai.com/v1/images/generations');
     }
 
     public function test_ai_edits_selected_image_and_restores_original_without_exposing_it(): void
@@ -280,13 +336,13 @@ class AutogenesiTest extends TestCase
         $this->assertNotContains($before[1]['source_url'], array_column(app(AutogenesiExport::class)->rows($p), 'Image Src'));
         $this->get('/autogenesi/'.$p->id.'/images/0?v='.$edited['sha256'].'&download=1')->assertOk()->assertHeader('Cache-Control', 'no-store, private');
         Http::assertSent(function ($r) {
-            $form = collect($r->data())->mapWithKeys(fn ($part) => [$part['name'] => $part['contents']])->all();
-
-            return $r->isMultipart() && $r->hasFile('image') && $form['size'] === '1024x1024' && $form['model'] === 'gpt-image-1-mini'
-                && str_contains($form['prompt'], 'Canary Islands') && str_contains($form['prompt'], 'stone platform')
-                && str_contains($form['prompt'], 'clear blue sky') && str_contains($form['prompt'], 'No writing')
-                && str_contains($form['prompt'], 'width-to-height ratio') && str_contains($form['prompt'], 'ONE uniform scale factor')
-                && str_contains($form['prompt'], 'square OUTPUT CANVAS does NOT mean a square radio');
+            return !$r->isMultipart() && !$r->hasFile('image')
+                && $r->url() === 'https://api.openai.com/v1/images/generations'
+                && $r['size'] === '1024x1024' && $r['model'] === 'gpt-image-1-mini'
+                && str_contains($r['prompt'], 'Canary Islands desert setting')
+                && str_contains($r['prompt'], 'natural stone platform')
+                && str_contains($r['prompt'], 'contact line y=760')
+                && str_contains($r['prompt'], 'No radio, screen, dashboard');
         });
         $this->post('/autogenesi/'.$p->id.'/images/0/restore', ['image_id' => $edited['sha256']])->assertRedirect()->assertSessionHasNoErrors();
         $this->assertSame($before, $p->fresh()->images);
@@ -443,6 +499,55 @@ class AutogenesiTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_paint_updates_selected_photo_preserves_dimensions_and_restores_original(): void
+    {
+        $p = $this->import();
+        $before = $p->images;
+        $image = $before[1];
+        $info = getimagesize(Storage::disk('local')->path($image['path']));
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $url = '/autogenesi/'.$p->id.'/images/0/paint';
+        $this->post($url, ['image_id' => $image['sha256'], 'photo' => \Illuminate\Http\UploadedFile::fake()->image('paint.png', $info[0] + 1, $info[1])])
+            ->assertRedirect()->assertSessionHasErrors('photo');
+        $this->assertSame($before, $p->fresh()->images);
+        session()->forget('errors');
+        $this->post($url, ['image_id' => $image['sha256'], 'photo' => \Illuminate\Http\UploadedFile::fake()->image('paint.png', $info[0], $info[1])])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $after = $p->fresh()->images;
+        $this->assertSame($before[0], $after[0]);
+        $this->assertSame($before[2], $after[2]);
+        $this->assertTrue($after[1]['manually_painted']);
+        $this->assertSame($image, $after[1]['original']);
+        $result = getimagesize(Storage::disk('local')->path($after[1]['path']));
+        $this->assertSame([$info[0], $info[1]], [$result[0], $result[1]]);
+        $this->post('/autogenesi/'.$p->id.'/images/0/restore', ['image_id' => $after[1]['sha256']])->assertSessionHasNoErrors();
+        $this->assertSame($before, $p->fresh()->images);
+        Storage::disk('local')->assertMissing($after[1]['path']);
+        Http::assertNothingSent();
+    }
+
+    public function test_rectangular_crop_saves_requested_dimensions_and_keeps_other_photos(): void
+    {
+        $p = $this->import();
+        $before = $p->images;
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $url = '/autogenesi/'.$p->id.'/images/0/crop';
+        $this->post($url, ['image_id' => $before[1]['sha256'], 'x' => 10, 'y' => 10, 'width' => 160, 'height' => 80])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $after = $p->fresh()->images;
+        $this->assertSame($before[0], $after[0]);
+        $this->assertSame($before[2], $after[2]);
+        $this->assertSame([160, 80], [$after[1]['width'], $after[1]['height']]);
+        $this->assertFalse($after[1]['square_cropped']);
+        $this->assertSame($before[1], $after[1]['original']);
+        $this->post($url, ['image_id' => $after[1]['sha256'], 'x' => 0, 'y' => 0, 'width' => 100, 'height' => 81])
+            ->assertRedirect()->assertSessionHasErrors('image_crop');
+        $this->assertSame($after, $p->fresh()->images);
+        session()->forget('errors');
+        $this->post('/autogenesi/'.$p->id.'/images/0/restore', ['image_id' => $after[1]['sha256']])->assertSessionHasNoErrors();
+        $this->assertSame($before, $p->fresh()->images);
+    }
+
     public function test_crop_rejects_outside_selection_without_changing_image(): void
     {
         $p = $this->import();
@@ -507,6 +612,32 @@ class AutogenesiTest extends TestCase
         $this->assertSame('draft', $p->fresh()->status);
     }
 
+    public function test_watermark_cleanup_uses_current_photo_and_preserves_original_and_neighbors(): void
+    {
+        $p = $this->import();
+        $before = $p->images;
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->post('/autogenesi/'.$p->id.'/images/1/crop', ['image_id' => $before[1]['sha256'], 'x' => 0, 'y' => 0, 'size' => 200])->assertSessionHasNoErrors();
+        $current = $p->fresh()->images[1];
+        $this->fakeImageEdit();
+        $this->post('/autogenesi/'.$p->id.'/images/0/text', ['image_id' => $current['sha256']])->assertRedirect()->assertSessionHasNoErrors();
+        $images = $p->fresh()->images;
+        $this->assertSame($before[0], $images[0]);
+        $this->assertSame($before[2], $images[2]);
+        $this->assertSame($before[1], $images[1]['original']);
+        $this->assertSame('text', $images[1]['ai_edit_mode']);
+        Http::assertSent(function ($request) use ($current) {
+            $form = collect($request->data())->mapWithKeys(fn ($part) => [$part['name'] => $part['contents']])->all();
+            return $request->url() === 'https://api.openai.com/v1/images/edits'
+                && $request->hasFile('image', null, basename($current['path']))
+                && str_contains($form['prompt'], 'superimposed supplier watermarks')
+                && str_contains($form['prompt'], 'Preserve all authentic screen-interface text')
+                && str_contains($form['prompt'], 'Do not replace the screen interface or the background');
+        });
+        $this->post('/autogenesi/'.$p->id.'/images/0/restore', ['image_id' => $images[1]['sha256']])->assertSessionHasNoErrors();
+        $this->assertSame($before, $p->fresh()->images);
+    }
+
     public function test_image_edit_requires_admin_local_environment_and_valid_image_id(): void
     {
         $p = $this->import();
@@ -525,7 +656,7 @@ class AutogenesiTest extends TestCase
         $p = $this->import();
         $before = $p->images;
         config(['services.openai.api_key' => 'test-key']);
-        Http::fake(['https://api.openai.com/v1/images/edits' => Http::response(['data' => [['b64_json' => base64_encode('<html>error</html>')]]])]);
+        Http::fake(['https://api.openai.com/v1/images/*' => Http::response(['data' => [['b64_json' => base64_encode('<html>error</html>')]]])]);
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         $this->post('/autogenesi/'.$p->id.'/images/0/ai', ['image_id' => $before[0]['sha256']])->assertRedirect()->assertSessionHasErrors('image_ai');
         $this->assertSame($before, $p->fresh()->images);
@@ -572,7 +703,8 @@ class AutogenesiTest extends TestCase
         $this->assertCount(4, Storage::disk('local')->allFiles('autogenesi/products'));
         Http::assertSentCount(2);
         foreach (Http::recorded() as [$request]) {
-            $this->assertTrue($request->hasFile('image', null, basename($original['path'])));
+            $this->assertFalse($request->hasFile('image'));
+            $this->assertSame('https://api.openai.com/v1/images/generations', $request->url());
         }
     }
 
@@ -581,7 +713,7 @@ class AutogenesiTest extends TestCase
         $p = $this->import();
         $before = $p->images;
         $bytes = $this->fakeImageEdit();
-        Http::fake(['https://api.openai.com/v1/images/edits' => function () use ($p, $before, $bytes) {
+        Http::fake(['https://api.openai.com/v1/images/*' => function () use ($p, $before, $bytes) {
             $p->update(['images' => [$before[0], $before[2]]]);
             Storage::disk('local')->delete($before[1]['path']);
 
@@ -608,7 +740,7 @@ class AutogenesiTest extends TestCase
         $this->fakeImageEdit();
         $this->actingAs(User::factory()->create(['is_admin' => true]));
         $this->post('/autogenesi/'.$p->id.'/images/1/ai', ['image_id' => $image['sha256']])->assertSessionHasNoErrors();
-        Http::assertSent(fn ($r) => $r->hasFile('image', null, basename($image['path'])));
+        Http::assertSent(fn ($r) => !$r->hasFile('image') && $r->url() === 'https://api.openai.com/v1/images/generations');
         $edited = $p->fresh()->images[1];
         $this->post('/autogenesi/'.$p->id.'/images/1/restore', ['image_id' => $edited['sha256']])->assertSessionHasNoErrors();
         $this->assertSame([600, 300], [$p->fresh()->images[1]['width'], $p->fresh()->images[1]['height']]);
@@ -958,6 +1090,25 @@ class AutogenesiTest extends TestCase
         $this->assertNotContains($p->source_url, $rows[1]);
         $this->assertContains('Active', $rows[1]);
     }
+    public function test_draft_saves_extra_product_links_without_changing_original_source(): void
+    {
+        $p = $this->import();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $data = ['title' => $p->title, 'body_html' => $p->body_html, 'variants' => $p->variants,
+            'additional_source_urls' => ['https://example.com/product/2', 'https://example.com/product/2', null, $p->source_url, 'https://example.com/product/3']];
+        $this->patch('/autogenesi/'.$p->id, $data)->assertSessionHasNoErrors();
+        $this->assertSame(['https://example.com/product/2', 'https://example.com/product/3'], $p->fresh()->metadata['additional_source_urls']);
+        $this->assertSame($p->source_url, $p->fresh()->source_url);
+        $this->assertSame($p->source_id, $p->fresh()->source_id);
+        $data['additional_source_urls'] = ['javascript:alert(1)'];
+        $this->patch('/autogenesi/'.$p->id, $data)->assertSessionHasErrors('additional_source_urls.0');
+        $this->assertCount(2, $p->fresh()->metadata['additional_source_urls']);
+        $data['additional_source_urls'] = [];
+        session()->forget('errors');
+        $this->patch('/autogenesi/'.$p->id, $data)->assertSessionHasNoErrors();
+        $this->assertSame([], $p->fresh()->metadata['additional_source_urls']);
+    }
+
     public function test_draft_vehicle_editor_saves_multibrand_models_and_individual_year_ranges(): void
     {
         $p = $this->import();

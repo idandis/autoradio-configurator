@@ -65,7 +65,7 @@ class AutogenesiCatalogImport
                 $images = $source->images;
                 $gallery = [];
                 $dashboard = [];
-                $selectedDashboard = AutogenesiImageLayout::dashboard($source)['sha256'] ?? null;
+                $selectedDashboard = array_column(AutogenesiImageLayout::dashboards($source), 'sha256');
                 foreach ($images as &$image) {
                     $path = $local->path($image['path']);
                     $info = is_file($path) && ! is_link($path) ? @getimagesize($path) : false;
@@ -88,7 +88,7 @@ class AutogenesiCatalogImport
                     $image['configurator_sha256'] = $hash;
                     $url = '/storage/'.$target;
                     $gallery[] = $url;
-                    if ($image['sha256'] === $selectedDashboard) {
+                    if (in_array($image['sha256'], $selectedDashboard, true)) {
                         $dashboard[] = ['url' => $url, 'variant' => $image['variant'] ?? null, 'shopify_file_reference' => $image['shopify_file_reference'] ?? null];
                     }
                 }
@@ -97,7 +97,7 @@ class AutogenesiCatalogImport
                 $meta = array_replace($product->meta ?? [], ['imported_at' => now()->toIso8601String(), 'type' => 'Radio AM/FM', 'din' => $row[AutogenesiTemplateExport::DIN],
                     'vehicle_compatibilities' => $source->metadata['vehicle_compatibilities'] ?? [],
                     'gallery_images' => array_values(array_unique($gallery)), 'original_dashboard_images' => $dashboard,
-                    'autogenesi' => ['source_id' => $source->source_id, 'source_url' => $source->source_url, 'draft_id' => $source->id, 'imported_at' => now()->toIso8601String()]]);
+                    'autogenesi' => ['source_id' => $source->source_id, 'source_url' => $source->source_url, 'additional_source_urls' => $source->metadata['additional_source_urls'] ?? [], 'draft_id' => $source->id, 'imported_at' => now()->toIso8601String()]]);
                 if ($product->exists && $product->title !== $source->title) {
                     $product->fill(['title_it' => null, 'title_en' => null]);
                 }

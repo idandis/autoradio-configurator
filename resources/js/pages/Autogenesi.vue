@@ -3,9 +3,12 @@ import { Head, router, useForm, usePoll } from '@inertiajs/vue3';
 import { computed, nextTick, ref, watch } from 'vue';
 import DescriptionEditor from '@/components/DescriptionEditor.vue';
 import SquareImageCropper from '@/components/SquareImageCropper.vue';
+import ImagePainter from '@/components/ImagePainter.vue';
+import ImageTextBand from '@/components/ImageTextBand.vue';
+import ProductSilhouette from '@/components/ProductSilhouette.vue';
 
 type Variant = { label: string; sku: string; supplier_price: string; currency: string; selling_price: string | null; pricing?: { markup: string; customs_estimate: string } };
-type Product = { id: number; title: string; body_html: string; status: string; brand: string; model: string; year_from: number; year_to: number; source_url: string; variants: Variant[]; images: { id: string; ai_edited: boolean; dashboard_selected: boolean; shopify_file_reference: string; ai_generated: boolean; web_sources: string[]; manually_cropped: boolean; local_only: boolean; url: string; source_url: string | null; role: string; width: number; height: number }[]; metadata: { vehicle_compatibilities?: { brand: string; model: string; year_from: number; year_to: number }[]; configurator_import?: { product_id: number; imported_at: string }; seller?: string; source_title?: string; warnings?: string[]; captured_at?: string; description_source?: { text: string; specifications: { name: string; value: string }[]; images: unknown[] }; description_generation?: { generated_at: string } } };
+type Product = { id: number; title: string; body_html: string; status: string; brand: string; model: string; year_from: number; year_to: number; source_url: string; variants: Variant[]; images: { id: string; ai_edited: boolean; dashboard_selected: boolean; shopify_file_reference: string; ai_generated: boolean; web_sources: string[]; manually_cropped: boolean; local_only: boolean; url: string; source_url: string | null; role: string; width: number; height: number }[]; metadata: { additional_source_urls?: string[]; vehicle_compatibilities?: { brand: string; model: string; year_from: number; year_to: number }[]; configurator_import?: { product_id: number; imported_at: string }; seller?: string; source_title?: string; warnings?: string[]; captured_at?: string; description_source?: { text: string; specifications: { name: string; value: string }[]; images: unknown[] }; description_generation?: { generated_at: string } } };
 type Candidate = { title: string; source_url: string; price_text?: string; verified?: boolean };
 type Search = { query: string; origin: string; url: string; mode?: 'links' | 'best_price'; selected?: Candidate | null; inspected_count?: number; vehicle: { brand: string; model: string; year_from: number; year_to: number }; candidates: Candidate[] };
 type BatchItem = { id: number; query: string; status: string; source_url: string | null; product_id: number | null; error: string | null };
@@ -84,7 +87,18 @@ const searching = useForm({ query: props.directImport?.source_url ?? props.searc
 const queryInput = ref<HTMLInputElement | null>(null);
 const importForm = ref<HTMLFormElement | null>(null);
 const removing = ref(false);
-const imageAi = useForm({ image_id: '' });
+const imageAi = useForm({ image_id: '', points: [] as number[][] });
+const sceneTarget = ref<{ index: number; url: string } | null>(null);
+const applyScene = (points: number[][]) => {
+    if (!selected.value || !sceneTarget.value || imageAi.processing) return;
+    imageAi.points = points;
+    imageAi.transform(data => data).post(`/autogenesi/${selected.value.id}/images/${sceneTarget.value.index}/ai`, { preserveScroll: true, onSuccess: () => { sceneTarget.value = null; imageAi.points = []; } });
+};
+const applyAutomaticScene = (mask: File) => {
+    if (!selected.value || !sceneTarget.value || imageAi.processing) return;
+    imageAi.transform(data => ({ image_id: data.image_id, cutout_mode: 'auto', mask })).post(`/autogenesi/${selected.value.id}/images/${sceneTarget.value.index}/ai`, {
+        forceFormData: true, preserveScroll: true, onSuccess: () => { sceneTarget.value = null; } });
+};
 const layout = useForm({});
 const dashboard = useForm({});
 const generateDashboard = () => {
@@ -105,25 +119,42 @@ const uploadPhotos = () => {
     if (!selected.value || !uploading.photos.length || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || removing.value) return;
     uploading.post(`/autogenesi/${selected.value.id}/images`, { forceFormData: true, preserveScroll: true, onSuccess: () => { uploading.reset('photos'); uploadKey.value++; } });
 };
-const imageAction = ref<'ai' | 'restore' | 'white' | 'clean'>('ai');
+const imageAction = ref<'ai' | 'restore' | 'white' | 'clean' | 'text'>('ai');
 const cropTarget = ref<{ index: number; id: string; url: string } | null>(null);
-const cropping = useForm({ image_id: '', x: 0, y: 0, size: 0 });
+const cropping = useForm({ image_id: '', x: 0, y: 0, size: 0, width: 0, height: 0 });
 const startCrop = (index: number, id: string, url: string) => {
     if (dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing || removing.value) return;
     cropping.clearErrors();
     cropTarget.value = { index, id, url };
 };
-const applyCrop = (rect: { x: number; y: number; size: number }) => {
+const paintTarget = ref<{ index: number; id: string; url: string } | null>(null);
+const painting = useForm({ image_id: '', photo: null as File | null });
+const paintMode = ref<'paint' | 'text'>('paint');
+const startPaint = (index: number, id: string, url: string, mode: 'paint' | 'text' = 'paint') => {
+    paintMode.value = mode;
+    painting.clearErrors();
+    paintTarget.value = { index, id, url };
+};
+const applyPaint = (file: File) => {
+    if (!selected.value || !paintTarget.value || painting.processing) return;
+    painting.image_id = paintTarget.value.id;
+    painting.photo = file;
+    painting.post(`/autogenesi/${selected.value.id}/images/${paintTarget.value.index}/paint`, { forceFormData: true, preserveScroll: true,
+        onSuccess: () => { paintTarget.value = null; painting.reset(); } });
+};
+const applyCrop = (rect: { x: number; y: number; size: number; width: number; height: number }) => {
     if (!selected.value || !cropTarget.value) return;
     Object.assign(cropping, rect, { image_id: cropTarget.value.id });
     cropping.post(`/autogenesi/${selected.value.id}/images/${cropTarget.value.index}/crop`, { preserveScroll: true, onSuccess: () => { cropTarget.value = null; } });
 };
-const editImage = (index: number, id: string, action: 'ai' | 'restore' | 'white' | 'clean' = 'ai') => {
+const editImage = (index: number, id: string, action: 'ai' | 'restore' | 'white' | 'clean' | 'text' = 'ai') => {
     if (!selected.value || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing || removing.value) return;
     imageAi.image_id = id;
+    imageAi.points = [];
     imageAction.value = action;
     imageAi.clearErrors();
-    imageAi.post(`/autogenesi/${selected.value.id}/images/${index}/${action}`, { preserveScroll: true });
+    if (action === 'ai') { sceneTarget.value = { index, url: selected.value.images[index].url }; return; }
+    imageAi.transform(({ points, ...data }) => data).post(`/autogenesi/${selected.value.id}/images/${index}/${action}`, { preserveScroll: true });
 };
 const searchProducts = (mode: 'links' | 'best_price') => {
     if (searching.processing || !queryInput.value?.reportValidity()) return;
@@ -167,11 +198,12 @@ const selectedId = ref<number | null>(null);
 const selected = computed(() => props.products.find(p => p.id === selectedId.value));
 const automatic = props.search?.mode === 'best_price' && props.search.selected ? props.search : null;
 const importing = useForm({ source_url: props.directImport?.source_url ?? automatic?.selected?.source_url ?? '', brand: automatic?.vehicle.brand ?? '', model: automatic?.vehicle.model ?? '', year_from: (automatic?.vehicle.year_from ?? '') as number | string, year_to: (automatic?.vehicle.year_to ?? '') as number | string });
-const editing = useForm({ title: '', body_html: '', vehicles: [] as { brand: string; model: string; year_from: number; year_to: number }[], variants: [] as { sku: string; label: string; selling_price: string | null }[] });
+const editing = useForm({ title: '', body_html: '', additional_source_urls: [] as string[], vehicles: [] as { brand: string; model: string; year_from: number; year_to: number }[], variants: [] as { sku: string; label: string; selling_price: string | null }[] });
 const open = (p: Product) => {
     if (selectedId.value !== p.id) { uploading.reset(); uploading.clearErrors(); uploadKey.value++; }
     selectedId.value = p.id;
     removingVariant.clearErrors();
+    editing.additional_source_urls = [...(p.metadata.additional_source_urls ?? [])];
     editing.title = p.title;
     editing.body_html = p.body_html;
     const brands = p.brand.split(' | ');
@@ -221,7 +253,7 @@ const removeImage = (index: number, id: string) => {
     removing.value = true;
     router.delete(`/autogenesi/${selected.value.id}/images/${index}`, { data: { image_id: id }, preserveScroll: true, onFinish: () => { removing.value = false; } });
 };
-const changeLayout = (data: { order?: string[]; dashboard_image_id?: string | null; shopify_file_reference?: string | null }) => {
+const changeLayout = (data: { order?: string[]; dashboard_image_id?: string | null; dashboard_image_ids?: string[]; reference_image_id?: string; shopify_file_reference?: string | null }) => {
     if (!selected.value || layout.processing || dashboard.processing || imageAi.processing || cropping.processing || uploading.processing || removing.value) return;
     layout.transform(() => data).patch(`/autogenesi/${selected.value.id}/images/layout`, { preserveScroll: true });
 };
@@ -231,7 +263,7 @@ const moveImage = (index: number, step: number) => {
     [order[index], order[index + step]] = [order[index + step], order[index]];
     changeLayout({ order });
 };
-const dashboardReference = (id: string, event: Event) => changeLayout({ dashboard_image_id: id, shopify_file_reference: (event.target as HTMLInputElement).value.trim() || null });
+const dashboardReference = (id: string, event: Event) => changeLayout({ reference_image_id: id, shopify_file_reference: (event.target as HTMLInputElement).value.trim() || null });
 const money = (price: string) => new Intl.NumberFormat('it-IT', { style: 'currency', currency: 'EUR' }).format(Number(price));
 const imageRoles: Record<string, string> = { prodotto: 'Foto prodotto', pubblicitaria: 'Pubblicitaria', cruscotto_da_verificare: 'Cruscotto da verificare', cruscotto_originale: 'Cruscotto originale', cruscotto_prima_dopo: 'Prima / dopo installazione', accessori: 'Accessori' };
 const imageRole = (role: string) => imageRoles[role] ?? 'Da verificare';
@@ -337,13 +369,23 @@ const imageRole = (role: string) => imageRoles[role] ?? 'Da verificare';
         <div class="overflow-x-auto rounded-xl border">
             <table class="w-full text-left text-sm">
                 <thead class="bg-muted"><tr><th class="p-3">Prodotto</th><th class="p-3">Auto / anni</th><th class="p-3">Stato</th><th class="p-3">Immagini</th><th class="p-3">Varianti</th><th class="p-3">Link prodotto</th><th class="p-3">Azioni</th></tr></thead>
-                <tbody><tr v-for="p in products" :key="p.id" class="border-t"><td class="p-3"><button class="text-left font-medium underline underline-offset-4" @click="open(p)">{{ p.title }}</button></td><td class="p-3"><template v-if="p.metadata.vehicle_compatibilities?.length"><p v-for="(vehicle, i) in p.metadata.vehicle_compatibilities" :key="i">{{ vehicle.brand }} {{ vehicle.model }}<br />{{ vehicle.year_from }}–{{ vehicle.year_to }}</p></template><template v-else>{{ p.brand }} {{ p.model }}<br />{{ p.year_from }}–{{ p.year_to }}</template></td><td class="p-3"><span class="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-900">{{ p.metadata.configurator_import ? 'Importata nel configuratore' : 'Bozza · non visibile' }}</span></td><td class="p-3">{{ p.images.length }}</td><td class="p-3">{{ p.variants.length }}</td><td class="p-3"><a :href="p.source_url" class="break-all text-blue-600 underline" rel="noreferrer">{{ p.source_url }}</a></td><td class="p-3"><button type="button" class="text-red-600 underline" @click="deleteProduct(p)">Cancella prodotto</button></td></tr><tr v-if="!products.length"><td colspan="7" class="p-6 text-muted-foreground">Nessuna bozza importata.</td></tr></tbody>
+                <tbody><tr v-for="p in products" :key="p.id" class="border-t"><td class="p-3"><button class="text-left font-medium underline underline-offset-4" @click="open(p)">{{ p.title }}</button></td><td class="p-3"><template v-if="p.metadata.vehicle_compatibilities?.length"><p v-for="(vehicle, i) in p.metadata.vehicle_compatibilities" :key="i">{{ vehicle.brand }} {{ vehicle.model }}<br />{{ vehicle.year_from }}–{{ vehicle.year_to }}</p></template><template v-else>{{ p.brand }} {{ p.model }}<br />{{ p.year_from }}–{{ p.year_to }}</template></td><td class="p-3"><span class="rounded-full bg-amber-100 px-2 py-1 text-xs text-amber-900">{{ p.metadata.configurator_import ? 'Importata nel configuratore' : 'Bozza · non visibile' }}</span></td><td class="p-3">{{ p.images.length }}</td><td class="p-3">{{ p.variants.length }}</td><td class="p-3"><a :href="p.source_url" class="break-all text-blue-600 underline" rel="noreferrer">{{ p.source_url }}</a><a v-for="url in p.metadata.additional_source_urls || []" :key="url" :href="url" target="_blank" rel="noopener noreferrer" class="mt-2 block break-all text-blue-600 underline">{{ url }} ↗</a></td><td class="p-3"><button type="button" class="text-red-600 underline" @click="deleteProduct(p)">Cancella prodotto</button></td></tr><tr v-if="!products.length"><td colspan="7" class="p-6 text-muted-foreground">Nessuna bozza importata.</td></tr></tbody>
             </table>
         </div>
         <section v-if="selected" id="autogenesi-review" class="space-y-5 rounded-xl border bg-card p-5">
             <div class="flex flex-wrap items-center justify-between gap-3"><h2 class="text-lg font-semibold">Verifica bozza #{{ selected.id }}</h2><a :href="selected.source_url" class="text-sm text-blue-600 underline" rel="noreferrer">Verifica sul sito originale</a></div>
             <p class="text-sm text-muted-foreground">{{ selected.metadata.seller || 'Venditore da verificare' }} · {{ selected.metadata.captured_at }}</p>
             <a v-if="selected.source_url" :href="selected.source_url" target="_blank" rel="noopener noreferrer" class="block break-all text-sm text-blue-600 underline underline-offset-2">{{ selected.source_url }} ↗</a>
+            <form class="space-y-3 rounded-lg border p-4" @submit.prevent="save">
+                <h3 class="text-sm font-semibold">Altri link del prodotto</h3>
+                <div v-for="(_, i) in editing.additional_source_urls" :key="i" class="flex flex-wrap items-center gap-2">
+                    <input v-model="editing.additional_source_urls[i]" type="url" maxlength="4096" placeholder="https://…" aria-label="Link prodotto aggiuntivo" class="min-w-0 flex-1 rounded border bg-background px-3 py-2 text-sm" :disabled="editing.processing" />
+                    <a v-if="/^https?:\/\//i.test(editing.additional_source_urls[i])" :href="editing.additional_source_urls[i]" target="_blank" rel="noopener noreferrer" class="text-sm text-blue-600 underline">Apri ↗</a>
+                    <button type="button" class="rounded border px-3 py-2 text-sm text-red-600" :disabled="editing.processing" @click="editing.additional_source_urls.splice(i, 1)">Rimuovi link</button>
+                </div>
+                <p v-for="(error, key) in Object.fromEntries(Object.entries(editing.errors).filter(([key]) => key.startsWith('additional_source_urls')))" :key="key" role="alert" class="text-sm text-red-600">{{ error }}</p>
+                <div class="flex gap-3"><button type="button" class="rounded border px-3 py-2 text-sm" :disabled="editing.processing || editing.additional_source_urls.length >= 30" @click="editing.additional_source_urls.push('')">Aggiungi link</button><button type="submit" class="rounded bg-foreground px-3 py-2 text-sm text-background" :disabled="editing.processing">Salva link</button></div>
+            </form>
             <details v-if="selected.metadata.description_source" class="rounded-lg border p-3 text-sm">
                 <summary class="cursor-pointer font-medium">Testo originale e specifiche lette · {{ selected.metadata.description_source.specifications.length }} voci · {{ selected.metadata.description_source.images.length }} immagini della descrizione</summary>
                 <p class="mt-3 whitespace-pre-line">{{ selected.metadata.description_source.text }}</p>
@@ -379,7 +421,7 @@ const imageRole = (role: string) => imageRoles[role] ?? 'Da verificare';
                 <p v-for="(error, key) in dashboard.errors" :key="key" role="alert" class="text-sm text-red-600">{{ error }}</p>
             </div>
             <p v-for="(error, key) in layout.errors" :key="key" role="alert" class="text-sm text-red-600">{{ error }}</p>
-            <p class="text-xs text-muted-foreground">La prima immagine è la foto principale. Usa Prima / Dopo per riordinarle; il flag Cruscotto originale sceglie la foto per il metafield e il configuratore.</p>
+            <p class="text-xs text-muted-foreground">La prima immagine è la foto principale. Usa Prima / Dopo per riordinarle; i flag Cruscotto originale scelgono le foto per il metafield e il configuratore.</p>
             <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 <figure v-for="(image, i) in selected.images" :key="image.id" class="rounded-lg border p-3">
                     <img :src="image.url" :alt="`Foto ${i + 1} — ${selected.title}`" class="h-auto w-full rounded" />
@@ -390,13 +432,16 @@ const imageRole = (role: string) => imageRoles[role] ?? 'Da verificare';
                             <button type="button" :disabled="i === 0 || layout.processing || dashboard.processing || imageAi.processing || cropping.processing || uploading.processing || removing" class="rounded border px-2 py-1 disabled:opacity-50" @click="moveImage(i, -1)">← Prima</button>
                             <button type="button" :disabled="i === selected.images.length - 1 || layout.processing || dashboard.processing || imageAi.processing || cropping.processing || uploading.processing || removing" class="rounded border px-2 py-1 disabled:opacity-50" @click="moveImage(i, 1)">Dopo →</button>
                         </div>
-                        <label class="flex items-center gap-2"><input type="checkbox" :checked="image.dashboard_selected" :disabled="layout.processing || dashboard.processing || imageAi.processing || cropping.processing || uploading.processing || removing" @change="changeLayout({ dashboard_image_id: image.dashboard_selected ? null : image.id })" />Cruscotto originale · foto per il metafield</label>
+                        <label class="flex items-center gap-2"><input type="checkbox" :checked="image.dashboard_selected" :disabled="layout.processing || dashboard.processing || imageAi.processing || cropping.processing || uploading.processing || removing" @change="changeLayout({ dashboard_image_ids: selected.images.filter(p => p.id === image.id ? !p.dashboard_selected : p.dashboard_selected).map(p => p.id) })" />Cruscotto originale · foto per il metafield</label>
                         <label v-if="image.dashboard_selected" class="block space-y-1"><span>Riferimento Shopify manuale (facoltativo)</span><input :value="image.shopify_file_reference" :disabled="layout.processing" type="text" maxlength="255" placeholder="cruscotto-originale.jpg" class="w-full rounded border bg-background px-2 py-1" @change="dashboardReference(image.id, $event)" /><span class="block text-muted-foreground">Lascia vuoto per usare automaticamente il nome della foto selezionata nell’export. Il link Aruba completo sarà in Image Src. Se il file Shopify ha un nome diverso, inseriscilo qui; il campo si salva quando esci.</span></label>
                         <div class="flex flex-wrap gap-2">
                             <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border border-violet-300 px-2 py-1 text-violet-700 disabled:opacity-50" @click="editImage(i, image.id)">{{ imageAi.processing && imageAi.image_id === image.id && imageAction === 'ai' ? 'Modifica AI in corso…' : 'Modifica con AI' }}</button>
                             <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="editImage(i, image.id, 'clean')">{{ imageAi.processing && imageAi.image_id === image.id && imageAction === 'clean' ? 'Pulizia e miglioramento in corso…' : 'Pulisci e migliora' }}</button>
+                            <button v-if="local" type="button" title="Rimuove watermark e scritte pubblicitarie sovrapposte, conservando l’interfaccia originale" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="editImage(i, image.id, 'text')">{{ imageAi.processing && imageAi.image_id === image.id && imageAction === 'text' ? 'Cancellazione scritte…' : 'Cancella scritte' }}</button>
                             <button v-if="local && (image.ai_edited || image.manually_cropped)" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="editImage(i, image.id, 'restore')">Ripristina originale</button>
                             <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="startCrop(i, image.id, image.url)">Taglia</button>
+                            <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="startPaint(i, image.id, image.url)">Paint</button>
+                            <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="startPaint(i, image.id, image.url, 'text')">TESTO</button>
                             <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="editImage(i, image.id, 'white')">{{ imageAi.processing && imageAi.image_id === image.id && imageAction === 'white' ? 'Rimozione sfondo in corso…' : 'Rimuovi sfondo' }}</button>
                             <button type="button" class="rounded border border-red-200 px-2 py-1 text-red-600 disabled:opacity-50" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" @click="removeImage(i, image.id)">Rimuovi</button>
                         </div>
@@ -422,6 +467,9 @@ const imageRole = (role: string) => imageRoles[role] ?? 'Da verificare';
             <div class="flex flex-wrap gap-3 border-t pt-4"><a :href="`/autogenesi/${selected.id}/export`" class="rounded-lg border px-4 py-2 text-sm font-medium">Scarica Excel · formato modello</a></div>
             <p class="text-xs text-muted-foreground">Unico formato Excel con le colonne del modello, stato Active. Il link del fornitore resta nel database. Il file contiene soltanto il foglio Products. Gli URL immagini puntano alla produzione Aruba: trasferisci prima le foto con FileZilla e verifica gli indirizzi, poi importa l’Excel in Shopify.</p>
         </section>
+        <ProductSilhouette v-if="sceneTarget" :src="sceneTarget.url" :busy="imageAi.processing" :error="Object.values(imageAi.errors).join(' ')" @cancel="sceneTarget = null" @save="applyScene" @automatic="applyAutomaticScene" />
+        <ImageTextBand v-if="paintTarget && paintMode === 'text'" :src="paintTarget.url" :busy="painting.processing" :error="Object.values(painting.errors).join(' ')" @cancel="paintTarget = null" @save="applyPaint" />
+        <ImagePainter v-if="paintTarget && paintMode === 'paint'" :src="paintTarget.url" :busy="painting.processing" :error="Object.values(painting.errors).join(' ')" @cancel="paintTarget = null" @save="applyPaint" />
         <SquareImageCropper v-if="cropTarget" :src="cropTarget.url" :busy="cropping.processing" :error="Object.values(cropping.errors).join(' ')" @cancel="cropTarget = null" @save="applyCrop" />
     </div>
 </template>

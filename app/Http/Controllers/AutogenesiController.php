@@ -40,10 +40,10 @@ class AutogenesiController extends Controller
                 unset($data['metadata']['source_text']);
                 unset($data['metadata']['description_source']['html'], $data['metadata']['previous_copy'], $data['metadata']['capture_directory']);
                 $data['images'] = array_map(fn ($image, $i) => ['url' => route('autogenesi.image', [$p, $i, 'v' => $image['sha256']]), 'id' => $image['sha256'],
-                    'ai_edited' => (bool) ($image['ai_edited'] ?? false), 'manually_cropped' => (bool) ($image['manually_cropped'] ?? false),
-                    'dashboard_selected' => ($image['sha256'] === (\App\Services\AutogenesiImageLayout::dashboard($p)['sha256'] ?? null)), 'shopify_file_reference' => $image['shopify_file_reference'] ?? '',
+                    'ai_edited' => (bool) ($image['ai_edited'] ?? false), 'manually_cropped' => (bool) (($image['manually_cropped'] ?? false) || ($image['manually_painted'] ?? false)),
+                    'dashboard_selected' => in_array($image['sha256'], array_column(\App\Services\AutogenesiImageLayout::dashboards($p), 'sha256'), true), 'shopify_file_reference' => $image['shopify_file_reference'] ?? '',
                     'ai_generated' => (bool) ($image['ai_generated'] ?? false), 'web_sources' => $image['web_sources'] ?? [],
-                    'local_only' => (bool) (($image['uploaded'] ?? false) || ($image['ai_generated'] ?? false) || ($image['ai_edited'] ?? false) || ($image['square_cropped'] ?? false)),
+                    'local_only' => (bool) (($image['uploaded'] ?? false) || ($image['ai_generated'] ?? false) || ($image['ai_edited'] ?? false) || ($image['square_cropped'] ?? false) || ($image['manually_painted'] ?? false)),
                     'role' => $image['role'], 'source_url' => $image['source_url'], 'width' => $image['width'], 'height' => $image['height']], $p->images, array_keys($p->images));
 
                 return $data;
@@ -282,6 +282,7 @@ class AutogenesiController extends Controller
     public function update(Request $request, AutogenesiProduct $product)
     {
         $data = $request->validate(['title' => 'required|string|max:2000', 'body_html' => 'required|string|max:150000',
+            'additional_source_urls' => 'sometimes|array|max:30', 'additional_source_urls.*' => ['nullable', 'url:http,https', 'max:4096', function ($attribute, $value, $fail) { if ($value && (parse_url($value, PHP_URL_USER) || parse_url($value, PHP_URL_PASS))) $fail('Inserisci un link senza credenziali.'); }],
             'vehicles' => 'sometimes|required|array|min:1|max:100', 'vehicles.*.brand' => 'required|string|max:80', 'vehicles.*.model' => 'required|string|max:120',
             'vehicles.*.year_from' => 'required|integer|min:1|max:65535', 'vehicles.*.year_to' => 'required|integer|gte:vehicles.*.year_from|max:65535',
             'variants' => 'required|array|size:'.count($product->variants), 'variants.*.sku' => 'sometimes|required|string', 'variants.*.label' => 'sometimes|required|string|max:500', 'variants.*.selling_price' => 'nullable|numeric|gt:0|max:999999']);
@@ -311,6 +312,11 @@ class AutogenesiController extends Controller
             $meta['vehicle_compatibilities'] = $entries;
             $vehicleData = ['brand' => $brand, 'model' => count($models) === 1 ? $entries[0]['model'] : implode(' | ', $models),
                 'year_from' => min(array_column($entries, 'year_from')), 'year_to' => max(array_column($entries, 'year_to')), 'metadata' => $meta];
+        }
+        if (array_key_exists('additional_source_urls', $data)) {
+            $meta = $vehicleData['metadata'] ?? $product->metadata ?? [];
+            $meta['additional_source_urls'] = array_values(array_unique(array_filter($data['additional_source_urls'], fn ($url) => $url && $url !== $product->source_url)));
+            $vehicleData['metadata'] = $meta;
         }
         $product->update($vehicleData + ['title' => $data['title'], 'body_html' => ProductHtml::sanitize($data['body_html']), 'variants' => $variants]);
         app(AutogenesiExport::class)->writeFiles($product->fresh());
@@ -354,15 +360,15 @@ class AutogenesiController extends Controller
     public function editImage(Request $request, AutogenesiProduct $product, int $index, AutogenesiImageEditor $editor)
     {
         abort_unless(app()->environment('local'), 403);
-        $data = $request->validate(['image_id' => 'required|regex:/^[a-f0-9]{64}$/']);
+        $data = $request->validate(['image_id' => 'required|regex:/^[a-f0-9]{64}$/', 'points' => 'sometimes|array|min:3|max:100', 'points.*' => 'array|size:2', 'points.*.*' => 'required|integer|min:0', 'cutout_mode' => 'sometimes|in:manual,auto', 'mask' => 'required_if:cutout_mode,auto|file|mimetypes:image/png|max:8192']);
         abort_unless(collect($product->images)->contains('sha256', $data['image_id']), 404);
         try {
             if ($request->routeIs('autogenesi.restore-image')) {
                 $editor->restore($product, $data['image_id']);
             } else {
                 $editor->edit($product, $data['image_id'], match (true) {
-                    $request->routeIs('autogenesi.white-image') => 'white', $request->routeIs('autogenesi.clean-image') => 'clean', default => 'scene'
-                });
+                    $request->routeIs('autogenesi.white-image') => 'white', $request->routeIs('autogenesi.clean-image') => 'clean', $request->routeIs('autogenesi.text-image') => 'text', default => 'scene'
+                }, $data['points'] ?? [], $request->file('mask'));
             }
             app(AutogenesiExport::class)->writeFiles($product->fresh());
 
@@ -410,14 +416,29 @@ class AutogenesiController extends Controller
         }
     }
 
+    public function paintImage(Request $request, AutogenesiProduct $product, int $index, \App\Services\AutogenesiImagePaint $painter)
+    {
+        abort_unless(app()->environment('local'), 403);
+        $data = $request->validate(['image_id' => 'required|regex:/^[a-f0-9]{64}$/', 'photo' => 'required|file|mimetypes:image/png|max:16384']);
+        abort_unless(collect($product->images)->contains('sha256', $data['image_id']), 404);
+        try {
+            $painter->save($product, $data['image_id'], $request->file('photo'));
+            app(AutogenesiExport::class)->writeFiles($product->fresh());
+            return back()->with('status', 'Foto Paint salvata.');
+        } catch (\Throwable $e) {
+            report($e);
+            return back()->withErrors(['photo' => 'Salvataggio Paint non completato. '.$e->getMessage()]);
+        }
+    }
+
     public function cropImage(Request $request, AutogenesiProduct $product, int $index, AutogenesiImageCrop $cropper)
     {
         abort_unless(app()->environment('local'), 403);
         $data = $request->validate(['image_id' => 'required|regex:/^[a-f0-9]{64}$/', 'x' => 'required|integer|min:0',
-            'y' => 'required|integer|min:0', 'size' => 'required|integer|min:32|max:16000']);
+            'y' => 'required|integer|min:0', 'size' => 'required_without:width|integer|min:32|max:16000', 'width' => 'sometimes|required|integer|min:32|max:16000', 'height' => 'required_with:width|integer|min:32|max:16000']);
         abort_unless(collect($product->images)->contains('sha256', $data['image_id']), 404);
         try {
-            $cropper->crop($product, $data['image_id'], $data['x'], $data['y'], $data['size']);
+            $cropper->crop($product, $data['image_id'], $data['x'], $data['y'], $data['width'] ?? $data['size'], $data['height'] ?? null);
             app(AutogenesiExport::class)->writeFiles($product->fresh());
 
             return back()->with('status', 'Foto ritagliata.');
@@ -432,6 +453,8 @@ class AutogenesiController extends Controller
     {
         $data = $request->validate([
             'order' => 'sometimes|required|array|min:1|max:200', 'order.*' => 'required|distinct|regex:/^[a-f0-9]{64}$/',
+            'dashboard_image_ids' => 'sometimes|array|max:200', 'dashboard_image_ids.*' => 'required|distinct|regex:/^[a-f0-9]{64}$/',
+            'reference_image_id' => 'sometimes|required|regex:/^[a-f0-9]{64}$/',
             'dashboard_image_id' => 'sometimes|nullable|regex:/^[a-f0-9]{64}$/',
             'shopify_file_reference' => ['sometimes', 'nullable', 'string', 'max:255', 'regex:~^(?:gid://shopify/(?:MediaImage|GenericFile)/[0-9]+|[^/\\\\:\r\n]+\.(?:png|jpe?g|webp|avif))$~i'],
         ]);

@@ -94,15 +94,17 @@ class ImportedProductsController extends Controller
 
     public function updateDashboard(Request $request, ConfiguratorProduct $product): RedirectResponse
     {
-        $data = $request->validate(['image_url' => ['present', 'nullable', 'string', 'max:4096']]);
+        $data = $request->validate(['image_urls' => 'sometimes|array|max:200', 'image_urls.*' => 'required|string|max:4096|distinct', 'image_url' => 'sometimes|nullable|string|max:4096']);
+        abort_unless(array_key_exists('image_urls', $data) || array_key_exists('image_url', $data), 422);
         DB::transaction(function () use ($product, $data) {
             $current = ConfiguratorProduct::whereKey($product->id)->lockForUpdate()->firstOrFail();
-            $url = $data['image_url'];
-            if ($url !== null && ! in_array($url, $this->productImages($current), true)) {
-                throw \Illuminate\Validation\ValidationException::withMessages(['image_url' => 'Scegli una delle immagini di questo prodotto.']);
+            $urls = $data['image_urls'] ?? (isset($data['image_url']) ? [$data['image_url']] : []);
+            if (array_diff($urls, $this->productImages($current))) {
+                throw \Illuminate\Validation\ValidationException::withMessages([array_key_exists('image_urls', $data) ? 'image_urls' : 'image_url' => 'Scegli solo immagini di questo prodotto.']);
             }
             $meta = $current->meta ?? [];
-            $meta['original_dashboard_images'] = $url === null ? [] : [['url' => $url, 'variant' => null]];
+            $old = collect($meta['original_dashboard_images'] ?? [])->keyBy('url');
+            $meta['original_dashboard_images'] = array_map(fn ($url) => $old->get($url) ?? ['url' => $url, 'variant' => null], $urls);
             $current->update(['meta' => $meta]);
         });
 
@@ -215,6 +217,7 @@ class ImportedProductsController extends Controller
                 'image_url' => $product->image_url,
                 'images' => $this->productImages($product),
                 'dashboard_image_url' => $product->meta['original_dashboard_images'][0]['url'] ?? null,
+                'dashboard_image_urls' => array_column($product->meta['original_dashboard_images'] ?? [], 'url'),
             ]);
 
         return Inertia::render('ImportedProducts', [

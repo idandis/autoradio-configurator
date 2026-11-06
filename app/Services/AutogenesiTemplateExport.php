@@ -269,14 +269,17 @@ class AutogenesiTemplateExport
 
     private function dashboard(AutogenesiProduct $p): string
     {
-        $image = AutogenesiImageLayout::dashboard($p);
-        if (! empty($image['shopify_file_reference'])) return $image['shopify_file_reference'];
-        if ($image) {
-            $exportImage = collect($this->images($p))->firstWhere('sha256', $image['sha256']);
-            $url = $exportImage ? $this->publicUrl($exportImage) : '';
-            if ($url) return rawurldecode(basename(parse_url($url, PHP_URL_PATH)));
+        $references = [];
+        $exports = collect($this->images($p))->keyBy('sha256');
+        foreach (AutogenesiImageLayout::dashboards($p) as $image) {
+            $reference = $image['shopify_file_reference'] ?? '';
+            if (!$reference) {
+                $exportImage = $exports->get($image['sha256']);
+                $url = $exportImage ? $this->publicUrl($exportImage) : '';
+                if ($url) $reference = rawurldecode(basename(parse_url($url, PHP_URL_PATH)));
+            }
+            if ($reference) $references[] = $reference;
         }
-
-        return '';
+        return implode(', ', array_unique($references));
     }
 }
