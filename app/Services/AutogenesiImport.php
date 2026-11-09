@@ -16,6 +16,7 @@ class AutogenesiImport
         if (! app()->environment('local')) {
             throw new RuntimeException('Importazione browser disponibile solo in locale.');
         }
+        set_time_limit(900);
         $log = app(AutogenesiImportLog::class);
         $attempt = $log->start($url);
         try {
@@ -49,6 +50,7 @@ class AutogenesiImport
         if (! app()->environment('local')) {
             throw new RuntimeException('Generazione disponibile solo in locale.');
         }
+        set_time_limit(900);
         $this->validateSource($product->source_url);
         $dir = Storage::disk('local')->path('autogenesi/captures/'.Str::uuid());
         Process::timeout(360)->run(['node', base_path('scripts/autogenesi/capture-product.cjs'), $product->source_url, $dir])->throw();
@@ -71,6 +73,7 @@ class AutogenesiImport
         if (! app()->environment('local')) {
             throw new RuntimeException('Importazione disponibile solo in locale.');
         }
+        set_time_limit(600);
         $control = app(AutogenesiRunControl::class);
         $runId = $control->state()['run_id'];
         $control->assertActive($runId);

@@ -612,30 +612,12 @@ class AutogenesiTest extends TestCase
         $this->assertSame('draft', $p->fresh()->status);
     }
 
-    public function test_watermark_cleanup_uses_current_photo_and_preserves_original_and_neighbors(): void
+    public function test_old_watermark_ai_endpoint_is_disabled(): void
     {
         $p = $this->import();
-        $before = $p->images;
         $this->actingAs(User::factory()->create(['is_admin' => true]));
-        $this->post('/autogenesi/'.$p->id.'/images/1/crop', ['image_id' => $before[1]['sha256'], 'x' => 0, 'y' => 0, 'size' => 200])->assertSessionHasNoErrors();
-        $current = $p->fresh()->images[1];
-        $this->fakeImageEdit();
-        $this->post('/autogenesi/'.$p->id.'/images/0/text', ['image_id' => $current['sha256']])->assertRedirect()->assertSessionHasNoErrors();
-        $images = $p->fresh()->images;
-        $this->assertSame($before[0], $images[0]);
-        $this->assertSame($before[2], $images[2]);
-        $this->assertSame($before[1], $images[1]['original']);
-        $this->assertSame('text', $images[1]['ai_edit_mode']);
-        Http::assertSent(function ($request) use ($current) {
-            $form = collect($request->data())->mapWithKeys(fn ($part) => [$part['name'] => $part['contents']])->all();
-            return $request->url() === 'https://api.openai.com/v1/images/edits'
-                && $request->hasFile('image', null, basename($current['path']))
-                && str_contains($form['prompt'], 'superimposed supplier watermarks')
-                && str_contains($form['prompt'], 'Preserve all authentic screen-interface text')
-                && str_contains($form['prompt'], 'Do not replace the screen interface or the background');
-        });
-        $this->post('/autogenesi/'.$p->id.'/images/0/restore', ['image_id' => $images[1]['sha256']])->assertSessionHasNoErrors();
-        $this->assertSame($before, $p->fresh()->images);
+        $this->post('/autogenesi/'.$p->id.'/images/0/text', ['image_id' => $p->images[0]['sha256']])->assertNotFound();
+        Http::assertNothingSent();
     }
 
     public function test_image_edit_requires_admin_local_environment_and_valid_image_id(): void

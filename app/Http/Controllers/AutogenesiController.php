@@ -33,7 +33,7 @@ class AutogenesiController extends Controller
 {
     public function index()
     {
-        return Inertia::render('Autogenesi', ['local' => app()->environment('local'), 'search' => session('autogenesi_search'), 'directImport' => session('autogenesi_direct_import'),
+        return Inertia::render('Autogenesi', ['local' => app()->environment('local'), 'detection' => session('autogenesi_detection'), 'detectionMaxYear' => now()->year - 1, 'search' => session('autogenesi_search'), 'directImport' => session('autogenesi_direct_import'),
             'batches' => fn () => AutogenesiBatch::with('items')->latest()->limit(10)->get(),
             'products' => fn () => AutogenesiProduct::where('status', 'draft')->latest()->get()->map(function ($p) {
                 $data = $p->toArray();
@@ -48,6 +48,21 @@ class AutogenesiController extends Controller
 
                 return $data;
             })]);
+    }
+
+    public function detectMissing(Request $request, \App\Services\AutogenesiDetection $detector)
+    {
+        abort_unless(app()->environment('local'), 403);
+        $data = $request->validate(['year' => 'required|integer|min:1900|max:'.(now()->year - 1)]);
+        try {
+            $result = $detector->detect($data['year']);
+            $request->session()->put('autogenesi_detection', $result);
+            return back()->with('status', 'Rilevati '.count($result['cars']).' modelli su 50: '.$result['counts']['missing'].' mancanti, pronti in Importa lista.');
+        } catch (\Throwable $e) {
+            report($e);
+            return back()->withErrors(['year' => $e instanceof \RuntimeException && !$e instanceof RequestException
+                ? $e->getMessage() : 'Rilevamento non completato. Verifica la connessione e la configurazione OpenAI e riprova.']);
+        }
     }
 
     public function importLog()
@@ -367,7 +382,7 @@ class AutogenesiController extends Controller
                 $editor->restore($product, $data['image_id']);
             } else {
                 $editor->edit($product, $data['image_id'], match (true) {
-                    $request->routeIs('autogenesi.white-image') => 'white', $request->routeIs('autogenesi.clean-image') => 'clean', $request->routeIs('autogenesi.text-image') => 'text', default => 'scene'
+                    $request->routeIs('autogenesi.white-image') => 'white', $request->routeIs('autogenesi.clean-image') => 'clean', default => 'scene'
                 }, $data['points'] ?? [], $request->file('mask'));
             }
             app(AutogenesiExport::class)->writeFiles($product->fresh());
@@ -413,6 +428,21 @@ class AutogenesiController extends Controller
             report($e);
 
             return back()->withErrors(['photos' => $e->getMessage()]);
+        }
+    }
+
+    public function cleanupText(Request $request, AutogenesiProduct $product, int $index, \App\Services\AutogenesiMaskedBlur $editor)
+    {
+        abort_unless(app()->environment('local'), 403);
+        $data = $request->validate(['image_id' => 'required|regex:/^[a-f0-9]{64}$/', 'mask' => 'required|file|mimetypes:image/png|max:8192', 'strength' => 'sometimes|integer|min:1|max:100']);
+        abort_unless(collect($product->images)->contains('sha256', $data['image_id']), 404);
+        try {
+            $editor->edit($product, $data['image_id'], $request->file('mask'), $data['strength'] ?? 12);
+            app(AutogenesiExport::class)->writeFiles($product->fresh());
+            return back()->with('status', 'Sfocatura applicata solo alle zone selezionate.');
+        } catch (\Throwable $e) {
+            report($e);
+            return back()->withErrors(['mask' => $e instanceof \RuntimeException && !$e instanceof RequestException ? $e->getMessage() : 'Sfocatura non completata. Riprova.']);
         }
     }
 

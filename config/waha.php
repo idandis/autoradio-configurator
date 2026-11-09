@@ -1,6 +1,7 @@
 <?php
 
 return [
+    'complete_frame_products' => ['pantalla-android-16-con-carplay-dsp-y-gps-para-mitsubishi-asx-2016-2022-potencia-conectividad-total-y-experiencia-multimedia-premium'],
     'url' => env('WAHA_URL', 'http://127.0.0.1:3000'),
     'key' => env('WAHA_API_KEY'),
     'session' => env('WAHA_SESSION', 'default'),

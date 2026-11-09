@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
-const props = defineProps<{ src: string; busy: boolean; error?: string }>();
+const props = defineProps<{ src: string; busy: boolean; error?: string; cover?: boolean }>();
 const emit = defineEmits<{ save: [file: File]; cancel: [] }>();
 const canvas = ref<HTMLCanvasElement | null>(null);
-const color = ref('#ffffff');
-const size = ref(20);
+const color = ref(props.cover ? '#000000' : '#ffffff');
+const size = ref(props.cover ? 12 : 20);
+const picking = ref(false);
 const ready = ref(false);
 const error = ref('');
 const history = ref<ImageData[]>([]);
@@ -43,6 +44,11 @@ const stroke = (e: PointerEvent) => {
 const start = (e: PointerEvent) => {
     if (!ready.value || props.busy || e.button !== 0) return;
     const c = canvas.value!, ctx = c.getContext('2d')!;
+    if (picking.value) {
+        const p = point(e), pixel = ctx.getImageData(Math.max(0, Math.min(c.width - 1, Math.floor(p.x))), Math.max(0, Math.min(c.height - 1, Math.floor(p.y))), 1, 1).data;
+        color.value = '#' + Array.from(pixel.slice(0, 3)).map(v => v.toString(16).padStart(2, '0')).join('');
+        picking.value = false; return;
+    }
     history.value.push(ctx.getImageData(0, 0, c.width, c.height));
     while (history.value.length > Math.max(1, Math.min(15, Math.floor(64 * 1024 * 1024 / (c.width * c.height * 4))))) history.value.shift();
     c.setPointerCapture(e.pointerId);
@@ -64,16 +70,17 @@ const save = () => {
 <template>
     <Teleport to="body">
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" @keydown.esc="!busy && emit('cancel')">
-            <section role="dialog" aria-modal="true" aria-label="Paint" class="max-h-[95vh] w-[min(95vw,900px)] overflow-y-auto rounded-xl border bg-background p-5 text-foreground shadow-xl">
-                <h2 class="font-semibold">Paint</h2>
+            <section role="dialog" aria-modal="true" :aria-label="cover ? 'Oscura scritte' : 'Paint'" class="max-h-[95vh] w-[min(95vw,900px)] overflow-y-auto rounded-xl border bg-background p-5 text-foreground shadow-xl">
+                <h2 class="font-semibold">{{ cover ? 'Oscura scritte · senza AI' : 'Paint' }}</h2>
                 <div class="my-4 flex flex-wrap items-center gap-3">
                     <label class="flex items-center gap-2 text-sm">Colore<input v-model="color" aria-label="Colore pennello" type="color" :disabled="busy" /></label>
                     <div class="flex gap-1"><button v-for="c in palette" :key="c" type="button" :aria-label="`Colore ${c}`" :aria-pressed="color === c" :style="{ backgroundColor: c }" class="h-7 w-7 rounded border-2" :class="color === c ? 'border-blue-500' : 'border-gray-400'" :disabled="busy" @click="color = c"></button></div>
                     <label class="flex items-center gap-2 text-sm">Pennello<input v-model.number="size" type="range" min="1" max="150" :disabled="busy" />{{ size }} px</label>
+                    <button v-if="cover" type="button" class="rounded border px-3 py-1" :disabled="busy" :aria-pressed="picking" @click="picking = !picking">{{ picking ? 'Clicca un colore nella foto…' : 'Campiona colore' }}</button>
                     <button type="button" class="rounded border px-3 py-1" :disabled="busy || !history.length" @click="undo">Annulla tratto</button>
                 </div>
                 <canvas ref="canvas" class="mx-auto block h-auto max-h-[65vh] max-w-full touch-none cursor-crosshair" @pointerdown="start" @pointermove="stroke" @pointerup="drawing = false" @pointercancel="drawing = false" />
-                <p class="mt-3 text-xs text-muted-foreground">Disegna direttamente sulla foto. Dimensioni e proporzioni restano invariate.</p>
+                <p class="mt-3 text-xs text-muted-foreground">{{ cover ? 'Passa il pennello solo sulle scritte da coprire. Scegli un colore oppure campionalo vicino alla scritta. I pixel fuori dai tratti restano invariati; nessuna rigenerazione AI.' : 'Disegna direttamente sulla foto. Dimensioni e proporzioni restano invariate.' }}</p>
                 <p v-if="error || props.error" role="alert" class="mt-3 text-sm text-red-600">{{ error || props.error }}</p>
                 <div class="mt-4 flex justify-end gap-3"><button type="button" class="rounded border px-4 py-2" :disabled="busy" @click="emit('cancel')">Annulla</button><button type="button" class="rounded bg-foreground px-4 py-2 text-background" :disabled="busy || !ready || drawing" @click="save">{{ busy ? 'Salvataggio…' : 'Salva foto' }}</button></div>
             </section>

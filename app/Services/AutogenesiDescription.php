@@ -13,6 +13,7 @@ class AutogenesiDescription
         if (! config('services.openai.api_key')) {
             throw new RuntimeException('Chiave OpenAI necessaria per generare la scheda.');
         }
+        set_time_limit(600);
         $control = app(AutogenesiRunControl::class);
         $runId = $control->state()['run_id'];
         $control->assertActive($runId);

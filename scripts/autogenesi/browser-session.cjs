@@ -60,7 +60,7 @@ const connect = async () => {
     socket.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Browser connection failed')); }, { once: true });
   });
   let browser;
-  try { browser = await chromium.connectOverCDP(transport, { timeout: 10000 }); }
+  try { browser = await chromium.connectOverCDP(transport, { timeout: 10000, noDefaults: true }); }
   catch (error) { socket.close(); throw error; }
   const context = browser.contexts()[0];
   if (!context) { socket.close(); throw new Error('AutoGenesi browser context unavailable'); }

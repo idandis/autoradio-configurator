@@ -6,6 +6,34 @@ use Illuminate\Support\Str;
 
 class WhatsAppStandardReplies
 {
+    public function storeVisitQuestion(string $text): bool
+    {
+        return (bool) preg_match('/\b(?:tienda|negozio|shop|store)\s+(?:f[ií]sic[ao]|physical)\b|\bphysical\s+(?:shop|store)\b|\b(?:ir|pasar|acercar\w*|visitar\w*|venire|passare|recar\w*|visit|come)\b.{0,65}\b(?:tienda|negozio|sede|shop|store|vosotros|ustedes|voi)\b/ui', $text);
+    }
+
+    public function storeVisitPolicy(string $locale): string
+    {
+        return [
+            'it' => 'Lavoriamo online e abbiamo la sede amministrativa a Mogán, ma non disponiamo di un negozio fisico. Puoi chiederci qui tutto quello che ti serve prima di acquistare, con tutta tranquillità.',
+            'es' => 'Trabajamos online y tenemos nuestra sede administrativa en Mogán, pero no disponemos de tienda física. Puedes preguntarnos por aquí todo lo que necesites antes de comprar, con toda confianza.',
+            'en' => 'We work online and have our administrative office in Mogán, but we do not have a physical shop. Feel free to ask us anything you need here before buying.',
+        ][$locale];
+    }
+
+    public function returnQuestion(string $text): bool
+    {
+        return (bool) preg_match('/\b(?:resi|reso|restitui\w*|restituzion\w*|devoluci[oó]n|devoluciones|devolver\w*|returns?|returning)\b/ui', $text);
+    }
+
+    public function returnPolicy(string $locale): string
+    {
+        return [
+            'it' => 'Ti seguiamo anche dopo l’acquisto: in caso di reso gestiamo la pratica e facciamo da intermediari con il fornitore.',
+            'es' => 'También te acompañamos después de la compra: en caso de devolución, gestionamos el trámite y hacemos de intermediarios con el proveedor.',
+            'en' => 'We also support you after purchase: for returns, we manage the process and liaise with the supplier.',
+        ][$locale];
+    }
+
     public function taxQuestion(string $text): bool
     {
         return (bool) preg_match('/\b(?:iva|igic|vat)\b.{0,65}(?:inclu|deduc|descont|resta|cambi|chang|subtract|deduct)|(?:inclu|deduc|descont|resta|subtract|deduct).{0,45}\b(?:iva|igic|vat)\b|\b(?:iva|igic|vat)\s*\?/ui', $text);
@@ -174,12 +202,14 @@ class WhatsAppStandardReplies
 
     public function match(string $text, array $replies, string $locale = 'it'): ?string
     {
+        if ($this->storeVisitQuestion($text)) return $this->storeVisitPolicy($locale);
         if (preg_match('/\b(modific\w*|cambiar\w*|change|cancel\w*|annull\w*)\b.{0,40}\b(pagament\w*|pago|payment)\b/ui', $text)) {
             return null;
         }
         if (preg_match('/\b(prezz\w*|precios?|prices?|costa|costo|cuesta|cost|link|enlace|compatibil\w*|specific\w*|adatt\w*|modello|model|versione|version|variante|variant|ram|core|gb|pollici|inch)\b|\b(?:19|20)\d{2}\b/ui', $text)) {
             return null;
         }
+        if ($this->returnQuestion($text)) return $this->returnPolicy($locale);
         $normalize = fn ($v) => trim(preg_replace('/[^a-z0-9]+/', ' ', Str::ascii(mb_strtolower($v))));
         $question = $normalize($text);
         $custom = array_values(array_filter($replies, function ($r) use ($normalize, $question) {

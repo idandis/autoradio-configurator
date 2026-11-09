@@ -44,6 +44,17 @@ class AutogenesiDescriptionTest extends TestCase
         parent::tearDown();
     }
 
+    public function test_generation_overrides_the_default_thirty_second_php_limit(): void
+    {
+        $previous = (int) ini_get('max_execution_time');
+        set_time_limit(30);
+        try {
+            $this->respond($this->copy);
+            app(AutogenesiDescription::class)->generate($this->source, ['brand' => 'Hyundai', 'model' => 'Kona', 'year_from' => 2017, 'year_to' => 2020], $this->dir);
+            $this->assertGreaterThanOrEqual(600, (int) ini_get('max_execution_time'));
+        } finally { set_time_limit($previous); }
+    }
+
     private function respond(array $copy, string $status = 'completed'): void
     {
         Http::fake(['https://api.openai.com/v1/responses' => Http::response(['status' => $status, 'output' => [

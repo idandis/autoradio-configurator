@@ -24,6 +24,94 @@ class WhatsAppTestBotTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_dimensions_followup_answers_inches_without_operator(): void
+    {
+        foreach ([9, 7] as $size) {
+            ConfiguratorProduct::create(['handle' => 'w210-'.$size, 'category' => 'screen', 'title' => 'Pantalla '.$size.'″ Mercedes W210',
+                'brand' => 'MERCEDES', 'model' => 'Clase E W210', 'year_from' => 1994, 'year_to' => 2003]);
+        }
+        app(WhatsAppAssistantSettings::class)->save(['language' => 'es']);
+        $history = [['role' => 'user', 'content' => '¿La pantalla de 9" admite CANBUS?']];
+        $vehicle = ['brand' => 'MERCEDES', 'model' => 'Clase E W210', 'year' => 2000];
+        $bot = app(WhatsAppTestBot::class);
+        $r = $bot->conversationAnswer('Las medidas exteriores de la radio podrían dármelas, gracias', $history, $vehicle);
+        $this->assertSame('standard', $r['mode']);
+        $this->assertSame('La pantalla es de 9 pulgadas.', $r['text']);
+        $this->assertArrayNotHasKey('alert', $r);
+        $r = $bot->waitingAnswer('Las medidas exteriores de la radio podrían dármelas, gracias', $history, $vehicle);
+        $this->assertSame('La pantalla es de 9 pulgadas.', $r['text']);
+        Http::assertNothingSent();
+    }
+
+    public function test_centimeter_followup_converts_screen_diagonal_without_operator(): void
+    {
+        ConfiguratorProduct::create(['handle' => 'asx-size', 'category' => 'screen', 'title' => 'Pantalla 9″ Mitsubishi ASX',
+            'brand' => 'MITSUBISHI', 'model' => 'ASX', 'year_from' => 2016, 'year_to' => 2022]);
+        $vehicle = ['brand' => 'MITSUBISHI', 'model' => 'ASX', 'year' => 2020];
+        foreach (['it' => 'Quanti cm?', 'es' => '¿Cuántos centímetros?', 'en' => 'How many cm?'] as $locale => $text) {
+            app(WhatsAppAssistantSettings::class)->save(['language' => $locale]);
+            $r = app(WhatsAppTestBot::class)->conversationAnswer($text, [], $vehicle);
+            $this->assertSame('standard', $r['mode']);
+            $this->assertStringContainsString($locale === 'en' ? '22.86 cm' : '22,86 cm', $r['text']);
+            $this->assertStringContainsString($locale === 'it' ? 'diagonale' : 'diagonal', $r['text']);
+            $this->assertArrayNotHasKey('alert', $r);
+        }
+        Http::assertNothingSent();
+    }
+
+    public function test_approved_frame_followup_answers_all_three_questions(): void
+    {
+        $handle = config('waha.complete_frame_products')[0];
+        $p = ConfiguratorProduct::create(['handle' => $handle, 'category' => 'screen', 'title' => 'Mitsubishi ASX']);
+        $p->variants()->create(['title' => '4 core 2G 32G', 'price' => 150]);
+        app(WhatsAppAssistantSettings::class)->save(['language' => 'es']);
+        $text = 'Entiendo que viene con carcasa, verdad? Creo que voy a comprar la opción mas económica. Hay posibilidad de ir a su tienda física?';
+        $r = app(WhatsAppTestBot::class)->waitingAnswer($text, [], [], ['product' => $handle]);
+        $this->assertStringContainsString('Sí, viene con el marco completo', $r['text']);
+        $this->assertStringContainsString('4 núcleos y 2/32 GB', $r['text']);
+        $this->assertStringContainsString('no disponemos de tienda física', $r['text']);
+        $this->assertArrayNotHasKey('alert', $r);
+        config(['waha.complete_frame_products' => []]);
+        $r = app(WhatsAppTestBot::class)->waitingAnswer($text, [], [], ['product' => $handle]);
+        $this->assertStringNotContainsString('Sí, viene con el marco completo', $r['text']);
+        Http::assertNothingSent();
+    }
+
+    public function test_physical_store_visit_is_distinct_from_address_even_while_waiting(): void
+    {
+        $service = app(\App\Services\WhatsAppStandardReplies::class);
+        foreach (['es' => 'Muchas gracias. Entiendo que el sí es un sí a que viene con carcasa, verdad? Creo que voy a comprar la opción mas económica. Tengo otra duda. Hay posibilidad de ir a su tienda física para aclarar información?',
+            'it' => 'Posso venire direttamente in negozio?', 'en' => 'Can I visit your physical store?'] as $locale => $text) {
+            app(WhatsAppAssistantSettings::class)->save(['language' => $locale]);
+            $r = app(WhatsAppTestBot::class)->waitingAnswer($text);
+            $this->assertSame('standard_general', $r['mode']);
+            $this->assertSame($service->storeVisitPolicy($locale), $r['text']);
+            $this->assertStringNotContainsString('Mencey', $r['text']);
+        }
+        $this->assertFalse($service->storeVisitQuestion('¿Cuál es vuestra dirección?'));
+        Http::assertNothingSent();
+    }
+
+    public function test_waiting_customer_can_choose_a_catalog_variant_without_closing_technical_handoff(): void
+    {
+        $p = ConfiguratorProduct::create(['handle' => 'asx-choice', 'category' => 'screen', 'title' => 'Mitsubishi ASX']);
+        $p->variants()->create(['title' => '4 core 2G 32G', 'price' => 150]);
+        $p->variants()->create(['title' => '8Core 4G 64G', 'price' => 250]);
+        app(WhatsAppAssistantSettings::class)->save(['language' => 'es']);
+        $state = ['product' => $p->handle];
+        $r = app(WhatsAppTestBot::class)->waitingAnswer('También me gustaría preguntarle si puedo comprar la opción de 4 core 2G 32 G', [], [], $state);
+        $this->assertSame('standard', $r['mode']);
+        $this->assertStringContainsString('Claro', $r['text']);
+        $this->assertStringContainsString('8 núcleos', $r['text']);
+        $this->assertSame($state, $r['quote_state']);
+        $this->assertArrayNotHasKey('alert', $r);
+        $missing = app(WhatsAppTestBot::class)->waitingAnswer('¿Puedo comprar la opción de 4 core 1G 16G?', [], [], $state);
+        $this->assertSame('operator_waiting', $missing['mode']);
+        $technical = app(WhatsAppTestBot::class)->waitingAnswer('¿Puedo comprar 4 core 2G 32G y funciona la cámara original?', [], [], $state);
+        $this->assertSame('operator_waiting', $technical['mode']);
+        Http::assertNothingSent();
+    }
+
     private string $dir;
 
     private array $polledMessages = [];

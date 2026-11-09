@@ -10,6 +10,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Process;
 use Tests\TestCase;
 
 class WhatsAppSessionRestartTest extends TestCase
@@ -52,6 +53,39 @@ class WhatsAppSessionRestartTest extends TestCase
         $this->post('/dashboard/whatsapp/restart')->assertRedirect('/login');
         $this->actingAs(User::factory()->create())->post('/dashboard/whatsapp/restart')->assertForbidden();
         Http::assertNothingSent();
+    }
+
+    public function test_start_is_administrator_only_and_rejects_remote_installations(): void
+    {
+        Process::fake();
+        $this->post('/dashboard/whatsapp/start')->assertRedirect('/login');
+        $this->actingAs(User::factory()->create())->postJson('/dashboard/whatsapp/start')->assertForbidden();
+        $this->app['env'] = 'production';
+        $this->actingAs(User::factory()->create(['is_admin' => true]))->postJson('/dashboard/whatsapp/start')->assertStatus(409);
+        Process::assertNothingRan();
+    }
+
+    public function test_start_launches_bot_and_enables_saved_rules_without_resetting_memory(): void
+    {
+        Process::fake();
+        $this->mock(\App\Services\WhatsAppTestBot::class)->shouldReceive('connect')->once();
+        $settings = app(WhatsAppAssistantSettings::class);
+        $settings->save(['enabled' => false]);
+        $history = 'waha-test-history:'.$settings->suffix();
+        Cache::store('file')->put($history, ['existing conversation'], now()->addMinute());
+        $this->actingAs(User::factory()->create(['is_admin' => true]))->postJson('/dashboard/whatsapp/start')->assertStatus(202);
+        Process::assertRan(fn ($p) => str_contains($p->command, 'whatsapp:test-bot --minutes=120'));
+        $this->assertTrue($settings->get()['enabled']);
+        $this->assertSame(['existing conversation'], Cache::store('file')->get($history));
+    }
+
+    public function test_start_does_not_launch_another_running_bot(): void
+    {
+        Process::fake();
+        $this->mock(\App\Services\WhatsAppTestBot::class)->shouldReceive('connect')->once();
+        Cache::store('file')->put('waha-test-runtime', ['at' => time(), 'state' => 'active'], now()->addMinute());
+        $this->actingAs(User::factory()->create(['is_admin' => true]))->postJson('/dashboard/whatsapp/start')->assertStatus(202);
+        Process::assertNothingRan();
     }
 
     public function test_restart_only_affects_configured_session_and_preserves_settings_and_memory(): void

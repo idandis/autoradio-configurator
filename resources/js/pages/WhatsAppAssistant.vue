@@ -119,6 +119,23 @@ const deleteChat = async (client?: ClientChat) => {
 const chatTime = (value: string | null) => value ? new Date(value).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—';
 
 const restarting = ref(false);
+const starting = ref(false);
+const startNotice = ref('');
+const startError = ref('');
+let startAt = 0;
+const startService = async () => {
+    starting.value = true; startError.value = ''; startNotice.value = ''; startAt = Date.now();
+    try {
+        const { data } = await axios.post('/dashboard/whatsapp/start');
+        form.enabled = true;
+        form.defaults('enabled', true);
+        startNotice.value = data.message;
+        await refresh();
+    } catch (e: any) {
+        starting.value = false;
+        startError.value = e.response?.data?.message ?? 'Avvio non riuscito. Riprova.';
+    }
+};
 const reconnecting = ref(false);
 const restartNotice = ref('');
 const restartError = ref('');
@@ -144,6 +161,8 @@ const refresh = async () => {
     void loadChats();
     try {
         runtime.value = (await axios.get('/dashboard/whatsapp/status')).data; statusError.value = false;
+        if (starting.value && runtime.value.running) { starting.value = false; startNotice.value = 'Servizio riattivato.'; }
+        else if (starting.value && Date.now() - startAt > 30000) { starting.value = false; startNotice.value = ''; startError.value = 'Il servizio non risulta avviato. Controlla WAHA e il log del bot sul Mac.'; }
         if (reconnecting.value) {
             const state = runtime.value.connection?.status;
             if (state === 'WORKING') { reconnecting.value = false; restartNotice.value = 'Sessione ricollegata. Le regole e la memoria della chat sono conservate.'; }
@@ -245,6 +264,11 @@ const toggleFields = [
                 <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Servizio locale</p>
                 <p class="mt-2 flex items-center gap-2 font-semibold"><span class="size-2 rounded-full" :class="runtime.running ? 'bg-emerald-500' : 'bg-neutral-400'" />{{ status }}</p>
                 <p class="mt-1 text-xs text-muted-foreground">{{ statusError ? 'Stato non aggiornato: riprova.' : runtime.running && expires ? `Prova attiva fino alle ${expires} · ${runtime.replies} risposte` : 'Le regole restano salvate anche quando il servizio è fermo.' }}</p>
+                <button v-if="!runtime.running || runtime.manual_stop || !form.enabled" type="button" :disabled="!runtime.local || starting || form.isDirty" class="mt-3 flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50" @click="startService"><RefreshCw class="size-4" :class="{ 'animate-spin': starting }" />{{ starting ? 'Avvio…' : 'Riattiva servizio' }}</button>
+                <p v-if="!runtime.local" class="mt-2 text-xs text-muted-foreground">Apri questa dashboard sul Mac del servizio per riattivarlo.</p>
+                <p v-else-if="form.isDirty" class="mt-2 text-xs text-muted-foreground">Salva le regole prima di riattivare.</p>
+                <p v-if="startNotice" role="status" class="mt-2 text-sm text-emerald-600">{{ startNotice }}</p>
+                <p v-if="startError" role="alert" class="mt-2 text-sm text-red-500">{{ startError }}</p>
             </div>
             <div class="rounded-xl border bg-card p-4"><p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Modalità prova</p><p class="mt-2 font-semibold">Un solo numero autorizzato</p><p class="mt-1 text-xs text-muted-foreground">{{ runtime.number ? `Numero del servizio: +${runtime.number}` : 'Gli altri contatti restano esclusi.' }}</p></div>
             <div class="rounded-xl border bg-card p-4"><p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">Catalogo collegato</p><p class="mt-2 font-semibold">Catalogo di questa applicazione</p><p class="mt-1 text-xs text-muted-foreground">Le proposte immediate non consumano token AI.</p></div>

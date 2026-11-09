@@ -4,6 +4,7 @@ import { computed, nextTick, ref, watch } from 'vue';
 import DescriptionEditor from '@/components/DescriptionEditor.vue';
 import SquareImageCropper from '@/components/SquareImageCropper.vue';
 import ImagePainter from '@/components/ImagePainter.vue';
+import ImageCleanupMask from '@/components/ImageCleanupMask.vue';
 import ImageTextBand from '@/components/ImageTextBand.vue';
 import ProductSilhouette from '@/components/ProductSilhouette.vue';
 
@@ -13,9 +14,14 @@ type Candidate = { title: string; source_url: string; price_text?: string; verif
 type Search = { query: string; origin: string; url: string; mode?: 'links' | 'best_price'; selected?: Candidate | null; inspected_count?: number; vehicle: { brand: string; model: string; year_from: number; year_to: number }; candidates: Candidate[] };
 type BatchItem = { id: number; query: string; status: string; source_url: string | null; product_id: number | null; error: string | null };
 type Batch = { id: number; status: string; total: number; items: BatchItem[] };
-const props = defineProps<{ products: Product[]; local: boolean; search?: Search | null; directImport?: { source_url: string } | null; batches: Batch[] }>();
+type Detection = { year: number; complete?: boolean; target?: number; researched_at: string; compared_at: string; notes: string; import_list: string; counts: { catalog: number; draft: number; missing: number }; sources: string[]; cars: { brand: string; model: string; market: string; rank: number; units: number | null; evidence: string; source_url: string; status: 'catalog' | 'draft' | 'missing' }[] };
+const props = defineProps<{ products: Product[]; local: boolean; detection?: Detection | null; detectionMaxYear: number; search?: Search | null; directImport?: { source_url: string } | null; batches: Batch[] }>();
 const showList = ref(false);
 const listForm = useForm({ list: '' });
+const detectionForm = useForm({ year: props.detection?.year ?? Math.min(2020, props.detectionMaxYear) });
+const fillDetectedList = () => { listForm.list = props.detection?.import_list ?? ''; showList.value = !!listForm.list; };
+const detectMissing = () => detectionForm.post('/autogenesi/detect-missing', { preserveScroll: true, onSuccess: fillDetectedList });
+
 const fileError = ref('');
 const chromeImport = useForm({ package: null as File | null, brand: '', model: '', year_from: '' as number | string, year_to: '' as number | string });
 const loadChromePackage = (event: Event) => {
@@ -119,7 +125,7 @@ const uploadPhotos = () => {
     if (!selected.value || !uploading.photos.length || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || removing.value) return;
     uploading.post(`/autogenesi/${selected.value.id}/images`, { forceFormData: true, preserveScroll: true, onSuccess: () => { uploading.reset('photos'); uploadKey.value++; } });
 };
-const imageAction = ref<'ai' | 'restore' | 'white' | 'clean' | 'text'>('ai');
+const imageAction = ref<'ai' | 'restore' | 'white' | 'clean'>('ai');
 const cropTarget = ref<{ index: number; id: string; url: string } | null>(null);
 const cropping = useForm({ image_id: '', x: 0, y: 0, size: 0, width: 0, height: 0 });
 const startCrop = (index: number, id: string, url: string) => {
@@ -129,10 +135,16 @@ const startCrop = (index: number, id: string, url: string) => {
 };
 const paintTarget = ref<{ index: number; id: string; url: string } | null>(null);
 const painting = useForm({ image_id: '', photo: null as File | null });
-const paintMode = ref<'paint' | 'text'>('paint');
-const startPaint = (index: number, id: string, url: string, mode: 'paint' | 'text' = 'paint') => {
+const cleanup = useForm({ image_id: '', mask: null as File | null, strength: 12 });
+const applyCleanup = ({ mask, strength }: { mask: File; strength: number }) => {
+    if (!selected.value || !paintTarget.value || cleanup.processing) return;
+    cleanup.image_id = paintTarget.value.id; cleanup.mask = mask; cleanup.strength = strength;
+    cleanup.post(`/autogenesi/${selected.value.id}/images/${paintTarget.value.index}/cleanup-text`, { forceFormData: true, preserveScroll: true, onSuccess: () => { paintTarget.value = null; cleanup.reset(); } });
+};
+const paintMode = ref<'paint' | 'text' | 'cover'>('paint');
+const startPaint = (index: number, id: string, url: string, mode: 'paint' | 'text' | 'cover' = 'paint') => {
     paintMode.value = mode;
-    painting.clearErrors();
+    painting.clearErrors(); cleanup.clearErrors();
     paintTarget.value = { index, id, url };
 };
 const applyPaint = (file: File) => {
@@ -147,7 +159,7 @@ const applyCrop = (rect: { x: number; y: number; size: number; width: number; he
     Object.assign(cropping, rect, { image_id: cropTarget.value.id });
     cropping.post(`/autogenesi/${selected.value.id}/images/${cropTarget.value.index}/crop`, { preserveScroll: true, onSuccess: () => { cropTarget.value = null; } });
 };
-const editImage = (index: number, id: string, action: 'ai' | 'restore' | 'white' | 'clean' | 'text' = 'ai') => {
+const editImage = (index: number, id: string, action: 'ai' | 'restore' | 'white' | 'clean' = 'ai') => {
     if (!selected.value || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing || removing.value) return;
     imageAi.image_id = id;
     imageAi.points = [];
@@ -273,6 +285,28 @@ const imageRole = (role: string) => imageRoles[role] ?? 'Da verificare';
     <Head title="AutoGenesi · Bozze" />
     <div class="space-y-6 p-4 md:p-8">
         <div class="flex flex-wrap items-start justify-between gap-4"><div><h1 class="text-2xl font-semibold">AutoGenesi</h1><p class="mt-2 text-sm text-muted-foreground">Prodotti importati in bozza, visibili soltanto agli amministratori. Rivedi foto, caratteristiche e prezzi prima dell’importazione finale.</p></div><div class="flex flex-wrap gap-3"><a v-if="products.some(p => p.status === 'draft')" href="/autogenesi/export-all" class="rounded-lg border px-4 py-2 text-sm font-medium">Esporta tutte le bozze</a><button v-if="local && products.length" type="button" :disabled="catalogAll.processing || catalogImport.processing || editing.processing || layout.processing || imageAi.processing || dashboard.processing || cropping.processing || uploading.processing || removing" class="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background disabled:opacity-50" @click="importAllConfigurator">{{ catalogAll.processing ? 'Importazione di tutte le bozze…' : 'Importa tutte le bozze nel configuratore' }}</button><button v-if="local" type="button" class="rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background" @click="showList = !showList">Importa lista</button></div></div>
+        <section v-if="local" class="space-y-4 rounded-xl border bg-card p-5">
+            <h2 class="text-lg font-semibold">Rilevamento autoradio mancanti per anno</h2>
+            <p class="text-sm text-muted-foreground">Ricerca web fino a 50 auto più vendute dell’anno: priorità alla classifica annuale spagnola, integrata con quella europea se necessario. Confronto con marca, modello e anni del catalogo e delle bozze, poi compilazione automatica di Importa lista.</p>
+            <form class="flex flex-wrap items-end gap-3" @submit.prevent="detectMissing">
+                <label class="text-sm">Anno<input v-model.number="detectionForm.year" required type="number" min="1900" :max="detectionMaxYear" class="mt-1 block w-32 rounded border bg-background px-3 py-2" :disabled="detectionForm.processing" /></label>
+                <button type="submit" :disabled="detectionForm.processing || listForm.processing" class="rounded-lg bg-foreground px-4 py-2 text-sm text-background disabled:opacity-50">{{ detectionForm.processing ? 'Ricerca e confronto in corso…' : 'Rileva le autoradio mancanti' }}</button>
+            </form>
+            <p v-if="detectionForm.processing" class="text-sm text-muted-foreground">La ricerca delle fonti può richiedere alcuni minuti. Mantieni aperta la pagina.</p>
+            <p v-for="(error, key) in detectionForm.errors" :key="key" role="alert" class="text-sm text-red-600">{{ error }}</p>
+            <div v-if="detection" class="space-y-3">
+                <p class="text-sm font-medium">Anno {{ detection.year }} · {{ detection.cars.length }} modelli · {{ detection.counts.catalog }} già nel catalogo · {{ detection.counts.draft }} già in bozza · {{ detection.counts.missing }} mancanti</p>
+                <p v-if="detection.cars.length < 50" class="text-sm text-amber-600">Ricerca parziale: {{ detection.cars.length }} modelli con riferimenti utilizzabili su 50 richiesti. Il confronto e la lista dei mancanti includono solo questi modelli.</p>
+                <p v-if="detection.notes" class="text-xs text-muted-foreground">{{ detection.notes }}</p>
+                <button v-if="detection.import_list" type="button" class="rounded border px-3 py-2 text-sm" @click="fillDetectedList">Mostra i mancanti in Importa lista</button>
+                <p v-else class="text-sm text-emerald-600">Tutti i modelli rilevati sono già presenti per l’anno selezionato.</p>
+                <details class="rounded border p-3"><summary class="cursor-pointer text-sm font-medium">Elenco dei {{ detection.cars.length }} modelli e fonti</summary>
+                    <div class="mt-3 max-h-96 overflow-auto"><table class="w-full text-left text-sm"><thead><tr><th class="p-2">Marca / modello</th><th class="p-2">Mercato / posizione</th><th class="p-2">Immatricolazioni</th><th class="p-2">Stato</th><th class="p-2">Fonte</th></tr></thead><tbody>
+                        <tr v-for="car in detection.cars" :key="`${car.brand}-${car.model}`" class="border-t"><td class="p-2">{{ car.brand }} {{ car.model }}</td><td class="p-2">{{ car.market }} · {{ car.rank }}</td><td class="p-2">{{ car.units?.toLocaleString('it-IT') ?? 'Non disponibile' }}</td><td class="p-2" :class="car.status === 'missing' ? 'text-amber-600' : 'text-emerald-600'">{{ car.status === 'catalog' ? 'Nel catalogo' : car.status === 'draft' ? 'In bozza' : 'Mancante' }}</td><td class="p-2"><a :href="car.source_url" target="_blank" rel="noopener noreferrer" class="text-blue-600 underline" :title="car.evidence">Apri fonte ↗</a></td></tr>
+                    </tbody></table></div>
+                </details>
+            </div>
+        </section>
         <p v-for="(error, key) in catalogAll.errors" :key="key" role="alert" class="text-sm text-red-600">{{ error }}</p>
         <p v-if="products.length" class="text-sm text-muted-foreground">Prima dell’importazione in Shopify, trasferisci con FileZilla anche storage/app/public/autogenesi/catalog/ su Aruba: contiene le foto corrispondenti agli URL dell’Excel.</p>
         <form v-if="local && showList" class="space-y-4 rounded-xl border bg-card p-5" @submit.prevent="importList">
@@ -437,12 +471,12 @@ const imageRole = (role: string) => imageRoles[role] ?? 'Da verificare';
                         <div class="flex flex-wrap gap-2">
                             <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border border-violet-300 px-2 py-1 text-violet-700 disabled:opacity-50" @click="editImage(i, image.id)">{{ imageAi.processing && imageAi.image_id === image.id && imageAction === 'ai' ? 'Modifica AI in corso…' : 'Modifica con AI' }}</button>
                             <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="editImage(i, image.id, 'clean')">{{ imageAi.processing && imageAi.image_id === image.id && imageAction === 'clean' ? 'Pulizia e miglioramento in corso…' : 'Pulisci e migliora' }}</button>
-                            <button v-if="local" type="button" title="Rimuove watermark e scritte pubblicitarie sovrapposte, conservando l’interfaccia originale" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="editImage(i, image.id, 'text')">{{ imageAi.processing && imageAi.image_id === image.id && imageAction === 'text' ? 'Cancellazione scritte…' : 'Cancella scritte' }}</button>
+                            <button v-if="local" type="button" title="Sfoca le scritte selezionate senza AI e senza modificare il resto della foto" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="startPaint(i, image.id, image.url, 'cover')">Cancella scritte</button>
                             <button v-if="local && (image.ai_edited || image.manually_cropped)" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="editImage(i, image.id, 'restore')">Ripristina originale</button>
                             <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="startCrop(i, image.id, image.url)">Taglia</button>
                             <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="startPaint(i, image.id, image.url)">Paint</button>
                             <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="startPaint(i, image.id, image.url, 'text')">TESTO</button>
-                            <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="editImage(i, image.id, 'white')">{{ imageAi.processing && imageAi.image_id === image.id && imageAction === 'white' ? 'Rimozione sfondo in corso…' : 'Rimuovi sfondo' }}</button>
+                            <button v-if="local" type="button" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" class="rounded border px-2 py-1 disabled:opacity-50" @click="editImage(i, image.id, 'white')">{{ imageAi.processing && imageAi.image_id === image.id && imageAction === 'white' ? 'Ricreazione accessori in corso…' : 'Ricrea accessori' }}</button>
                             <button type="button" class="rounded border border-red-200 px-2 py-1 text-red-600 disabled:opacity-50" :disabled="removing || dashboard.processing || catalogAll.processing || layout.processing || imageAi.processing || cropping.processing || uploading.processing" @click="removeImage(i, image.id)">Rimuovi</button>
                         </div>
                     </figcaption>
@@ -469,6 +503,7 @@ const imageRole = (role: string) => imageRoles[role] ?? 'Da verificare';
         </section>
         <ProductSilhouette v-if="sceneTarget" :src="sceneTarget.url" :busy="imageAi.processing" :error="Object.values(imageAi.errors).join(' ')" @cancel="sceneTarget = null" @save="applyScene" @automatic="applyAutomaticScene" />
         <ImageTextBand v-if="paintTarget && paintMode === 'text'" :src="paintTarget.url" :busy="painting.processing" :error="Object.values(painting.errors).join(' ')" @cancel="paintTarget = null" @save="applyPaint" />
+        <ImageCleanupMask v-if="paintTarget && paintMode === 'cover'" :src="paintTarget.url" :busy="cleanup.processing" :error="Object.values(cleanup.errors).join(' ')" @cancel="paintTarget = null" @save="applyCleanup" />
         <ImagePainter v-if="paintTarget && paintMode === 'paint'" :src="paintTarget.url" :busy="painting.processing" :error="Object.values(painting.errors).join(' ')" @cancel="paintTarget = null" @save="applyPaint" />
         <SquareImageCropper v-if="cropTarget" :src="cropTarget.url" :busy="cropping.processing" :error="Object.values(cropping.errors).join(' ')" @cancel="cropTarget = null" @save="applyCrop" />
     </div>

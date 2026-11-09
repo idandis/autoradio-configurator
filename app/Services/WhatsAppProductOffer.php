@@ -8,6 +8,100 @@ use Illuminate\Support\Str;
 
 class WhatsAppProductOffer
 {
+    public function screenSize(string $text, string $locale, array $history, array $vehicle, array $state): ?array
+    {
+        if (! preg_match('/\b(?:misur\w*|dimension\w*|medidas?|tama[nñ]o|size|measurements?|cm|cent[ií]metr\w*)\b/ui', $text)
+            || preg_match('/canbus|compatib|volante|steering|c[aá]mara|camera|install|montagg/ui', $text)) return null;
+        $context = app(WhatsAppCatalogSearch::class)->search(collect($history)->where('role', 'user')->pluck('content')->all(), $vehicle);
+        $products = collect($context['products']);
+        if (! empty($state['product'])) $products = $products->where('handle', $state['product']);
+        $size = null;
+        foreach (array_reverse([...collect($history)->where('role', 'user')->pluck('content')->all(), $text]) as $m) {
+            if (preg_match('/\b(\d{1,2}(?:[.,]\d+)?)\s*(?:["″”]|pulgadas?|pollici|inches?|inch)/ui', $m, $match)) { $size = str_replace(',', '.', $match[1]); break; }
+        }
+        $sizes = $products->map(function ($p) {
+            return preg_match('/\b(\d{1,2}(?:[.,]\d+)?)\s*(?:["″”]|pulgadas?|pollici|inches?|inch)/ui', $p['title'], $m) ? str_replace(',', '.', $m[1]) : null;
+        })->filter()->unique()->values();
+        if ($size !== null && ! $sizes->contains($size)) return null;
+        $size ??= $sizes->count() === 1 ? $sizes->first() : null;
+        if ($size === null) return null;
+        $answer = ['it' => "Lo schermo è da {$size} pollici.", 'es' => "La pantalla es de {$size} pulgadas.", 'en' => "The screen size is {$size} inches."][$locale];
+        if (preg_match('/\b(?:cm|cent[ií]metr\w*)\b/ui', $text)) {
+            $cm = rtrim(rtrim(number_format((float) $size * 2.54, 2, '.', ''), '0'), '.');
+            if ($locale !== 'en') $cm = str_replace('.', ',', $cm);
+            $answer = ['it' => "Lo schermo è da {$size} pollici, pari a {$cm} cm di diagonale.",
+                'es' => "La pantalla es de {$size} pulgadas, equivalentes a {$cm} cm de diagonal.",
+                'en' => "The screen is {$size} inches, equivalent to {$cm} cm diagonally."][$locale];
+        }
+
+        return ['text' => $answer, 'mode' => 'standard', 'context' => $context, 'quote_state' => $state,
+            'signature' => hash('sha256', json_encode($context['vehicle']))];
+    }
+
+    public function purchaseFollowup(string $text, string $locale, array $history, array $vehicle, array $state): ?array
+    {
+        $standard = app(WhatsAppStandardReplies::class);
+        if ($locale !== 'es' || ! $standard->storeVisitQuestion($text)
+            || ! preg_match('/\b(?:carcasa|marco)\b/ui', $text)
+            || ! preg_match('/econ[oó]mica|4\s*core|2\s*[\/ ]\s*32/ui', $text)) return null;
+        $choice = $this->variantChoice('comprar opción 4 core 2G 32G', $locale, $history, $vehicle, $state);
+        if (! $choice) return null;
+        $handle = $state['product'] ?? null;
+        if (! $handle) {
+            foreach (array_reverse($history) as $m) {
+                if (($m['role'] ?? '') !== 'assistant') continue;
+                preg_match_all('~/products/([^?\s)\]#]+)~u', $m['content'], $links);
+                $handles = array_unique($links[1]);
+                if (count($handles) > 1) return null;
+                if ($handles) { $handle = rawurldecode(reset($handles)); break; }
+            }
+        }
+        if (! in_array($handle, config('waha.complete_frame_products', []), true)) return null;
+        $choice['text'] = 'Sí, viene con el marco completo que aparece en la foto. Puedes elegir la de 4 núcleos y 2/32 GB; es la opción básica y tiene menor velocidad, como te comentamos.'
+            ."\n\n".$standard->storeVisitPolicy($locale);
+
+        return $choice;
+    }
+
+    public function variantChoice(string $text, string $locale, array $history, array $vehicle, array $state): ?array
+    {
+        if (! preg_match('/\b(?:compr\w*|prend\w*|scegli\w*|opci[oó]n|opzione|versi[oó]n|versione|buy|choose|option)\b/ui', $text)
+            || preg_match('/compatib|c[aá]mara|camera|volante|steering|install|montagg/ui', $text)) return null;
+        preg_match('/\b(\d+)\s*[- ]?core\b/ui', $text, $core);
+        preg_match('/\b(\d+)\s*g(?:b)?\s*[\/+ -]\s*(\d+)\s*g(?:b)?\b/ui', $text, $memory);
+        if (! $core && ! $memory) return null;
+        $handle = $state['product'] ?? null;
+        if (! $handle) {
+            foreach (array_reverse($history) as $m) {
+                if (($m['role'] ?? '') !== 'assistant') continue;
+                preg_match_all('~/products/([^?\s)\]#]+)~u', $m['content'], $links);
+                $handles = array_unique($links[1]);
+                if (count($handles) > 1) return null;
+                if ($handles) { $handle = rawurldecode(reset($handles)); break; }
+            }
+        }
+        if (! $handle && ! empty($vehicle['brand']) && ! empty($vehicle['model']) && ! empty($vehicle['year'])) {
+            $products = app(WhatsAppCatalogSearch::class)->search([], $vehicle)['products'];
+            if (count($products) === 1) $handle = $products[0]['handle'];
+        }
+        $p = $handle ? ConfiguratorProduct::where('handle', $handle)->where('category', 'screen')->first() : null;
+        if (! $p) return null;
+        $variants = $p->variants()->get();
+        $matches = $variants->filter(function ($v) use ($core, $memory) {
+            $label = $v->title.' '.$v->option_value;
+            return (! $core || preg_match('/\b'.preg_quote($core[1], '/').'\s*[- ]?core\b/ui', $label))
+                && (! $memory || preg_match('/\b'.preg_quote($memory[1], '/').'\s*g(?:b)?\s*[\/+ -]\s*'.preg_quote($memory[2], '/').'\s*g(?:b)?\b/ui', $label));
+        });
+        if ($matches->isEmpty()) return null;
+        $answer = ['it' => 'Certo, puoi scegliere anche questa variante.', 'es' => 'Claro, también puedes comprar esa opción.', 'en' => 'Of course, you can also choose that option.'][$locale];
+        if ((! $core || $core[1] !== '8') && $variants->contains(fn ($v) => preg_match('/\b8\s*[- ]?core\b/ui', $v->title.' '.$v->option_value))) {
+            $answer .= ' '.['it' => 'Consigliamo comunque la 8 core per maggiore fluidità e velocità.', 'es' => 'Aun así, recomendamos la de 8 núcleos por su mayor fluidez y velocidad.', 'en' => 'We still recommend the 8-core version for smoother and faster performance.'][$locale];
+        }
+
+        return ['text' => $answer, 'mode' => 'standard', 'context' => ['vehicle' => $vehicle, 'matching_specific_screens' => 1],
+            'quote_state' => $state, 'signature' => hash('sha256', json_encode($vehicle))];
+    }
+
     public function accessoryContext(array $history, array $state, array $vehicle): ?array
     {
         $handle = $state['accessory_handle'] ?? null;
@@ -171,10 +265,12 @@ class WhatsAppProductOffer
             ? $shipping->shippingPolicy($locale, $messages)
             : ['it' => 'Le condizioni di spedizione dipendono dalla destinazione.', 'es' => 'Las condiciones de envío dependen del destino.', 'en' => 'Shipping terms depend on the destination.'][$locale];
 
+        if (app(WhatsAppStandardReplies::class)->returnQuestion((string) end($messages))) return $delivery.' '.app(WhatsAppStandardReplies::class)->returnPolicy($locale);
+
         return $delivery.' '.[
-            'it' => 'Ti seguiamo anche dopo l’acquisto: in caso di reso gestiamo la pratica e facciamo da intermediari con il fornitore.',
-            'es' => 'También te acompañamos después de la compra: en caso de devolución, gestionamos el trámite y hacemos de intermediarios con el proveedor.',
-            'en' => 'We also support you after purchase: for returns, we manage the process and liaise with the supplier.',
+            'it' => 'Ti seguiamo anche dopo l’acquisto e facciamo da intermediari con il fornitore.',
+            'es' => 'También te acompañamos después de la compra y hacemos de intermediarios con el proveedor.',
+            'en' => 'We also support you after purchase and liaise with the supplier.',
         ][$locale];
     }
 

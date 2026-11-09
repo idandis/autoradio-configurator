@@ -83,6 +83,19 @@ class WhatsAppAssistantController extends Controller
         return response()->json(['results' => $results, 'sent' => array_sum(array_column($results, 'sent'))]);
     }
 
+    public function start(\App\Services\WhatsAppServiceControl $service)
+    {
+        try {
+            $service->start();
+
+            return response()->json(['message' => 'Avvio richiesto. Attendo il servizio…'], 202);
+        } catch (\LogicException $e) {
+            return response()->json(['message' => $e->getMessage()], 409);
+        } catch (Throwable $e) {
+            return response()->json(['message' => 'Avvio non riuscito. Verifica Docker, WAHA e il QR WhatsApp sul Mac.'], 503);
+        }
+    }
+
     public function restart(WhatsAppSessionConnection $connection)
     {
         if (! $connection->supported()) {
