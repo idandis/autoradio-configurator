@@ -1,0 +1,15 @@
+resources/data/screen-titles-it.json
+resources/data/screen-titles-en.json
+resources/data/screen-descriptions-it.json
+resources/data/screen-descriptions-en.json
+resources/data/camera-titles-it.json
+resources/data/camera-titles-en.json
+resources/data/camera-descriptions-it.json
+resources/data/camera-descriptions-en.json
+resources/data/speaker-titles-it.json
+resources/data/speaker-titles-en.json
+resources/data/speaker-descriptions-it.json
+resources/data/speaker-descriptions-en.json
+public/images/vehicles-dark/citroen-xsara-picasso-1999-2010.webp
+public/images/vehicles-dark/citroen-saxo-1996-2003.webp
+public/images/vehicles-dark/ford-mondeo-3-2000-2007.webp
