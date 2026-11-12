@@ -14,7 +14,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->scoped(\App\Services\ProductSheetProcessing::class);
     }
 
     /**
@@ -22,6 +22,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        \Illuminate\Support\Facades\DB::connection()->beforeExecuting(fn () => app(\App\Services\ProductSheetProcessing::class)->check());
+        \Illuminate\Support\Facades\Http::globalOptions(fn () => ['progress' => fn () => app(\App\Services\ProductSheetProcessing::class)->check()]);
+        RateLimiter::for('aliexpress-authorization', fn (Request $request) => Limit::perMinute(5)
+            ->by($request->route()?->getName().'|'.($request->user()?->id ?? $request->ip())));
         RateLimiter::for('autogenesi', function (Request $request) {
             if (app()->environment('local') && $request->user()?->is_admin) {
                 return Limit::none();

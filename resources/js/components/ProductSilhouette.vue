@@ -8,6 +8,7 @@ const width = ref(0), height = ref(0);
 const points = ref<number[][]>([]);
 const mode = ref<'manual' | 'auto'>('manual');
 const tolerance = ref(40);
+const removeHoles = ref(true);
 const preview = ref<HTMLCanvasElement | null>(null);
 const autoError = ref('');
 let maskCanvas: HTMLCanvasElement | null = null;
@@ -19,7 +20,7 @@ const prepare = () => {
         const c = preview.value; c.width = width.value; c.height = height.value;
         const ctx = c.getContext('2d')!; ctx.drawImage(image.value, 0, 0);
         const pixels = ctx.getImageData(0, 0, c.width, c.height);
-        const mask = contrastMask(pixels.data, c.width, c.height, tolerance.value);
+        const mask = contrastMask(pixels.data, c.width, c.height, tolerance.value, removeHoles.value);
         maskCanvas = document.createElement('canvas'); maskCanvas.width = c.width; maskCanvas.height = c.height;
         const mc = maskCanvas.getContext('2d')!, mp = mc.createImageData(c.width, c.height);
         for (let i = 0; i < mask.length; i++) {
@@ -30,7 +31,7 @@ const prepare = () => {
         mc.putImageData(mp, 0, 0); ctx.putImageData(pixels, 0, 0);
     } catch (e) { maskCanvas = null; autoError.value = e instanceof Error ? e.message : 'Scontorno non disponibile.'; }
 };
-watch([mode, tolerance], prepare, { flush: 'post' });
+watch([mode, tolerance, removeHoles], prepare, { flush: 'post' });
 const automatic = () => {
     if (!maskCanvas || props.busy) return;
     maskCanvas.toBlob(blob => {
@@ -57,6 +58,7 @@ const add = (e: MouseEvent) => {
                 <label class="my-3 flex items-center gap-3 text-sm">Contorno<select v-model="mode" :disabled="busy" class="rounded border bg-background px-3 py-2"><option value="manual">Con punti</option><option value="auto">Automatico per contrasto</option></select></label>
                 <p v-if="mode === 'auto'" class="my-3 text-sm">Per foto con sfondo chiaro uniforme: segue il contrasto e conserva la figura principale. Verifica l’anteprima; aumenta la sensibilità per togliere più sfondo, riducila per conservare dettagli chiari.</p>
                 <label v-if="mode === 'auto'" class="my-3 flex items-center gap-3 text-sm">Sensibilità<input v-model.number="tolerance" :disabled="busy" type="range" min="10" max="100" step="1" />{{ tolerance }}</label>
+                <label v-if="mode === 'auto'" class="my-3 flex items-center gap-2 text-sm"><input v-model="removeHoles" :disabled="busy" type="checkbox" />Rendi trasparenti i vuoti bianchi interni</label>
                 <p v-if="mode === 'manual'" class="my-3 text-sm">Clicca lungo il bordo esterno, in ordine. Includi solo la pantalla e la sua cornice. Il contorno si chiude automaticamente. L’AI genera lo sfondo con piattaforma di pietra, dune canarie, sole pieno e cielo azzurro. Il prodotto originale viene appoggiato sul piano con ombra di contatto.</p>
                 <div :class="mode === 'auto' ? 'hidden' : ''" class="relative mx-auto w-fit max-w-full cursor-crosshair" @click="add">
                     <img ref="image" :src="src" alt="Pantalla da scontornare" class="block max-h-[60vh] max-w-full" :draggable="false" @load="loaded" @error="failed = true" />

@@ -8,12 +8,32 @@ use RuntimeException;
 
 class AutogenesiExtraImages
 {
+    public const SELECTION_RULES = 'Select ONLY 2 or 3 distinct clear photographs of the actual car radio, preferably from variant images when they show the real product well. Prefer different useful product views, preserving the correct fascia and proportions. Exclude specification tables, RAM/CPU comparison charts, feature-only advertising panels, logos, shipping banners and unrelated products. Also select at most ONE accessories/package-list image showing included components, not separately sold optional extras, and at most ONE before/after dashboard comparison matching the vehicle. Missing categories must be null/empty; never invent a match. Use exact supplied file names. Never classify an accessories image or before/after comparison as a product photograph.';
+
+    public function curate(array $images, array $data, array $selection): array
+    {
+        $sources = array_column(array_merge($data['images'] ?? [], $data['description']['images'] ?? []), null, 'file');
+        $urls = isset($selection['product_images']) ? array_map(fn ($file) => $sources[$file]['source_url'] ?? '', $selection['product_images']) : null;
+        $result = []; $hashes = []; $counts = ['prodotto' => 0, 'accessori' => 0, 'cruscotto_prima_dopo' => 0];
+        foreach (['prodotto', 'accessori', 'cruscotto_prima_dopo'] as $role) foreach ($images as $image) {
+            $product = in_array($image['role'], ['prodotto', 'da_verificare'], true);
+            if (($role === 'prodotto' ? (!$product || ($urls !== null && !in_array($image['source_url'], $urls, true))) : $image['role'] !== $role)
+                || $counts[$role] >= ($role === 'prodotto' ? 3 : 1) || isset($hashes[$image['sha256']])) continue;
+            $image['role'] = $role; $result[] = $image; $hashes[$image['sha256']] = true; $counts[$role]++;
+        }
+        if (!$counts['prodotto']) throw new RuntimeException('Nessuna foto prodotto riconosciuta: nessuna immagine importata.');
+        return $result;
+    }
+
     public function append(array $images, array $data, array $selection, string $dir): array
     {
         $disk = Storage::disk('local');
         $written = [];
         try {
-            foreach (['accessories_image' => 'accessori', 'before_after_image' => 'cruscotto_prima_dopo'] as $key => $role) {
+            $picks = [];
+            foreach ($selection['product_images'] ?? [] as $i => $file) { $key = 'product_image_'.$i; $selection[$key] = $file; $picks[$key] = 'prodotto'; }
+            $picks += ['accessories_image' => 'accessori', 'before_after_image' => 'cruscotto_prima_dopo'];
+            foreach ($picks as $key => $role) {
                 $file = $selection[$key] ?? null;
                 if ($file === null) {
                     continue;

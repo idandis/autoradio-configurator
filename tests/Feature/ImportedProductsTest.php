@@ -12,6 +12,111 @@ class ImportedProductsTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_new_product_opens_existing_sheet_for_same_aliexpress_link(): void
+    {
+        $this->app->detectEnvironment(fn () => 'local');
+        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class);
+        $p = ConfiguratorProduct::create(['handle' => 'existing-radio', 'category' => 'screen', 'title' => 'Radio esistente',
+            'meta' => ['autogenesi' => ['source_id' => '1005001234567890', 'source_url' => 'https://es.aliexpress.com/item/1005001234567890.html']]]);
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->post(route('imported-products.new-from-aliexpress'), ['source_url' => 'https://www.aliexpress.com/item/1005001234567890.html?spm=123'])
+            ->assertRedirect(route('imported-products.sheet', $p));
+        $this->assertSame(1, ConfiguratorProduct::count());
+    }
+
+    public function test_new_product_reports_the_actual_import_error(): void
+    {
+        $this->app->detectEnvironment(fn () => 'local');
+        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class);
+        $this->mock(\App\Services\AutogenesiApiImport::class)
+            ->shouldReceive('importUrl')->once()->andThrow(new \RuntimeException('OpenAI non ha risposto in tempo. Riprova l’importazione.'));
+
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->post(route('imported-products.new-from-aliexpress'), ['source_url' => 'https://es.aliexpress.com/item/1005007712837802.html'])
+            ->assertSessionHasErrors(['source_url' => 'OpenAI non ha risposto in tempo. Riprova l’importazione.']);
+    }
+
+    public function test_new_product_identifies_invalid_import_data(): void
+    {
+        $this->app->detectEnvironment(fn () => 'local');
+        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class);
+        $this->mock(\App\Services\AutogenesiApiImport::class)
+            ->shouldReceive('importUrl')->once()->andThrow(\Illuminate\Validation\ValidationException::withMessages([
+                'variants.0.selling_price' => 'Prezzo non valido.',
+            ]));
+
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->post(route('imported-products.new-from-aliexpress'), ['source_url' => 'https://es.aliexpress.com/item/1005007712837802.html'])
+            ->assertSessionHasErrors(['source_url' => 'Dati del prodotto incompleti (variants.0.selling_price). Riprova o usa l’importazione in AutoGenesi.']);
+    }
+
+    public function test_sheet_export_contains_only_selected_product_and_all_its_variants(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $p = ConfiguratorProduct::create(['handle' => 'single-product', 'category' => 'camera', 'title' => 'Dashcam selezionata', 'body_html' => '<p>Descrizione aggiornata</p>']);
+        $p->variants()->create(['title' => 'W23S', 'sku' => 'CAM-1', 'price' => 73.66]);
+        $p->variants()->create(['title' => 'W25S', 'sku' => 'CAM-2', 'price' => 90]);
+        ConfiguratorProduct::create(['handle' => 'excluded-product', 'category' => 'screen', 'title' => 'Non esportare']);
+        $url = route('imported-products.sheet.export', $p);
+        $this->get($url)->assertRedirect('/login');
+        $this->actingAs(User::factory()->create(['is_admin' => false]))->get($url)->assertForbidden();
+        $this->actingAs(User::factory()->create(['is_admin' => true]))->get($url)->assertDownload('prodotto-'.$p->id.'-shopify.xlsx');
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load(\Illuminate\Support\Facades\Storage::disk('local')->path('imported-products/exports/prodotto-'.$p->id.'-shopify.xlsx'));
+        $rows = $book->getSheetByName('Products')->toArray();
+        $headers = array_shift($rows);
+        $rows = array_map(fn ($row) => array_combine($headers, $row), $rows);
+        $this->assertSame(['Products'], $book->getSheetNames());
+        $this->assertCount(2, $rows);
+        $this->assertSame(['single-product', 'single-product'], array_column($rows, 'Handle'));
+        $this->assertSame(['CAM-1', 'CAM-2'], array_column($rows, 'Variant SKU'));
+        $this->assertSame(['73.66', '90.00'], array_column($rows, 'Variant Price'));
+        $this->assertSame([null, null], array_column($rows, 'Variant Inventory Tracker'));
+        $this->assertSame(['continue', 'continue'], array_column($rows, 'Variant Inventory Policy'));
+        $this->assertSame('<p>Descrizione aggiornata</p>', $rows[0]['Body HTML']);
+    }
+
+    public function test_excel_compacts_only_block_whitespace_when_description_exceeds_cell_limit(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $html = str_repeat('<p>Dato tecnico</p>'.str_repeat(' ', 90), 400);
+        $p = ConfiguratorProduct::create(['handle' => 'long-html', 'category' => 'screen', 'title' => 'Radio', 'body_html' => $html]);
+        $path = app(\App\Services\ImportedProductsExport::class)->writeAllRadios();
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+        $data = $book->getActiveSheet()->toArray();
+        $row = array_combine($data[0], $data[1]);
+        $this->assertSame(400, substr_count($row['Body HTML'], '<p>Dato tecnico</p>'));
+        $this->assertLessThan(32768, mb_strlen($row['Body HTML']));
+        $this->assertSame($html, $p->fresh()->body_html);
+    }
+
+    public function test_export_all_radios_ignores_filters_and_uses_current_prices_in_the_existing_template(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        foreach (['a', 'b'] as $handle) {
+            $p = ConfiguratorProduct::create(['handle' => $handle, 'category' => 'screen', 'title' => 'Radio '.$handle,
+                'body_html' => '<p>Descripción</p>', 'meta' => ['shopify_product_id' => $handle === 'a' ? '123' : '456']]);
+            $p->variants()->create(['title' => '8Core 8GB 128GB', 'sku' => $handle.'-8', 'price' => 599]);
+            $p->variants()->create(['title' => '4Core 2GB 32GB', 'sku' => $handle.'-2', 'price' => 299]);
+        }
+        foreach (['camera', 'speaker', 'accessory'] as $category) ConfiguratorProduct::create(['handle' => $category, 'category' => $category, 'title' => 'Other']);
+        ConfiguratorProduct::create(['handle' => 'dashcam', 'category' => 'screen', 'title' => 'Camera', 'meta' => ['type' => 'DASHCAM']]);
+        $this->actingAs(User::factory()->create(['is_admin' => false]))->get(route('imported-products.export-all-radios'))->assertForbidden();
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->get(route('imported-products.export-all-radios', ['category' => 'camera', 'search' => 'nothing', 'date' => '1995-01-01', 'page' => 99]))
+            ->assertDownload('tutte-le-radio-shopify.xlsx');
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load(\Illuminate\Support\Facades\Storage::disk('local')->path('imported-products/exports/tutte-le-radio-shopify.xlsx'));
+        $this->assertSame(['Products'], $book->getSheetNames());
+        $data = $book->getActiveSheet()->toArray(); $headers = array_shift($data);
+        $rows = array_map(fn ($row) => array_combine($headers, $row), $data);
+        $this->assertSame(['a', 'a', 'b', 'b'], array_column($rows, 'Handle'));
+        $this->assertSame(['299.00', '599.00', '299.00', '599.00'], array_column($rows, 'Variant Price'));
+        $this->assertSame(['a-2', 'a-8', 'b-2', 'b-8'], array_column($rows, 'Variant SKU'));
+        $this->assertSame('<p>Descripción</p>', $rows[0]['Body HTML']);
+        $this->assertNull($rows[1]['Body HTML']);
+        $this->assertSame('123', (string) $rows[0]['ID']);
+        $this->assertDatabaseCount('configurator_products', 6);
+    }
+
     public function test_admin_can_edit_descriptions_without_changing_the_spanish_original(): void
     {
         $product = ConfiguratorProduct::create([
@@ -220,7 +325,7 @@ class ImportedProductsTest extends TestCase
         $this->assertSame('<p>Descrizione attuale</p>', $rows[0]['Body HTML']);
         $this->assertNull($rows[1]['Body HTML']);
         $this->assertSame(['299.00', '399.00'], array_column($rows, 'Variant Price'));
-        $this->assertSame('1:STONIC', $rows[0][\App\Services\AutogenesiTemplateExport::MODEL]);
+        $this->assertSame('Stonic', $rows[0][\App\Services\AutogenesiTemplateExport::MODEL]);
         $this->assertSame('dashboard.png', $rows[0][\App\Services\AutogenesiTemplateExport::DASHBOARD]);
         $this->assertSame('https://www.autoradioitaliano.it/storage/autogenesi/catalog/123/dashboard.png', $rows[1]['Image Src']);
         $this->assertNull($rows[1][\App\Services\AutogenesiTemplateExport::DASHBOARD]);

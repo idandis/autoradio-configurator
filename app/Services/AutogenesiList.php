@@ -9,8 +9,11 @@ use Illuminate\Validation\ValidationException;
 
 class AutogenesiList
 {
-    public function create(string $text, int $userId): AutogenesiBatch
+    public function create(string $text, int $userId, string $engine = 'browser', array $options = []): AutogenesiBatch
     {
+        if (!in_array($engine, ['browser', 'api'], true)) throw ValidationException::withMessages(['engine' => 'Modalità importazione non valida.']);
+        $options = \Illuminate\Support\Facades\Validator::make($options, ['sort_by' => 'sometimes|in:price,sales,best_match', 'origin_policy' => 'sometimes|in:prefer_eu,eu,all'])->validate();
+        if ($engine === 'api') $options['origin_policy'] = 'prefer_eu';
         $lines = preg_split('/\R/u', trim(preg_replace('/^\x{FEFF}/u', '', $text)));
         $rows = [];
         $errors = [];
@@ -49,8 +52,8 @@ class AutogenesiList
             throw ValidationException::withMessages(['list' => implode(' ', array_slice($errors, 0, 6))]);
         }
 
-        return DB::transaction(function () use ($rows, $userId) {
-            $batch = AutogenesiBatch::create(['user_id' => $userId, 'total' => count($rows), 'status' => 'queued']);
+        return DB::transaction(function () use ($rows, $userId, $engine, $options) {
+            $batch = AutogenesiBatch::create(['user_id' => $userId, 'engine' => $engine, 'api_options' => $options, 'total' => count($rows), 'status' => 'queued']);
             foreach (array_values($rows) as $i => $row) {
                 $batch->items()->create($row + ['position' => $i + 1, 'status' => 'queued']);
             }

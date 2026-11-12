@@ -1,4 +1,4 @@
-export function contrastMask(data: Uint8ClampedArray, w: number, h: number, tolerance: number): Uint8Array {
+export function contrastMask(data: Uint8ClampedArray, w: number, h: number, tolerance: number, removeHoles = false): Uint8Array {
     const n = w * h, background = new Uint8Array(n), queue = new Int32Array(n);
     let head = 0, tail = 0;
     const light = (i: number) => data[i * 4 + 3] < 16 || Math.min(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]) >= 255 - tolerance;
@@ -25,5 +25,19 @@ export function contrastMask(data: Uint8ClampedArray, w: number, h: number, tole
         if (tail > largest) { best.fill(0); for (let j = 0; j < tail; j++) best[queue[j]] = 1; largest = tail; }
     }
     if (largest < 256) throw new Error('Prodotto non rilevato. Riduci la sensibilità oppure usa i punti.');
+    if (removeHoles) {
+        const seen = new Uint8Array(n), minimum = Math.max(64, Math.round(n * 0.002));
+        for (let start = 0; start < n; start++) {
+            if (!best[start] || !light(start) || seen[start]) continue;
+            head = 0; tail = 1; queue[0] = start; seen[start] = 1;
+            const visit = (i: number) => { if (best[i] && light(i) && !seen[i]) { seen[i] = 1; queue[tail++] = i; } };
+            while (head < tail) {
+                const i = queue[head++], x = i % w;
+                if (x > 0) visit(i - 1); if (x < w - 1) visit(i + 1);
+                if (i >= w) visit(i - w); if (i < n - w) visit(i + w);
+            }
+            if (tail >= minimum) for (let j = 0; j < tail; j++) best[queue[j]] = 0;
+        }
+    }
     return best;
 }

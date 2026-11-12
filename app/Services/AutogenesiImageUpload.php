@@ -23,6 +23,7 @@ class AutogenesiImageUpload
         $pending = [];
         try {
             foreach ($files as $file) {
+                app(ProductSheetProcessing::class)->check();
                 $tmp = $disk->path('autogenesi/uploads/'.Str::uuid().'.png');
                 try {
                     $this->convert($file, $tmp);
@@ -44,7 +45,7 @@ class AutogenesiImageUpload
             }
             $used = [];
             $count = DB::transaction(function () use ($product, $pending, &$used) {
-                $current = AutogenesiProduct::lockForUpdate()->findOrFail($product->id);
+                $current = $product->locked();
                 $images = $current->images;
                 $hashes = array_column($images, 'sha256');
                 $added = 0;
@@ -90,8 +91,8 @@ class AutogenesiImageUpload
             $probe = Process::timeout(15)->run(['/usr/bin/sips', '-g', 'pixelWidth', '-g', 'pixelHeight', $path])->throw()->output();
             preg_match('/pixelWidth:\s*(\d+)/', $probe, $w);
             preg_match('/pixelHeight:\s*(\d+)/', $probe, $h);
-            if (empty($w[1]) || empty($h[1]) || min($w[1], $h[1]) < 200 || $w[1] * $h[1] > 25000000) {
-                throw new RuntimeException('Foto troppo piccola o superiore a 25 megapixel.');
+            if (empty($w[1]) || empty($h[1]) || $w[1] * $h[1] > 25000000) {
+                throw new RuntimeException('Foto non valida o superiore a 25 megapixel.');
             }
             Process::timeout(30)->run(['/usr/bin/sips', '-s', 'format', 'png', '--resampleHeightWidthMax', (string) min(1600, max((int) $w[1], (int) $h[1])), $path, '--out', $target])->throw();
 
@@ -100,8 +101,8 @@ class AutogenesiImageUpload
         if (! $info || ! in_array($mime, ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/bmp', 'image/x-ms-bmp', 'image/avif'], true)) {
             throw new RuntimeException('Formato non supportato: usa JPG, PNG, WebP, AVIF, GIF, BMP, HEIC o TIFF.');
         }
-        if (min($info[0], $info[1]) < 200 || $info[0] * $info[1] > 25000000) {
-            throw new RuntimeException('Foto troppo piccola o superiore a 25 megapixel.');
+        if ($info[0] * $info[1] > 25000000) {
+            throw new RuntimeException('Foto superiore a 25 megapixel.');
         }
         $image = @imagecreatefromstring(file_get_contents($path));
         if (! $image) {

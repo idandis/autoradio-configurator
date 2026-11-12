@@ -34,6 +34,7 @@ class AutogenesiBatchTest extends TestCase
         Queue::fake();
         Storage::fake('local');
         Http::preventStrayRequests();
+        Process::fake(['*start-worker.cjs*' => Process::result(output: '{"running":true}')]);
         Process::preventStrayProcesses();
     }
 
@@ -58,8 +59,71 @@ class AutogenesiBatchTest extends TestCase
             && $job->timeout < config('queue.connections.autogenesi.retry_after'));
         $this->get('/autogenesi')->assertInertia(fn (Assert $page) => $page->where('batches.0.total', 2)->has('batches.0.items', 2));
         $this->assertDatabaseCount('autogenesi_products', 0);
-        Process::assertNothingRan();
+        Process::assertRan(fn ($p) => str_ends_with($p->command[1], '/scripts/autogenesi/start-worker.cjs'));
+        Process::assertNotRan(fn ($p) => str_contains(implode(' ', (array) $p->command), 'capture-product.cjs') || str_contains(implode(' ', (array) $p->command), 'search-products.cjs'));
         Http::assertNothingSent();
+    }
+
+    public function test_worker_startup_failure_is_reported_and_keeps_the_queued_list(): void
+    {
+        Process::fake(['*start-worker.cjs*' => Process::result(errorOutput: 'Cannot start worker', exitCode: 1)]);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->post('/autogenesi/batches', ['list' => 'SEAT Ibiza 2010'])->assertSessionHasErrors('worker');
+        $batch = AutogenesiBatch::firstOrFail();
+        $this->assertSame('queued', $batch->status);
+        $this->assertSame(1, $batch->total);
+        Queue::assertPushed(ProcessAutogenesiBatch::class);
+    }
+
+    public function test_local_worker_exits_when_manually_stopped_and_cleans_pid_file(): void
+    {
+        app(AutogenesiRunControl::class)->stop();
+        $this->artisan('autogenesi:work')->assertSuccessful();
+        Storage::disk('local')->assertMissing('autogenesi/browser/worker.json');
+        Process::assertNothingRan();
+    }
+
+    public function test_old_browser_lock_cannot_block_a_new_run_after_stop_and_restart(): void
+    {
+        $batch = $this->batch();
+        $control = app(AutogenesiRunControl::class); $control->activate();
+        $old = new ProcessAutogenesiBatch($batch->id);
+        $oldKey = $old->middleware()[0]->getLockKey($old);
+        $lock = \Illuminate\Support\Facades\Cache::lock($oldKey, 1400);
+        $this->assertTrue($lock->get());
+        $control->stop(); $control->activate();
+        $new = new ProcessAutogenesiBatch($batch->id);
+        $newKey = $new->middleware()[0]->getLockKey($new);
+        $this->assertNotSame($old->runId, $new->runId);
+        $this->assertNotSame($oldKey, $newKey);
+        $newLock = \Illuminate\Support\Facades\Cache::lock($newKey, 1400);
+        $this->assertTrue($newLock->get());
+        $newLock->release(); $lock->release();
+        $search = $this->mock(AutogenesiSearch::class); $search->shouldNotReceive('search');
+        $old->handle($search, $this->mock(AutogenesiImport::class), $this->mock(AutogenesiExport::class));
+        $this->assertSame(['queued', 'queued'], $batch->items()->pluck('status')->all());
+    }
+
+    public function test_old_inflight_job_does_not_import_or_reschedule_after_restart(): void
+    {
+        $batch = $this->batch();
+        $control = app(AutogenesiRunControl::class); $control->activate();
+        $old = new ProcessAutogenesiBatch($batch->id);
+        $search = $this->mock(AutogenesiSearch::class);
+        $search->shouldReceive('search')->once()->andReturnUsing(function () use ($batch, $control) {
+            $control->stop();
+            $batch->update(['status' => 'stopped']);
+            $batch->items()->update(['status' => 'stopped']);
+            $control->activate();
+            $batch->update(['status' => 'queued']);
+            $batch->items()->update(['status' => 'queued']);
+            return ['selected' => ['source_url' => 'https://es.aliexpress.com/item/123.html']];
+        });
+        $importer = $this->mock(AutogenesiImport::class); $importer->shouldNotReceive('capture');
+        $old->handle($search, $importer, $this->mock(AutogenesiExport::class));
+        $this->assertSame('queued', $batch->fresh()->status);
+        $this->assertSame(['queued', 'queued'], $batch->items()->pluck('status')->all());
+        Queue::assertNothingPushed();
     }
 
     public function test_csv_and_multiword_brands_are_supported(): void

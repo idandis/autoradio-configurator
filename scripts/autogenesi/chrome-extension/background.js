@@ -83,10 +83,19 @@ const acquire = async () => {
   return filename;
 };
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  if (sender.id !== chrome.runtime.id || message?.type !== 'autogenesi-capture') return;
+  if (sender.id !== chrome.runtime.id || !['autogenesi-capture', 'autogenesi-dsers'].includes(message?.type)) return;
   if (busy) { sendResponse({ ok: false, error: 'Acquisizione già in corso. Attendi oppure chiudi la scheda.' }); return; }
   busy = true;
-  acquire().then(filename => sendResponse({ ok: true, filename }), error => sendResponse({ ok: false, error: error.message }))
+  (message.type === 'autogenesi-dsers' ? acquireDsers() : acquire()).then(filename => sendResponse({ ok: true, filename }), error => sendResponse({ ok: false, error: error.message }))
     .finally(() => { busy = false; });
   return true;
 });
+const acquireDsers = async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !/^https:\/\/([a-z0-9-]+\.)*dsers\.com\//i.test(tab.url || '')) throw new Error('Apri My Products nel tuo account DSers.');
+  const [{ result }] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['dsers.js'] });
+  if (!result?.rows?.length) throw new Error('Nessuna associazione leggibile. Apri Mapping di un prodotto e riprova: devono essere visibili titolo e link AliExpress.');
+  const filename = `autogenesi-dsers-${Date.now()}.json`;
+  await chrome.downloads.download({ url: 'data:application/json;base64,' + base64(new TextEncoder().encode(JSON.stringify(result))), filename, saveAs: true });
+  return filename;
+};

@@ -6,7 +6,7 @@ const { parse, compileScript } = require('@vue/compiler-sfc');
 const ts = require('typescript');
 const { chromium } = require('playwright');
 
-test('cleanup brush exports only selected areas as a mask, without painting the original', async () => {
+for (const enhance of [false, true]) test(`local ${enhance ? 'enhancement' : 'blur'} exports selection without painting the original`, async () => {
   const root = path.resolve(__dirname, '../..');
   const sfc = parse(fs.readFileSync(path.join(root, 'resources/js/components/ImageCleanupMask.vue'), 'utf8'), { filename: 'ImageCleanupMask.vue' });
   const compiled = compileScript(sfc.descriptor, { id: 'cleanup-test', inlineTemplate: true });
@@ -20,20 +20,24 @@ test('cleanup brush exports only selected areas as a mask, without painting the 
     await page.setContent(`<style>${css}</style><div id="app"></div>`);
     await page.addScriptTag({ path: path.join(root, 'node_modules/vue/dist/vue.global.js') });
     await page.addScriptTag({ content: script });
-    await page.evaluate(() => {
+    await page.evaluate(enhance => {
       const c = document.createElement('canvas'); c.width = 400; c.height = 250;
       const ctx = c.getContext('2d'); ctx.fillStyle = '#ff0000'; ctx.fillRect(0, 0, 400, 250);
       window.originalSrc = c.toDataURL();
-      Vue.createApp({ render: () => Vue.h(window.CleanupComponent, { src: window.originalSrc, busy: false, onSave: async ({ mask: file, strength }) => {
+      Vue.createApp({ render: () => Vue.h(window.CleanupComponent, { src: window.originalSrc, enhance, busy: false, onSave: async ({ mask: file, strength }) => {
         const bmp = await createImageBitmap(file), out = document.createElement('canvas'); out.width = bmp.width; out.height = bmp.height;
         const oc = out.getContext('2d'); oc.drawImage(bmp, 0, 0);
         window.saved = { strength, width: bmp.width, height: bmp.height, type: file.type, inside: Array.from(oc.getImageData(75, 50, 1, 1).data), outside: Array.from(oc.getImageData(0, 0, 1, 1).data) };
       } }) }).mount('#app');
-    });
+    }, enhance);
     await page.waitForFunction(() => document.querySelector('canvas')?.width === 400);
-    const save = page.getByRole('button', { name: 'Sfoca scritte selezionate' });
+    const save = page.getByRole('button', { name: enhance ? 'Applica nitidezza e pulizia' : 'Sfoca scritte selezionate' });
     await save.click();
-    assert.match(await page.getByRole('alert').textContent(), /Evidenzia almeno/);
+    if (enhance) {
+      await page.waitForFunction(() => window.saved);
+      assert.deepEqual((await page.evaluate(() => window.saved)).inside, [0, 0, 0, 255]);
+      await page.evaluate(() => { window.saved = null; });
+    } else assert.match(await page.getByRole('alert').textContent(), /Evidenzia almeno/);
     const box = await page.locator('canvas').boundingBox();
     await page.mouse.move(box.x + 50, box.y + 50); await page.mouse.down();
     await page.mouse.move(box.x + 100, box.y + 50); await page.mouse.up();

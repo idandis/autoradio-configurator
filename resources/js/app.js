@@ -13,16 +13,25 @@ const appName = import.meta.env.VITE_APP_NAME || 'Laravel';
 // receive a new asset URL after frontend releases.
 document.documentElement.dataset.frontendBuild = '2026-11-03-1';
 
-const keepNavigationInWindow = (event) => {
+const openExternalLinks = (event) => {
     const link = event.target instanceof Element ? event.target.closest('a, area') : null;
     const form = event.type === 'submit' ? event.target : null;
     const element = link ?? form;
-    if (element?.hasAttribute('target')) element.setAttribute('target', '_self');
-    const submitter = event.submitter;
-    if (submitter?.hasAttribute('formtarget')) submitter.setAttribute('formtarget', '_self');
+    if (!element) return;
+    const url = new URL(link?.href ?? event.submitter?.getAttribute('formaction') ?? form?.action ?? '', window.location.href);
+    if (!['http:', 'https:'].includes(url.protocol) || url.origin === window.location.origin) return;
+    element.setAttribute('target', '_blank');
+    if (link) {
+        link.setAttribute('rel', 'noopener noreferrer');
+        if (event.button === 0) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            window.open(url.href, '_blank', 'noopener,noreferrer');
+        }
+    } else if (event.submitter) event.submitter.setAttribute('formtarget', '_blank');
 };
-document.addEventListener('click', keepNavigationInWindow, true);
-document.addEventListener('submit', keepNavigationInWindow, true);
+document.addEventListener('click', openExternalLinks, true);
+document.addEventListener('submit', openExternalLinks, true);
 
 createInertiaApp({
     title: (title) => title || appName,

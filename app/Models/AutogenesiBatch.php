@@ -9,6 +9,8 @@ class AutogenesiBatch extends Model
 {
     protected $guarded = ['id'];
 
+    protected $casts = ['api_options' => 'array'];
+
     public function items(): HasMany
     {
         return $this->hasMany(AutogenesiBatchItem::class, 'batch_id')->orderBy('position');

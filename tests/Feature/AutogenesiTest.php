@@ -109,6 +109,53 @@ class AutogenesiTest extends TestCase
         $this->get('/autogenesi/'.$p->id.'/images/0')->assertOk()->assertHeader('Cache-Control', 'no-store, private');
     }
 
+    public function test_live_cost_quote_applies_formula_and_rejects_invalid_cost(): void
+    {
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->postJson('/autogenesi/variant-price', ['cost' => '120.50'])->assertOk()->assertJsonPath('selling_price', '231');
+        $this->postJson('/autogenesi/variant-price', ['cost' => '200.25'])->assertOk()->assertJsonPath('vat_rate', '21.00')->assertJsonPath('selling_price', '466');
+        $this->postJson('/autogenesi/variant-price', ['cost' => '-1'])->assertUnprocessable()->assertJsonValidationErrors('cost');
+        $this->actingAs(User::factory()->create(['is_admin' => false]));
+        $this->postJson('/autogenesi/variant-price', ['cost' => '120'])->assertForbidden();
+    }
+
+    public function test_editing_supplier_cost_recalculates_sale_and_preserves_observed_cost(): void
+    {
+        $p = $this->import();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $variants = $p->variants;
+        $sku = $variants[0]['sku']; $original = $variants[0]['supplier_price'];
+        $variants[0]['supplier_price'] = '120.50';
+        $this->patch('/autogenesi/'.$p->id, ['title' => $p->title, 'body_html' => $p->body_html, 'variants' => $variants])->assertSessionHasNoErrors();
+        $v = collect($p->fresh()->variants)->firstWhere('sku', $sku);
+        $this->assertSame('120.50', $v['supplier_price']);
+        $this->assertSame('231', $v['selling_price']);
+        $this->assertSame('0.00', $v['pricing']['customs_estimate']);
+        $this->assertSame($original, $v['observed_supplier_price']);
+        $this->assertTrue($v['supplier_price_edited']);
+        $this->assertSame('draft', $p->fresh()->status);
+    }
+
+    public function test_supplier_cost_edit_preserves_new_manual_sale_and_rejects_invalid_cost(): void
+    {
+        $p = $this->import();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $variants = $p->variants;
+        $sku = $variants[0]['sku'];
+        $variants[0]['supplier_price'] = '200.25'; $variants[0]['selling_price'] = '777';
+        $data = ['title' => $p->title, 'body_html' => $p->body_html, 'variants' => $variants];
+        $this->patch('/autogenesi/'.$p->id, $data)->assertSessionHasNoErrors();
+        $v = collect($p->fresh()->variants)->firstWhere('sku', $sku);
+        $this->assertSame('777', $v['selling_price']);
+        $this->assertSame('200.25', $v['pricing']['supplier_cost']);
+        foreach (['0', '-1', '12.345'] as $bad) {
+            $data['variants'] = $p->fresh()->variants;
+            $data['variants'][0]['supplier_price'] = $bad;
+            $this->patch('/autogenesi/'.$p->id, $data)->assertSessionHasErrors('variants.0.supplier_price');
+        }
+        $this->assertSame('200.25', collect($p->fresh()->variants)->firstWhere('sku', $sku)['supplier_price']);
+    }
+
     public function test_admin_can_edit_prices_and_remove_image_without_publishing(): void
     {
         $p = $this->import();
@@ -120,7 +167,8 @@ class AutogenesiTest extends TestCase
         $this->assertSame('500', $p->variants[0]['selling_price']);
         $this->assertSame('Versione personalizzata', $p->variants[0]['label']);
         $this->assertSame('Versione personalizzata', app(AutogenesiExport::class)->rows($p)[0]['Option1 Value']);
-        $this->assertSame('343.69', $p->variants[0]['supplier_price']);
+        $this->assertSame('1.00', $p->variants[0]['supplier_price']);
+        $this->assertSame('343.69', $p->variants[0]['observed_supplier_price']);
         $this->assertSame('draft', $p->status);
         $this->assertStringNotContainsString('<script', $p->body_html);
         $this->delete('/autogenesi/'.$p->id.'/images/1')->assertRedirect();
@@ -436,6 +484,46 @@ class AutogenesiTest extends TestCase
         $this->get('/autogenesi')->assertInertia(fn (Assert $page) => $page->where('products.0.images.2.local_only', true));
     }
 
+    public function test_small_photo_upload_keeps_original_resolution(): void
+    {
+        $p = $this->import();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->post('/autogenesi/'.$p->id.'/images', [
+            'photos' => [UploadedFile::fake()->image('small.png', 90, 60)],
+            'role' => 'cruscotto_prima_dopo',
+        ])->assertRedirect()->assertSessionHasNoErrors();
+        $image = collect($p->fresh()->images)->firstWhere('uploaded', true);
+        $this->assertSame([90, 60], [$image['width'], $image['height']]);
+        $this->assertSame('cruscotto_prima_dopo', $image['role']);
+        Storage::disk('local')->assertExists($image['path']);
+    }
+
+    public function test_upscale_doubles_pixels_preserves_proportions_and_restores_original(): void
+    {
+        $p = $this->import();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->post('/autogenesi/'.$p->id.'/images', [
+            'photos' => [UploadedFile::fake()->image('small.png', 90, 60)], 'role' => 'prodotto',
+        ])->assertSessionHasNoErrors();
+        $original = collect($p->fresh()->images)->firstWhere('uploaded', true);
+        for ($scale = 2; $scale <= 4; $scale *= 2) {
+            $images = $p->fresh()->images;
+            $index = array_search($original['sha256'], array_column($images, 'sha256'), true);
+            if ($index === false) $index = array_search($upscaled['sha256'], array_column($images, 'sha256'), true);
+            $current = $images[$index];
+            $this->post('/autogenesi/'.$p->id.'/images/'.$index.'/upscale', ['image_id' => $current['sha256'], 'sharpness' => 70])
+                ->assertRedirect()->assertSessionHasNoErrors();
+            $upscaled = $p->fresh()->images[$index];
+            $this->assertSame([90 * $scale, 60 * $scale], [$upscaled['width'], $upscaled['height']]);
+            $this->assertTrue($upscaled['resolution_upscaled']);
+            $this->assertSame(70, $upscaled['sharpness']);
+            $this->assertSame($original['sha256'], $upscaled['original']['sha256']);
+        }
+        $this->post('/autogenesi/'.$p->id.'/images/'.$index.'/restore', ['image_id' => $upscaled['sha256']])
+            ->assertRedirect()->assertSessionHasNoErrors();
+        $this->assertSame($original, $p->fresh()->images[$index]);
+    }
+
     public function test_invalid_upload_rolls_back_all_photos_and_rejects_vector_files(): void
     {
         $p = $this->import();
@@ -526,6 +614,23 @@ class AutogenesiTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_text_can_be_saved_after_increasing_photo_resolution(): void
+    {
+        $p = $this->import();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $before = $p->images[0];
+        $this->post('/autogenesi/'.$p->id.'/images/0/upscale', ['image_id' => $before['sha256']])->assertSessionHasNoErrors();
+        $upscaled = $p->fresh()->images[0];
+        $this->post('/autogenesi/'.$p->id.'/images/0/paint', [
+            'image_id' => $upscaled['sha256'],
+            'photo' => UploadedFile::fake()->image('testo.webp', $upscaled['width'], $upscaled['height']),
+        ])->assertSessionHasNoErrors();
+        $after = $p->fresh()->images[0];
+        $this->assertTrue($after['manually_painted']);
+        $this->assertSame([$upscaled['width'], $upscaled['height']], [$after['width'], $after['height']]);
+        $this->assertSame($before['sha256'], $after['original']['sha256']);
+    }
+
     public function test_rectangular_crop_saves_requested_dimensions_and_keeps_other_photos(): void
     {
         $p = $this->import();
@@ -561,55 +666,84 @@ class AutogenesiTest extends TestCase
 
     public function test_background_removal_uses_current_crop_and_keeps_original_and_other_photos(): void
     {
+        config()->set('services.openai.api_key', 'test');
+        $output = imagecreatetruecolor(1024, 1024);
+        imagefill($output, 0, 0, imagecolorallocate($output, 255, 255, 255));
+        ob_start(); imagepng($output); $png = ob_get_clean(); imagedestroy($output);
+        Http::fake(['api.openai.com/*' => Http::response(['data' => [['b64_json' => base64_encode($png)]]])]);
         $p = $this->import();
         $before = $p->images;
+        $sample = imagecreatetruecolor(302, 302);
+        imagefill($sample, 0, 0, imagecolorallocate($sample, 255, 255, 255));
+        $gray = imagecolorallocate($sample, 214, 215, 217);
+        $caption = imagecolorallocate($sample, 176, 176, 178);
+        $black = imagecolorallocate($sample, 0, 0, 0);
+        $white = imagecolorallocate($sample, 255, 255, 255);
+        foreach ([0, 1] as $row) foreach ([0, 1, 2] as $col) {
+            $x = 5 + $col * 100; $y = 5 + $row * 145;
+            imagefilledrectangle($sample, $x, $y, $x + 89, $y + 129, $gray);
+            imagefilledrectangle($sample, $x, $y + 100, $x + 89, $y + 129, $caption);
+            imagefilledrectangle($sample, $x + 25, $y + 35, $x + 65, $y + 65, $black);
+            imagestring($sample, 3, $x + 15, $y + 108, 'CABLE', $white);
+        }
+        imagepng($sample, Storage::disk('local')->path($before[1]['path']));
         $this->actingAs(User::factory()->create(['is_admin' => true]));
-        $this->post('/autogenesi/'.$p->id.'/images/1/crop', ['image_id' => $before[1]['sha256'], 'x' => 10, 'y' => 10, 'size' => 200])->assertSessionHasNoErrors();
+        $this->post('/autogenesi/'.$p->id.'/images/1/crop', ['image_id' => $before[1]['sha256'], 'x' => 1, 'y' => 1, 'size' => 300])->assertSessionHasNoErrors();
         $crop = $p->fresh()->images[1];
-        $this->fakeImageEdit();
         $this->post('/autogenesi/'.$p->id.'/images/0/white', ['image_id' => $crop['sha256']])->assertRedirect()->assertSessionHasNoErrors();
         $images = $p->fresh()->images;
         $this->assertSame($before[0], $images[0]);
         $this->assertSame($before[2], $images[2]);
         $this->assertSame($before[1], $images[1]['original']);
         $this->assertSame('white', $images[1]['ai_edit_mode']);
-        Http::assertSent(function ($r) use ($crop) {
-            $form = collect($r->data())->mapWithKeys(fn ($part) => [$part['name'] => $part['contents']])->all();
-
-            return $r->hasFile('image', null, basename($crop['path'])) && str_contains($form['prompt'], '#FFFFFF')
-                && str_contains($form['prompt'], 'black text') && str_contains($form['prompt'], 'every actual product and accessory')
-                && ! str_contains($form['prompt'], 'Canary Islands');
-        });
+        $this->assertTrue($images[1]['image_reframed']);
+        $this->assertTrue($images[1]['ai_edited']);
+        $this->assertSame([1024, 1024], [$images[1]['width'], $images[1]['height']]);
+        Http::assertSent(fn ($request) => str_ends_with($request->url(), '/v1/images/edits'));
         Storage::disk('local')->assertMissing($crop['path']);
         $this->assertSame('draft', $p->fresh()->status);
     }
 
-    public function test_cleanup_uses_current_photo_and_restores_original_without_changing_other_images(): void
+    public function test_accessory_cleanup_removes_separate_heading_from_white_sheet(): void
+    {
+        config()->set('services.openai.api_key', 'test');
+        $output = imagecreatetruecolor(1024, 1024);
+        imagefill($output, 0, 0, imagecolorallocate($output, 255, 255, 255));
+        imagefilledrectangle($output, 240, 610, 360, 690, imagecolorallocate($output, 0, 0, 0));
+        ob_start(); imagepng($output); $png = ob_get_clean(); imagedestroy($output);
+        Http::fake(['api.openai.com/*' => Http::response(['data' => [['b64_json' => base64_encode($png)]]])]);
+        $p = $this->import();
+        $image = $p->images[1];
+        $sample = imagecreatetruecolor(600, 400);
+        $white = imagecolorallocate($sample, 255, 255, 255);
+        $black = imagecolorallocate($sample, 0, 0, 0);
+        imagefill($sample, 0, 0, $white);
+        imagestring($sample, 5, 20, 5, 'ACCESSORIES', $black);
+        imagestring($sample, 5, 20, 30, 'MODEL B', $black);
+        imagefilledrectangle($sample, 70, 110, 200, 180, $black);
+        imagefilledrectangle($sample, 300, 110, 450, 180, $black);
+        imagepng($sample, Storage::disk('local')->path($image['path']));
+        imagedestroy($sample);
+
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->post('/autogenesi/'.$p->id.'/images/1/white', ['image_id' => $image['sha256']])
+            ->assertRedirect()->assertSessionHasNoErrors();
+
+        $cleaned = $p->fresh()->images[1];
+        $this->assertTrue($cleaned['image_reframed']);
+        $result = imagecreatefrompng(Storage::disk('local')->path($cleaned['path']));
+        $this->assertSame(0xffffff, imagecolorat($result, 100, 50) & 0xffffff);
+        $this->assertSame(0x000000, imagecolorat($result, 300, 650) & 0xffffff);
+        imagedestroy($result);
+    }
+
+    public function test_clean_requires_selection_form_instead_of_silently_generating_an_ai_image(): void
     {
         $p = $this->import();
-        $before = $p->images;
         $this->actingAs(User::factory()->create(['is_admin' => true]));
-        $this->post('/autogenesi/'.$p->id.'/images/1/crop', ['image_id' => $before[1]['sha256'], 'x' => 10, 'y' => 10, 'size' => 200])->assertSessionHasNoErrors();
-        $crop = $p->fresh()->images[1];
-        $this->fakeImageEdit();
-        $this->post('/autogenesi/'.$p->id.'/images/0/clean', ['image_id' => $crop['sha256']])->assertRedirect()->assertSessionHasNoErrors();
-        $images = $p->fresh()->images;
-        $this->assertSame($before[0], $images[0]);
-        $this->assertSame($before[2], $images[2]);
-        $this->assertSame('clean', $images[1]['ai_edit_mode']);
-        $this->assertSame($before[1], $images[1]['original']);
-        Http::assertSent(function ($r) use ($crop) {
-            $form = collect($r->data())->mapWithKeys(fn ($part) => [$part['name'] => $part['contents']])->all();
-
-            return $r->hasFile('image', null, basename($crop['path'])) && str_contains($form['prompt'], 'advertising text')
-                && str_contains($form['prompt'], 'arrows') && str_contains($form['prompt'], 'exact dashboard')
-                && str_contains($form['prompt'], 'Improve definition') && ! str_contains($form['prompt'], 'Canary Islands')
-                && ! str_contains($form['prompt'], '#FFFFFF');
-        });
-        $this->post('/autogenesi/'.$p->id.'/images/0/restore', ['image_id' => $images[1]['sha256']])->assertSessionHasNoErrors();
-        $this->assertSame($before, $p->fresh()->images);
-        Storage::disk('local')->assertMissing($images[1]['path']);
-        $this->assertSame('draft', $p->fresh()->status);
+        $this->post('/autogenesi/'.$p->id.'/images/0/clean', ['image_id' => $p->images[0]['sha256']])->assertSessionHasErrors('mask');
+        $this->assertSame($p->images, $p->fresh()->images);
+        Http::assertNothingSent();
     }
 
     public function test_old_watermark_ai_endpoint_is_disabled(): void
@@ -757,7 +891,7 @@ class AutogenesiTest extends TestCase
         $this->assertArrayNotHasKey(AutogenesiTemplateExport::SOURCE, $rows[0]);
         $this->assertSame('2017-2020', $rows[0][AutogenesiTemplateExport::YEAR]);
         $this->assertSame('1DIN', $rows[0][AutogenesiTemplateExport::DIN]);
-        $this->assertSame('1:Kona', $rows[0][AutogenesiTemplateExport::MODEL]);
+        $this->assertSame('Kona', $rows[0][AutogenesiTemplateExport::MODEL]);
         $this->assertSame('684', $rows[0]['Variant Price']);
         $this->assertSame('', $rows[0]['ID']);
         $this->assertSame('', $rows[0]['Variant ID']);
@@ -822,6 +956,14 @@ class AutogenesiTest extends TestCase
         $book = IOFactory::load(Storage::disk('local')->path($files[0]));
         $this->assertSame('Products', $book->getSheet(0)->getTitle());
         $this->assertSame(1, $book->getSheetCount());
+        $rows = $book->getSheet(0)->toArray();
+        $headers = array_shift($rows);
+        foreach ($rows as $values) {
+            $row = array_combine($headers, $values);
+            $this->assertNull($row['Variant Inventory Tracker']);
+            if ($row['Variant SKU']) $this->assertSame('continue', $row['Variant Inventory Policy']);
+            else $this->assertNull($row['Variant Inventory Policy']);
+        }
         Http::assertNothingSent();
     }
 
@@ -994,13 +1136,35 @@ class AutogenesiTest extends TestCase
         $this->assertSame(1900, app(AutogenesiSearch::class)->parse('radio Ford Model T 1900 1910')['vehicle']['year_from']);
     }
 
+    public function test_import_automatically_transforms_multiple_models_of_one_brand(): void
+    {
+        $manifest = json_decode(file_get_contents($this->dir.'/manifest.json'), true);
+        $manifest['description']['text'] .= ' Ford S MAX / S-MAX 2006-2015. Ford Galaxy 2006-2015.';
+        file_put_contents($this->dir.'/manifest.json', json_encode($manifest));
+        $this->app->instance(AutogenesiDescription::class, new class extends AutogenesiDescription {
+            public function generate(array $data, array $vehicle, string $dir, bool $guard = true): array
+            {
+                return ['title' => 'Radio Android Ford', 'body_html' => '<p>Radio.</p>', 'notes' => [], 'compatibilities' => [
+                    ['brand' => 'Ford', 'model' => 'S MAX / S-MAX', 'year_from' => 2006, 'year_to' => 2015, 'evidence' => 'Ford S MAX / S-MAX 2006-2015', 'source_file' => null],
+                    ['brand' => 'Ford', 'model' => 'Galaxy', 'year_from' => 2006, 'year_to' => 2015, 'evidence' => 'Ford Galaxy 2006-2015', 'source_file' => null],
+                ]];
+            }
+        });
+        $p = $this->import();
+        $this->assertSame('FORD', $p->brand);
+        $this->assertSame('S-MAX | Galaxy', $p->model);
+        $this->assertSame('TRASFORMA', $p->metadata['vehicle_transform']['rule']);
+        $this->assertCount(2, $p->metadata['vehicle_compatibilities']);
+        $this->assertSame('S-MAX | Galaxy', app(AutogenesiTemplateExport::class)->rows($p)[0][AutogenesiTemplateExport::MODEL]);
+    }
+
     public function test_import_corrects_search_vehicle_from_original_description_compatibilities(): void
     {
         $manifest = json_decode(file_get_contents($this->dir.'/manifest.json'), true);
         $manifest['description']['text'] .= ' Compatible con Fiat 500X 2014-2020.';
         file_put_contents($this->dir.'/manifest.json', json_encode($manifest));
         $this->app->instance(AutogenesiDescription::class, new class extends AutogenesiDescription {
-            public function generate(array $data, array $vehicle, string $dir): array
+            public function generate(array $data, array $vehicle, string $dir, bool $guard = true): array
             {
                 return ['title' => 'Radio 7 pulgadas 2DIN Fiat 500X 2014-2020', 'body_html' => '<p>Fiat 500X 2014-2020</p>', 'notes' => [],
                     'compatibilities' => [['brand' => 'Fiat', 'model' => '500X', 'year_from' => 2014, 'year_to' => 2020, 'evidence' => 'Fiat 500X 2014-2020', 'source_file' => null]]];
@@ -1012,7 +1176,7 @@ class AutogenesiTest extends TestCase
         $this->assertSame(2014, (int) $p->year_from);
         $this->assertSame(2020, (int) $p->year_to);
         $this->assertSame('HYUNDAI', $p->metadata['requested_vehicle']['brand']);
-        $this->assertSame('1:500X', app(AutogenesiTemplateExport::class)->rows($p)[0][AutogenesiTemplateExport::MODEL]);
+        $this->assertSame('500X', app(AutogenesiTemplateExport::class)->rows($p)[0][AutogenesiTemplateExport::MODEL]);
     }
 
     public function test_chrome_extension_archive_is_admin_only_and_has_no_cookie_permission(): void
@@ -1029,7 +1193,7 @@ class AutogenesiTest extends TestCase
         $this->assertNotContains('debugger', $manifest['permissions']);
         $this->assertNotFalse($zip->getFromName('capture.js'));
         $this->assertNotFalse($zip->getFromName('generic.js'));
-        $this->assertSame('0.2.2', $manifest['version']);
+        $this->assertSame('0.3.0', $manifest['version']);
         $this->assertContains('https://*/*', $manifest['optional_host_permissions']);
         $zip->close();
     }
@@ -1072,6 +1236,67 @@ class AutogenesiTest extends TestCase
         $this->assertNotContains($p->source_url, $rows[1]);
         $this->assertContains('Active', $rows[1]);
     }
+    public function test_manual_variants_get_unique_skus_automatic_prices_and_are_exported(): void
+    {
+        $p = $this->import();
+        $before = $p->variants;
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $url = '/autogenesi/'.$p->id.'/variants';
+        $this->post($url, ['label' => '8Core 8GB 128GB manuale', 'supplier_price' => '100.00', 'selling_price' => null])->assertSessionHasNoErrors();
+        $current = $p->fresh();
+        $this->assertCount(count($before) + 1, $current->variants);
+        $manual = collect($current->variants)->firstWhere('manual', true);
+        $this->assertSame('210', $manual['selling_price']);
+        $this->assertSame('100.00', $manual['supplier_price']);
+        $this->assertStringStartsWith('AE-'.$p->source_id.'-M', $manual['sku']);
+        $this->assertSame(array_column($before, 'sku'), array_values(array_filter(array_column($current->variants, 'sku'), fn ($sku) => $sku !== $manual['sku'])));
+        $this->post($url, ['label' => '4Core 2GB 32GB manuale', 'supplier_price' => '80', 'selling_price' => '150.25'])->assertSessionHasNoErrors();
+        $fresh = $p->fresh();
+        $added = collect($fresh->variants)->firstWhere('label', '4Core 2GB 32GB manuale');
+        $this->assertSame('151', $added['selling_price']);
+        $this->assertNotSame($manual['sku'], $added['sku']);
+        $this->assertSame($added['sku'], $fresh->variants[0]['sku']);
+        $rows = app(AutogenesiTemplateExport::class)->rows($fresh);
+        $this->assertContains($added['sku'], array_column($rows, 'Variant SKU'));
+        $this->assertContains($manual['sku'], array_column($rows, 'Variant SKU'));
+        $this->post('/autogenesi/'.$p->id.'/import-configurator')->assertSessionHasNoErrors();
+        $product = \App\Models\ConfiguratorProduct::where('handle', $p->handle)->firstOrFail();
+        $this->assertContains($added['sku'], $product->variants()->pluck('sku')->all());
+        Http::assertNothingSent();
+    }
+
+    public function test_manual_variants_reject_duplicate_names_360_and_invalid_prices(): void
+    {
+        $p = $this->import();
+        $before = $p->variants;
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $url = '/autogenesi/'.$p->id.'/variants';
+        foreach ([['label' => $before[0]['label'], 'supplier_price' => '100'], ['label' => '8GB 360', 'supplier_price' => '100'],
+            ['label' => 'Manuale', 'supplier_price' => '0'], ['label' => 'Manuale', 'supplier_price' => '1.123']] as $data) {
+            $this->post($url, $data)->assertSessionHasErrors();
+            $this->assertSame($before, $p->fresh()->variants);
+            session()->forget('errors');
+        }
+        $this->actingAs(User::factory()->create(['is_admin' => false]))->post($url, ['label' => 'Manuale', 'supplier_price' => '100'])->assertForbidden();
+        Http::assertNothingSent();
+    }
+
+    public function test_partial_variant_acquisition_is_saved_and_exposed_in_draft_details(): void
+    {
+        $path = $this->dir.'/manifest.json';
+        $manifest = json_decode(file_get_contents($path), true);
+        $manifest['variant_acquisition'] = ['complete' => false, 'detected' => 5, 'captured' => count($manifest['variants']), 'skipped' => ['QS6 Low', 'QS6 High']];
+        $manifest['warnings'][] = 'Non tutte le varianti sono state prese: introdurle manualmente.';
+        file_put_contents($path, json_encode($manifest));
+        $p = $this->import();
+        $this->assertFalse($p->metadata['variant_acquisition']['complete']);
+        $this->assertSame(['QS6 Low', 'QS6 High'], $p->metadata['variant_acquisition']['skipped']);
+        $this->assertContains('Non tutte le varianti sono state prese: introdurle manualmente.', $p->metadata['warnings']);
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->get('/autogenesi')->assertInertia(fn (Assert $page) => $page->where('products.0.metadata.variant_acquisition.complete', false)
+            ->where('products.0.metadata.variant_acquisition.detected', 5));
+    }
+
     public function test_draft_saves_extra_product_links_without_changing_original_source(): void
     {
         $p = $this->import();
@@ -1091,6 +1316,20 @@ class AutogenesiTest extends TestCase
         $this->assertSame([], $p->fresh()->metadata['additional_source_urls']);
     }
 
+    public function test_draft_vehicle_editor_accepts_transformed_single_brand_group(): void
+    {
+        $p = $this->import();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->patch('/autogenesi/'.$p->id, ['title' => $p->title, 'body_html' => $p->body_html, 'variants' => $p->variants,
+            'vehicles' => [['brand' => 'Ford', 'model' => 'S MAX / S-MAX | GALAXY', 'year_from' => 2006, 'year_to' => 2015]],
+        ])->assertSessionHasNoErrors();
+        $p->refresh();
+        $this->assertSame('FORD', $p->brand);
+        $this->assertSame('S-MAX | Galaxy', $p->model);
+        $this->assertCount(2, $p->metadata['vehicle_compatibilities']);
+        $this->assertSame('Galaxy', $p->metadata['vehicle_compatibilities'][1]['model']);
+    }
+
     public function test_draft_vehicle_editor_saves_multibrand_models_and_individual_year_ranges(): void
     {
         $p = $this->import();
@@ -1101,14 +1340,14 @@ class AutogenesiTest extends TestCase
         $this->patch('/autogenesi/'.$p->id, $data)->assertRedirect()->assertSessionHasNoErrors();
         $fresh = $p->fresh();
         $this->assertSame('FIAT | HYUNDAI', $fresh->brand);
-        $this->assertSame('1:500X | 2:KONA', $fresh->model);
+        $this->assertSame('1:500X | 2:Kona', $fresh->model);
         $this->assertSame(2014, (int) $fresh->year_from);
         $this->assertSame(2026, (int) $fresh->year_to);
         $this->assertSame(2020, $fresh->metadata['vehicle_compatibilities'][0]['year_to']);
         $this->assertSame('manual', $fresh->metadata['vehicle_compatibilities'][0]['origin']);
         $this->assertSame($p->source_url, $fresh->source_url);
         $this->assertSame($p->handle, $fresh->handle);
-        $this->assertSame('1:500X | 2:KONA', app(AutogenesiTemplateExport::class)->rows($fresh)[0][AutogenesiTemplateExport::MODEL]);
+        $this->assertSame('1:500X | 2:Kona', app(AutogenesiTemplateExport::class)->rows($fresh)[0][AutogenesiTemplateExport::MODEL]);
         $data['vehicles'][0]['year_to'] = 2010;
         $this->patch('/autogenesi/'.$p->id, $data)->assertSessionHasErrors('vehicles.0.year_to');
         $this->assertSame(2020, $p->fresh()->metadata['vehicle_compatibilities'][0]['year_to']);

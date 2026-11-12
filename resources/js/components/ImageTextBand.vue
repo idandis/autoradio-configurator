@@ -67,10 +67,14 @@ const save = () => {
     if (!ready.value || props.busy || !text.value.trim()) return;
     error.value = '';
     try {
-        canvas.value?.toBlob(blob => {
-            if (!blob || blob.size > 16 * 1024 * 1024) { error.value = 'Immagine troppo grande (massimo 16 MB).'; return; }
-            emit('save', new File([blob], 'testo.png', { type: 'image/png' }));
-        }, 'image/png');
+        const qualities = [0.92, 0.85, 0.75, 0.65, 0.5, 0.35];
+        const encode = (index: number) => canvas.value?.toBlob(blob => {
+            if (!blob || blob.type !== 'image/webp') { error.value = 'Salvataggio WebP non disponibile nel browser.'; return; }
+            if (blob.size > 1_900_000 && index < qualities.length - 1) { encode(index + 1); return; }
+            if (blob.size > 1_900_000) { error.value = 'Immagine troppo grande per il caricamento.'; return; }
+            emit('save', new File([blob], 'testo.webp', { type: 'image/webp' }));
+        }, 'image/webp', qualities[index]);
+        encode(0);
     } catch { error.value = 'Salvataggio non riuscito. Riapri la foto e riprova.'; }
 };
 </script>

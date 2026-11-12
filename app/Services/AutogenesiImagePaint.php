@@ -18,10 +18,11 @@ class AutogenesiImagePaint
         $path = $image ? $disk->path($image['path']) : '';
         $source = is_file($path) && !is_link($path) ? @getimagesize($path) : false;
         $info = @getimagesize($file->getRealPath());
-        if (!$source || !$info || $info['mime'] !== 'image/png' || $info[0] !== $source[0] || $info[1] !== $source[1] || $info[0] * $info[1] > 25000000) {
+        if (!$source || !$info || !in_array($info['mime'], ['image/png', 'image/webp'], true) || $info[0] !== $source[0] || $info[1] !== $source[1] || $info[0] * $info[1] > 25000000) {
             throw new RuntimeException('La modifica deve mantenere le dimensioni originali della foto.');
         }
-        $decoded = imagecreatefrompng($file->getRealPath());
+        $decoded = @imagecreatefromstring(file_get_contents($file->getRealPath()));
+        if (!$decoded) throw new RuntimeException('Immagine Paint non leggibile.');
         imagesavealpha($decoded, true);
         ob_start();
         imagepng($decoded);
@@ -32,7 +33,7 @@ class AutogenesiImagePaint
         if (!$disk->put($target, $bytes)) throw new RuntimeException('Salvataggio Paint non riuscito.');
         try {
             DB::transaction(function () use ($product, $id, $image, $target, $bytes, $attributes) {
-                $current = AutogenesiProduct::lockForUpdate()->findOrFail($product->id);
+                $current = $product->locked();
                 $images = $current->images;
                 $i = array_search($id, array_column($images, 'sha256'), true);
                 if ($i === false) throw new RuntimeException('La foto è cambiata durante la modifica.');

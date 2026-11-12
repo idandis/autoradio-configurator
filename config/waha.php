@@ -1,6 +1,8 @@
 <?php
 
 return [
+    'docker_binary' => env('WAHA_DOCKER_BINARY', '/usr/local/bin/docker'),
+    'container' => env('WAHA_CONTAINER', 'autoradio-waha-local'),
     'complete_frame_products' => ['pantalla-android-16-con-carplay-dsp-y-gps-para-mitsubishi-asx-2016-2022-potencia-conectividad-total-y-experiencia-multimedia-premium'],
     'url' => env('WAHA_URL', 'http://127.0.0.1:3000'),
     'key' => env('WAHA_API_KEY'),

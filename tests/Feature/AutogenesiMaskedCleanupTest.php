@@ -78,6 +78,71 @@ class AutogenesiMaskedCleanupTest extends TestCase
         $this->assertSame($before, $p->fresh()->images);
     }
 
+    public function test_local_enhancement_sharpens_without_resize_or_ai_and_allows_no_text_selection(): void
+    {
+        $p = $this->draft(); $before = $p->images;
+        config(['services.openai.api_key' => null]);
+        $this->post('/autogenesi/'.$p->id.'/images/0/clean', ['image_id' => $before[0]['sha256'], 'mask' => $this->mask(true)])->assertSessionHasNoErrors();
+        $image = $p->fresh()->images[0];
+        $this->assertTrue($image['locally_enhanced']);
+        $this->assertFalse($image['masked_blur']);
+        $this->assertSame([600, 300], [$image['width'], $image['height']]);
+        $out = imagecreatefromstring(Storage::disk('local')->get($image['path']));
+        $pixel = imagecolorsforindex($out, imagecolorat($out, 109, 55));
+        $this->assertLessThan(210, $pixel['red']);
+        $this->assertSame(0xd21e3c, imagecolorat($out, 10, 10));
+        $this->assertSame($before[0], $image['original']);
+        Http::assertNothingSent();
+    }
+
+    public function test_ai_cleanup_uses_original_dashboard_as_reference_and_keeps_restore_available(): void
+    {
+        $p = $this->draft(); $before = $p->images;
+        Http::fake(['api.openai.com/v1/images/edits' => Http::response(['data' => [['b64_json' => base64_encode($this->png(1024, 1024, [200, 200, 200]))]]])]);
+        $this->post('/autogenesi/'.$p->id.'/images/0/clean-ai', ['image_id' => $before[0]['sha256'], 'mask' => $this->mask()])->assertSessionHasNoErrors();
+        $image = $p->fresh()->images[0];
+        $this->assertSame('dashboard_clean', $image['ai_edit_mode']);
+        $this->assertStringContainsString('Inpaint ONLY the transparent areas', $image['ai_prompt']);
+        $this->assertSame([1024, 1024], [$image['width'], $image['height']]);
+        $this->assertSame($before[0], $image['original']);
+        $out = imagecreatefromstring(Storage::disk('local')->get($image['path']));
+        $this->assertSame(0xd21e3c, imagecolorat($out, 50, 300) & 0xffffff);
+        $this->assertSame(0xc8c8c8, imagecolorat($out, 187, 350) & 0xffffff);
+        Http::assertSent(fn ($request) => str_contains($request->url(), '/images/edits'));
+        $this->post('/autogenesi/'.$p->id.'/images/0/restore', ['image_id' => $image['sha256']])->assertSessionHasNoErrors();
+        $this->assertSame($before, $p->fresh()->images);
+    }
+
+    public function test_ai_cleanup_requires_a_selected_area(): void
+    {
+        $p = $this->draft();
+        $this->post('/autogenesi/'.$p->id.'/images/0/clean-ai', ['image_id' => $p->images[0]['sha256']])->assertSessionHasErrors('mask');
+        $this->post('/autogenesi/'.$p->id.'/images/0/clean-ai', ['image_id' => $p->images[0]['sha256'], 'mask' => $this->mask(true)])->assertSessionHasErrors('image_ai');
+        $this->assertSame($p->images, $p->fresh()->images);
+        Http::assertNothingSent();
+    }
+
+    public function test_ai_cleanup_uses_the_visible_crop_and_preserves_pixels_outside_selection(): void
+    {
+        $p = $this->draft(); $before = $p->images[0];
+        app(\App\Services\AutogenesiImageCrop::class)->crop($p, $before['sha256'], 50, 20, 200, 150);
+        $cropped = $p->fresh()->images[0];
+        $mask = imagecreatetruecolor(200, 150);
+        imagefilledrectangle($mask, 55, 25, 65, 35, imagecolorallocate($mask, 255, 255, 255));
+        ob_start(); imagepng($mask); $maskBytes = ob_get_clean(); imagedestroy($mask);
+        Http::fake(['api.openai.com/v1/images/edits' => Http::response(['data' => [['b64_json' => base64_encode($this->png(1024, 1024, [200, 200, 200]))]]])]);
+        $this->post('/autogenesi/'.$p->id.'/images/0/clean-ai', [
+            'image_id' => $cropped['sha256'], 'mask' => UploadedFile::fake()->createWithContent('mask.png', $maskBytes),
+        ])->assertSessionHasNoErrors();
+        $image = $p->fresh()->images[0];
+        $out = imagecreatefromstring(Storage::disk('local')->get($image['path']));
+        $this->assertSame(0xc8c8c8, imagecolorat($out, 307, 282) & 0xffffff);
+        $this->assertNotSame(0xc8c8c8, imagecolorat($out, 50, 200) & 0xffffff);
+        $this->assertSame($before, $image['original']);
+        $this->post('/autogenesi/'.$p->id.'/images/0/restore', ['image_id' => $image['sha256']])->assertSessionHasNoErrors();
+        $this->assertSame($before, $p->fresh()->images[0]);
+    }
+
     public function test_empty_mask_is_rejected_without_api_call_or_image_changes(): void
     {
         $p = $this->draft();

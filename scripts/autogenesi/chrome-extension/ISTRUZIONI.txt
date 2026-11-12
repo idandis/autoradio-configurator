@@ -15,6 +15,8 @@ Massimo 20 combinazioni di varianti. AliExpress mantiene l’acquisizione dedica
 Per interrompere l'acquisizione nell'estensione chiudi la scheda prodotto. Il pulsante Ferma tutto di localhost controlla i processi locali e non questa estensione indipendente.
 Il pacchetto resta sul computer fino a quando lo carichi volontariamente in AutoGenesi. L'importazione usa la lettura AI gia configurata e le regole di prezzi, descrizioni, immagini e bozza privata.
 
-AGGIORNAMENTO: versione 0.2.2. Scarica di nuovo lo ZIP, sostituisci i file nella cartella installata e premi Ricarica su chrome://extensions.
+AGGIORNAMENTO: versione 0.3.0. Scarica di nuovo lo ZIP, sostituisci i file nella cartella installata e premi Ricarica su chrome://extensions.
+
+DSers: apri My Products e premi Recupera link DSers nell'estensione. Sono acquisite solo associazioni leggibili dalla pagina caricata, senza usare API private, cookie o nuovi abbinamenti ai fornitori. Se non trova associazioni, apri Mapping di un prodotto rendendo visibili titolo e link AliExpress. Carica il JSON in Prodotti importati > Recupero link DSers. Ripeti per le altre pagine; i prodotti già con link non vengono sovrascritti. Non è ancora verificata sul tuo layout DSers: se non acquisisce, occorre adattare i selettori alla pagina reale.
 
 AliExpress: supportati anche prodotti senza selettore varianti (Versión única) e con una sola opzione fissa. Prezzi aggregati/intervalli, opzioni 360 e soli accessori restano esclusi.

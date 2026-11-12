@@ -14,11 +14,91 @@ use Inertia\Response;
 
 class ImportedProductsController extends Controller
 {
+    public function createFromAliExpress(Request $request): RedirectResponse
+    {
+        abort_unless(app()->environment('local'), 403);
+        $data = $request->validate(['source_url' => ['required', 'url', 'max:2048']]);
+        try {
+            set_time_limit(900);
+            $url = app(\App\Services\AutogenesiSearch::class)->sourceUrl($data['source_url']);
+            if (!$url) throw new \RuntimeException('Inserisci il link completo di un prodotto AliExpress.');
+            $id = \App\Services\AutogenesiSource::id($url);
+            $canonicalUrl = 'https://es.aliexpress.com/item/'.$id.'.html';
+            $product = ConfiguratorProduct::where('meta->autogenesi->source_url', $canonicalUrl)
+                ->orWhere('meta->autogenesi->source_url', $url)
+                ->orWhere('meta->source_url', $canonicalUrl)
+                ->orWhere('meta->source_url', $url)
+                ->orWhere('meta->autogenesi->source_id', $id)
+                ->first();
+            if (!$product) {
+                $draft = app(\App\Services\AutogenesiApiImport::class)->importUrl($request->user()->id, $url);
+                $product = app(\App\Services\AutogenesiCatalogImport::class)->import($draft);
+                $paths = collect($draft->images)->flatMap(fn ($image) => [$image['path'] ?? null, $image['uncropped_path'] ?? null,
+                    $image['original']['path'] ?? null, $image['original']['uncropped_path'] ?? null])->filter()->unique()->all();
+                $draft->delete();
+                \Illuminate\Support\Facades\Storage::disk('local')->delete($paths);
+            }
+            return redirect()->route('imported-products.sheet', $product);
+        } catch (\Throwable $e) {
+            report($e);
+            if ($e instanceof \Illuminate\Validation\ValidationException) {
+                \Illuminate\Support\Facades\Log::warning('AutoGenesi: dati non validi durante importazione', [
+                    'fields' => array_keys($e->errors()), 'file' => $e->getFile(), 'line' => $e->getLine(),
+                ]);
+                return back()->withErrors(['source_url' => 'Dati del prodotto incompleti ('.implode(', ', array_keys($e->errors())).'). Riprova o usa l’importazione in AutoGenesi.']);
+            }
+            if (!$e instanceof \RuntimeException) {
+                \Illuminate\Support\Facades\Log::warning('AutoGenesi: errore importazione non classificato', [
+                    'type' => get_class($e), 'file' => $e->getFile(), 'line' => $e->getLine(),
+                ]);
+            }
+            return back()->withErrors(['source_url' => $e instanceof \RuntimeException ? $e->getMessage() : 'Importazione non completata. Controlla il log locale e riprova.']);
+        }
+    }
+
+    public function variantMatcher(Request $request, ConfiguratorProduct $product): Response
+    {
+        abort_unless(app()->environment('local'), 403);
+
+        return Inertia::render('ImportedProductVariantMatcher', [
+            'product' => ['id' => $product->id, 'title' => $product->title],
+            'allowReplacement' => $request->boolean('replace'),
+        ]);
+    }
+
+    public function recoverDsers(Request $request, \App\Services\DsersLinkRecovery $recovery): RedirectResponse
+    {
+        abort_unless(app()->environment('local'), 403);
+        $request->validate(['dsers_file' => ['required', 'file', 'max:5120']]);
+        try {
+            $data = json_decode(file_get_contents($request->file('dsers_file')->getRealPath()), true, 32, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $e) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['dsers_file' => 'File JSON non valido.']);
+        }
+        $data = validator(is_array($data) ? $data : [], [
+            'format' => 'required|in:autogenesi.dsers.v1', 'rows' => 'required|array|min:1|max:5000',
+            'rows.*.shopify_product_id' => 'nullable|string|regex:/^\d+$/',
+            'rows.*.title_es' => 'nullable|string|max:1000',
+            'rows.*.supplier_url' => 'required|string|max:2048',
+        ])->validate();
+        $result = $recovery->recover($data['rows']);
+        return back()->with('status', "Link DSers: {$result['updated']} prodotti aggiornati; {$result['existing']} già con link; {$result['unmatched']} righe non abbinate; {$result['ambiguous']} ambigue.");
+    }
+
     public function exportShopify(Request $request, \App\Services\ImportedProductsExport $exporter)
     {
         $data = $request->validate(['date' => ['required', 'date_format:Y-m-d']]);
         try {
             return response()->download($exporter->write($data['date']), 'prodotti-importati-'.$data['date'].'-shopify.xlsx');
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['export_date' => $e->getMessage()]);
+        }
+    }
+
+    public function exportAllRadios(\App\Services\ImportedProductsExport $exporter)
+    {
+        try {
+            return response()->download($exporter->writeAllRadios(), 'tutte-le-radio-shopify.xlsx');
         } catch (\RuntimeException $e) {
             return back()->withErrors(['export_date' => $e->getMessage()]);
         }
@@ -167,7 +247,7 @@ class ImportedProductsController extends Controller
         $date = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']])['date'] ?? '';
 
         $products = ConfiguratorProduct::query()
-            ->with('variants:id,configurator_product_id,title,sku,option_value,price,image_url')
+            ->with('variants:id,configurator_product_id,title,sku,option_value,price,image_url,meta')
             ->withCount('variants')
             ->whereIn('category', ['screen', 'camera', 'speaker', 'accessory'])
             ->when($date !== '', fn ($query) => $query->whereIn('id', app(\App\Services\ImportedProductsExport::class)->idsOnDate($date)))
@@ -207,11 +287,12 @@ class ImportedProductsController extends Controller
                 'year_to' => $product->year_to,
                 'price_min' => $product->price_min,
                 'variants_count' => $product->variants_count,
-                'variants' => $product->variants->map(fn ($variant) => [
+                'variants' => $product->variants->sortBy(fn ($variant) => app(\App\Services\CatalogPriceUpdater::class)->variantOrder($variant))->values()->map(fn ($variant) => [
                     'id' => $variant->id,
                     'title' => $variant->title ?: $variant->option_value,
                     'sku' => $variant->sku,
                     'price' => $variant->price,
+                    'supplier_cost' => $variant->meta['variant_cost'] ?? null,
                 ]),
                 'source_url' => $this->sourceUrl($product),
                 'image_url' => $product->image_url,
@@ -221,6 +302,9 @@ class ImportedProductsController extends Controller
             ]);
 
         return Inertia::render('ImportedProducts', [
+            'canRecoverDsers' => app()->environment('local'),
+            'priceUpdate' => fn () => app(CatalogPriceUpdateController::class)->snapshot($request->user()->id),
+            'dsersStatus' => $request->session()->get('status'),
             'importDates' => fn () => app(\App\Services\ImportedProductsExport::class)->dates(),
             'filters' => [
                 'category' => $category,

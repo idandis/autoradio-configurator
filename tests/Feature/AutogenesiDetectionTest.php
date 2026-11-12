@@ -26,6 +26,110 @@ class AutogenesiDetectionTest extends TestCase
         Http::preventStrayRequests();
     }
 
+    public function test_brand_research_exports_uncovered_year_ranges_and_hides_covered_models(): void
+    {
+        $cars = [
+            ['brand' => 'Volkswagen', 'model' => 'Golf', 'year_from' => 1995, 'year_to' => 2003, 'market' => 'Spagna', 'source_url' => 'https://example.com/vw', 'evidence' => 'Golf 1995-2003 popular in Spain'],
+            ['brand' => 'Volkswagen', 'model' => 'Polo', 'year_from' => 2010, 'year_to' => 2024, 'market' => 'Europa', 'source_url' => 'https://example.com/vw', 'evidence' => 'Polo 2010-2024 popular in Europe'],
+            ['brand' => 'Volkswagen', 'model' => 'Passat', 'year_from' => 1973, 'year_to' => 2024, 'market' => 'Globale', 'source_url' => 'https://example.com/vw', 'evidence' => 'Passat 1973-2024'],
+            ['brand' => 'Volkswagen', 'model' => 'Passat (B8)', 'year_from' => 2014, 'year_to' => 2024, 'market' => 'Europa', 'source_url' => 'https://example.com/vw', 'evidence' => 'Passat 2014-2024'],
+            ['brand' => 'Ford', 'model' => 'Focus', 'year_from' => 2000, 'year_to' => 2005, 'market' => 'Spagna', 'source_url' => 'https://example.com/vw', 'evidence' => 'Focus 2000-2005'],
+        ];
+        Http::fakeSequence('api.openai.com/v1/responses')
+            ->push(['status' => 'completed', 'output' => [
+                ['type' => 'web_search_call', 'status' => 'completed', 'action' => ['sources' => [['url' => 'https://example.com/vw']]]],
+                ['type' => 'message', 'content' => [['type' => 'output_text', 'text' => implode("\n", array_column($cars, 'evidence'))]]],
+            ]])
+            ->push(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['cars' => $cars, 'notes' => 'Documented ranges; not an exhaustive ranking.'])]]]]]);
+        ConfiguratorProduct::create(['handle' => 'golf', 'category' => 'screen', 'title' => 'Unrelated', 'brand' => 'VW', 'model' => 'Golf', 'year_from' => 1998, 'year_to' => 2001]);
+        ConfiguratorProduct::create(['handle' => 'polo', 'category' => 'screen', 'title' => 'Unrelated', 'brand' => 'VW', 'model' => 'Polo', 'year_from' => 2010, 'year_to' => 2024]);
+        $this->from('/autogenesi')->post('/autogenesi/detect-missing', ['mode' => 'brand', 'brand' => 'VW'])->assertRedirect('/autogenesi')->assertSessionHasNoErrors();
+        $r = session('autogenesi_detection');
+        $this->assertSame(1995, $r['year_from']);
+        $this->assertSame(2024, $r['year_to']);
+        $this->assertCount(3, $r['cars']);
+        $this->assertSame(['catalog' => 1, 'draft' => 0, 'missing' => 2], $r['counts']);
+        $this->assertSame("VW Golf 1995 1997\nVW Golf 2002 2003\nVW Passat 1995 2024", $r['import_list']);
+        Http::assertSent(fn ($r) => str_contains($r['instructions'] ?? '', 'NON-INTERACTIVE backend job')
+            && str_contains($r['input'] ?? '', 'known_model_names_to_investigate'));
+        Http::assertSentCount(2);
+        app(AutogenesiDetection::class)->detectBrand('Volkswagen');
+        Http::assertSentCount(2);
+        $this->assertDatabaseCount('autogenesi_batches', 0);
+    }
+
+    public function test_brand_accepts_separate_date_quotes_and_preserves_first_year_before_window(): void
+    {
+        $car = ['brand' => 'Toyota', 'model' => 'RAV4 (XA10)', 'year_from' => 1994, 'year_to' => 2000, 'market' => 'Europa',
+            'source_url' => 'https://example.com/toyota', 'evidence' => 'RAV4 was launched in 1994 || This generation ended in 2000'];
+        Http::fakeSequence('api.openai.com/v1/responses')
+            ->push(['status' => 'completed', 'output' => [
+                ['type' => 'web_search_call', 'status' => 'completed', 'action' => ['sources' => [['url' => 'https://example.com/toyota']]]],
+                ['type' => 'message', 'content' => [['type' => 'output_text', 'text' => "RAV4 was launched in 1994\nOther information.\nThis generation ended in 2000"]]],
+            ]])
+            ->push(['status' => 'completed', 'output' => [['type' => 'message', 'content' => [['type' => 'output_text', 'text' => json_encode(['cars' => [$car], 'notes' => 'Copertura parziale.'])]]]]]);
+        $this->post('/autogenesi/detect-missing', ['mode' => 'brand', 'brand' => 'Toyota'])->assertSessionHasNoErrors();
+        $this->assertSame('Toyota RAV4 1995 2000', session('autogenesi_detection.import_list'));
+        $this->assertSame('partial', session('autogenesi_detection.coverage'));
+        $this->assertSame(1994, session('autogenesi_detection.cars.0.source_year_from'));
+        $this->assertSame(0, session('autogenesi_detection.discarded_count'));
+    }
+
+    public function test_brand_comparison_checks_every_year_for_existing_model(): void
+    {
+        ConfiguratorProduct::create(['handle' => 'rav4', 'category' => 'screen', 'title' => 'Unrelated', 'brand' => 'Toyota', 'model' => 'RAV4', 'year_from' => 1998, 'year_to' => 2000]);
+        $r = app(AutogenesiDetection::class)->compare(['mode' => 'brand', 'year' => null, 'cars' => [
+            ['brand' => 'Toyota', 'model' => 'RAV4 (XA10)', 'year_from' => 1995, 'year_to' => 2000],
+        ]]);
+        $this->assertSame('Toyota RAV4 (XA10) 1995 1997', $r['import_list']);
+        $this->assertSame('missing', $r['cars'][0]['status']);
+    }
+
+    public function test_camera_only_models_remain_missing_and_drafts_cover_only_their_years(): void
+    {
+        ConfiguratorProduct::create(['handle' => 'blade-camera', 'category' => 'camera', 'title' => 'Camera', 'brand' => 'Toyota', 'model' => 'Blade', 'year_from' => 2006, 'year_to' => 2012]);
+        ConfiguratorProduct::create(['handle' => 'blade-dashcam', 'category' => 'screen', 'title' => 'Dashcam', 'brand' => 'Toyota', 'model' => 'Blade', 'year_from' => 2006, 'year_to' => 2012, 'meta' => ['type' => 'DASHCAM']]);
+        AutogenesiProduct::create(['source_id' => 'prius', 'source_url' => 'https://example.com/product', 'status' => 'draft', 'handle' => 'prius-draft', 'title' => 'Radio', 'body_html' => '<p>Radio</p>',
+            'brand' => 'Toyota', 'model' => 'Prius', 'year_from' => 2015, 'year_to' => 2020, 'images' => [], 'variants' => [], 'metadata' => []]);
+        ConfiguratorProduct::create(['handle' => 'lc80', 'category' => 'screen', 'title' => 'Radio', 'brand' => 'Toyota', 'model' => 'Land Cruiser LC80', 'year_from' => 1990, 'year_to' => 1997]);
+        $r = app(AutogenesiDetection::class)->compare(['mode' => 'brand', 'year_from' => 1995, 'year_to' => 2024, 'cars' => [
+            ['brand' => 'Toyota', 'model' => 'Blade', 'year_from' => 2006, 'year_to' => 2012],
+            ['brand' => 'Toyota', 'model' => 'Prius', 'year_from' => 1997, 'year_to' => 2024],
+            ['brand' => 'Toyota', 'model' => 'Land Cruiser 80', 'year_from' => 1990, 'year_to' => 1997],
+        ]]);
+        $this->assertSame("Toyota Blade 2006 2012\nToyota Prius 1997 2014\nToyota Prius 2021 2024", $r['import_list']);
+        $this->assertTrue($r['cars'][0]['camera_only']);
+        $this->assertCount(3, $r['cars']);
+        $this->assertSame(3, $r['checked_count']);
+        $this->assertSame(['catalog' => 1, 'draft' => 0, 'missing' => 2], $r['counts']);
+    }
+
+    public function test_brand_does_not_request_radios_for_model_production_hiatus(): void
+    {
+        ConfiguratorProduct::create(['handle' => 'supra-camera', 'category' => 'camera', 'title' => 'Camera', 'brand' => 'Toyota', 'model' => 'Supra', 'year_from' => 1995, 'year_to' => 2024]);
+        $r = app(AutogenesiDetection::class)->compare(['mode' => 'brand', 'year_from' => 1995, 'year_to' => 2024, 'cars' => [
+            ['brand' => 'Toyota', 'model' => 'Supra', 'year_from' => 1978, 'year_to' => 2024, 'production_ranges' => [
+                ['year_from' => 1978, 'year_to' => 2002], ['year_from' => 2019, 'year_to' => 2024],
+            ]],
+        ]]);
+        $this->assertSame("Toyota Supra 1995 2002\nToyota Supra 2019 2024", $r['import_list']);
+        $this->assertTrue($r['cars'][0]['camera_only']);
+        $this->assertTrue($r['cars'][1]['camera_only']);
+    }
+
+    public function test_ongoing_production_is_valid_and_direct_model_source_is_preserved(): void
+    {
+        $evidence = 'Toyota / Prius / 1997 / present / https://example.com/prius';
+        $r = app(AutogenesiDetection::class)->normalizeBrandResearch('Toyota', 1995, 2024, $evidence,
+            ['https://example.com/general' => 'https://example.com/general'], ['cars' => [[
+                'brand' => 'Toyota', 'model' => 'Prius', 'year_from' => 1997, 'year_to' => 2024,
+                'market' => 'Globale', 'source_url' => 'https://example.com/general', 'evidence' => $evidence,
+            ]], 'notes' => 'Copertura parziale.']);
+        $this->assertCount(1, $r['cars']);
+        $this->assertSame('https://example.com/prius', $r['cars'][0]['source_url']);
+        $this->assertSame(2024, $r['cars'][0]['year_to']);
+    }
+
     private function research(int $count = 50, bool $web = true, bool $firstFailure = false, bool $formatFailure = false, bool $headingOnly = false): void
     {
         $names = [['Volkswagen', 'Golf'], ['Peugeot', '2008'], ['Seat', 'Leon'], ['Skoda', 'Fabia'], ['Ford', 'Focus'], ['Opel', 'Corsa']];

@@ -74,7 +74,7 @@ class WhatsAppSessionRestartTest extends TestCase
         $history = 'waha-test-history:'.$settings->suffix();
         Cache::store('file')->put($history, ['existing conversation'], now()->addMinute());
         $this->actingAs(User::factory()->create(['is_admin' => true]))->postJson('/dashboard/whatsapp/start')->assertStatus(202);
-        Process::assertRan(fn ($p) => str_contains($p->command, 'whatsapp:test-bot --minutes=120'));
+        Process::assertRan(fn ($p) => $p->command === ['/usr/bin/python3', base_path('scripts/start-whatsapp-bot.py'), base_path(), PHP_BINDIR.'/php']);
         $this->assertTrue($settings->get()['enabled']);
         $this->assertSame(['existing conversation'], Cache::store('file')->get($history));
     }

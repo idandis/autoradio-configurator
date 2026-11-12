@@ -44,6 +44,6 @@ test('text band spans full width, moves vertically and saves white text without 
     });
     assert.equal(pixels.top, 0); assert.equal(pixels.bottom, 255); assert.ok(pixels.white > 0);
     await save.click(); await page.waitForFunction(() => window.saved);
-    assert.deepEqual(await page.evaluate(() => window.saved), { width: 400, height: 250, type: 'image/png' });
+    assert.deepEqual(await page.evaluate(() => window.saved), { width: 400, height: 250, type: 'image/webp' });
   } finally { await browser.close(); }
 });

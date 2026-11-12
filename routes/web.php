@@ -43,6 +43,27 @@ use Inertia\Inertia;
     ]);
 });*/
 
+Route::get('/autogenesi/aliexpress/relay', function (Request $request) {
+    $headers = ['Cache-Control' => 'no-store, private', 'Referrer-Policy' => 'no-referrer', 'X-Content-Type-Options' => 'nosniff'];
+    if (! $request->hasAny(['state', 'code', 'error'])) {
+        return response('Ponte AutoGenesi pronto. Avvia l’autorizzazione dal Mac.', 200, $headers);
+    }
+    $data = $request->only(['state', 'code', 'error']);
+    $valid = isset($data['state']) && is_string($data['state']) && preg_match('/^[a-zA-Z0-9]{64}$/D', $data['state']);
+    foreach (['code' => 4096, 'error' => 256] as $key => $max) {
+        if (isset($data[$key]) && (! is_string($data[$key]) || strlen($data[$key]) > $max)) {
+            $valid = false;
+        }
+    }
+    if (! $valid || (empty($data['code']) && empty($data['error']))) {
+        return response('Callback non valido. Riavvia l’autorizzazione dal Mac.', 400, $headers);
+    }
+
+    return response('', 302, $headers + [
+        'Location' => 'http://localhost:8000/autogenesi/aliexpress/callback?'.http_build_query($data, '', '&', PHP_QUERY_RFC3986),
+    ]);
+})->name('autogenesi.aliexpress.relay');
+
 Route::get('/storage/autogenesi/catalog/{source}/{filename}', function (Request $request, string $source, string $filename) {
     $disk = \Illuminate\Support\Facades\Storage::disk('public');
     $root = realpath($disk->path('autogenesi/catalog'));
@@ -57,7 +78,7 @@ Route::get('/storage/autogenesi/catalog/{source}/{filename}', function (Request 
     $response->isNotModified($request);
 
     return $response;
-})->where(['source' => '[0-9]+', 'filename' => '[a-f0-9]{64}\\.(?:png|jpg|webp)'])->name('autogenesi.public-image');
+})->where(['source' => '(?:[0-9]+|catalog-[0-9]+)', 'filename' => '[a-f0-9]{64}\\.(?:png|jpg|webp)'])->name('autogenesi.public-image');
 
 Route::match(['get', 'post'], '/checkout/italiano/{path?}', function (Request $request, ?string $path = null) {
     $path = strtr($path ?? '', ['preventivo/' => 'quote/', '/conferma' => '/confirmation', '/pagamento' => '/payment']);
@@ -150,6 +171,12 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/dashboard/whatsapp/chats/labels', [WhatsAppChatsController::class, 'labels'])->name('whatsapp-chats.labels');
     Route::post('/dashboard/whatsapp/chats/sync', [WhatsAppChatsController::class, 'sync'])->middleware('throttle:60,1')->name('whatsapp-chats.sync');
     Route::delete('/dashboard/whatsapp/chats', [WhatsAppChatsController::class, 'destroyAll'])->name('whatsapp-chats.destroy-all');
+    Route::post('/dashboard/whatsapp/chats/{chat}/history', [WhatsAppChatsController::class, 'syncHistory'])->whereNumber('chat')->middleware('throttle:3,1')->name('whatsapp-chats.history');
+    Route::post('/dashboard/whatsapp/chats/{chat}/recontact', [WhatsAppChatsController::class, 'recontact'])->whereNumber('chat')->middleware('throttle:5,1')->name('whatsapp-chats.recontact');
+    Route::post('/dashboard/whatsapp/chats/{chat}/recontact/rewrite', [WhatsAppChatsController::class, 'rewriteRecontact'])->whereNumber('chat')->middleware('throttle:5,1')->name('whatsapp-chats.recontact-rewrite');
+    Route::post('/dashboard/whatsapp/chats/{chat}/recontact/manual', [WhatsAppChatsController::class, 'manualRecontact'])->whereNumber('chat')->middleware('throttle:5,1')->name('whatsapp-chats.recontact-manual');
+    Route::post('/dashboard/whatsapp/chats/{chat}/lessons', [WhatsAppChatsController::class, 'saveLesson'])->whereNumber('chat')->name('whatsapp-chats.lessons-save');
+    Route::delete('/dashboard/whatsapp/chats/{chat}/lessons/{lesson}', [WhatsAppChatsController::class, 'deleteLesson'])->whereNumber(['chat', 'lesson'])->name('whatsapp-chats.lessons-delete');
     Route::delete('/dashboard/whatsapp/chats/{chat}', [WhatsAppChatsController::class, 'destroy'])->whereNumber('chat')->name('whatsapp-chats.destroy');
     Route::patch('/dashboard/whatsapp/chats/{chat}', [WhatsAppChatsController::class, 'update'])->whereNumber('chat')->name('whatsapp-chats.update');
     Route::get('/dashboard/whatsapp/status', [WhatsAppAssistantController::class, 'status'])->name('whatsapp-assistant.status');
@@ -181,7 +208,15 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/models/edit', [ModelsController::class, 'edit'])->name('models.edit');
     Route::put('/models', [ModelsController::class, 'update'])->name('models.update');
     Route::get('/imported-products', ImportedProductsController::class)->name('imported-products.index');
+    Route::post('/imported-products/new-from-aliexpress', [ImportedProductsController::class, 'createFromAliExpress'])->middleware('throttle:autogenesi')->name('imported-products.new-from-aliexpress');
+    Route::get('/imported-products/{product}/variant-matcher', [ImportedProductsController::class, 'variantMatcher'])->name('imported-products.variant-matcher');
     Route::get('/autogenesi', [AutogenesiController::class, 'index'])->name('autogenesi.index');
+    Route::get('/autogenesi/aliexpress/callback', [\App\Http\Controllers\AutogenesiAliExpressController::class, 'callback'])->name('autogenesi.aliexpress.callback');
+    Route::get('/autogenesi/aliexpress/status', [\App\Http\Controllers\AutogenesiAliExpressController::class, 'status'])->name('autogenesi.aliexpress.status');
+    Route::post('/autogenesi/aliexpress/authorize', [\App\Http\Controllers\AutogenesiAliExpressController::class, 'authorize'])->middleware('throttle:aliexpress-authorization')->name('autogenesi.aliexpress.authorize');
+    Route::post('/autogenesi/aliexpress/exchange', [\App\Http\Controllers\AutogenesiAliExpressController::class, 'exchange'])->middleware('throttle:aliexpress-authorization')->name('autogenesi.aliexpress.exchange');
+    Route::post('/autogenesi/aliexpress/search', [\App\Http\Controllers\AutogenesiAliExpressController::class, 'search'])->middleware('throttle:10,1')->name('autogenesi.aliexpress.search');
+    Route::post('/autogenesi/aliexpress/product', [\App\Http\Controllers\AutogenesiAliExpressController::class, 'product'])->middleware('throttle:10,1')->name('autogenesi.aliexpress.product');
     Route::get('/autogenesi/import-log', [AutogenesiController::class, 'importLog'])->name('autogenesi.import-log');
     Route::get('/autogenesi/chrome-extension', [AutogenesiController::class, 'chromeExtension'])->name('autogenesi.chrome-extension');
     Route::get('/autogenesi/export-all', [AutogenesiController::class, 'exportAll'])->name('autogenesi.export-all');
@@ -200,20 +235,27 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::post('/autogenesi/batches/{batch}/retry', [AutogenesiController::class, 'retryList'])->whereNumber('batch')->name('autogenesi.retry-list');
     Route::delete('/autogenesi/{product}', [AutogenesiController::class, 'destroy'])->whereNumber('product')->name('autogenesi.destroy');
     Route::post('/autogenesi/import', [AutogenesiController::class, 'store'])->middleware('throttle:autogenesi')->name('autogenesi.import');
+    Route::post('/autogenesi/variant-price', [AutogenesiController::class, 'variantPrice'])->middleware('throttle:60,1')->name('autogenesi.variant-price');
     Route::patch('/autogenesi/{product}', [AutogenesiController::class, 'update'])->whereNumber('product')->name('autogenesi.update');
     Route::post('/autogenesi/{product}/description', [AutogenesiController::class, 'regenerate'])->whereNumber('product')->middleware('throttle:autogenesi')->name('autogenesi.description');
+    Route::post('/autogenesi/{product}/variants', [AutogenesiController::class, 'storeVariant'])->whereNumber('product')->name('autogenesi.store-variant');
     Route::delete('/autogenesi/{product}/variants', [AutogenesiController::class, 'destroyVariant'])->whereNumber('product')->name('autogenesi.destroy-variant');
     Route::post('/autogenesi/{product}/dashboard-image', [AutogenesiController::class, 'generateDashboard'])->whereNumber('product')->middleware('throttle:autogenesi')->name('autogenesi.dashboard-image');
     Route::patch('/autogenesi/{product}/images/layout', [AutogenesiController::class, 'imageLayout'])->whereNumber('product')->name('autogenesi.image-layout');
     Route::get('/autogenesi/{product}/images/{index}', [AutogenesiController::class, 'image'])->whereNumber(['product', 'index'])->name('autogenesi.image');
     Route::delete('/autogenesi/{product}/images/{index}', [AutogenesiController::class, 'removeImage'])->whereNumber(['product', 'index'])->name('autogenesi.remove-image');
     Route::post('/autogenesi/{product}/images/{index}/ai', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.edit-image');
+    Route::post('/autogenesi/{product}/stop-processing', [AutogenesiController::class, 'stopProcessing'])->whereNumber('product')->name('autogenesi.stop-processing');
+    Route::post('/autogenesi/{product}/description-link', [AutogenesiController::class, 'descriptionFromLink'])->whereNumber('product')->middleware('throttle:10,1')->name('autogenesi.description-link');
+    Route::post('/autogenesi/{product}/reimport-images', [AutogenesiController::class, 'reimportImages'])->whereNumber('product')->middleware('throttle:10,1')->name('autogenesi.reimport-images');
     Route::post('/autogenesi/{product}/images', [AutogenesiController::class, 'uploadImages'])->whereNumber('product')->name('autogenesi.upload-images');
     Route::post('/autogenesi/{product}/images/{index}/cleanup-text', [AutogenesiController::class, 'cleanupText'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.cleanup-text');
     Route::post('/autogenesi/{product}/images/{index}/paint', [AutogenesiController::class, 'paintImage'])->whereNumber(['product', 'index'])->name('autogenesi.paint-image');
     Route::post('/autogenesi/{product}/images/{index}/crop', [AutogenesiController::class, 'cropImage'])->whereNumber(['product', 'index'])->name('autogenesi.crop-image');
-    Route::post('/autogenesi/{product}/images/{index}/clean', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.clean-image');
+    Route::post('/autogenesi/{product}/images/{index}/clean', [AutogenesiController::class, 'cleanupText'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.clean-image');
+    Route::post('/autogenesi/{product}/images/{index}/clean-ai', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.clean-ai-image');
     Route::post('/autogenesi/{product}/images/{index}/white', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->middleware('throttle:autogenesi')->name('autogenesi.white-image');
+    Route::post('/autogenesi/{product}/images/{index}/upscale', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->name('autogenesi.upscale-image');
     Route::post('/autogenesi/{product}/images/{index}/restore', [AutogenesiController::class, 'editImage'])->whereNumber(['product', 'index'])->name('autogenesi.restore-image');
     Route::get('/autogenesi/{product}/export', [AutogenesiController::class, 'export'])->whereNumber('product')->name('autogenesi.export');
     Route::get('/customers', [CustomersController::class, 'index'])->name('customers.index');
@@ -235,6 +277,37 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::get('/missing-vehicle-requests/{missingVehicleRequest}/photo', [MissingVehicleRequestsController::class, 'photo'])->name('missing-vehicle-requests.photo');
     Route::delete('/missing-vehicle-requests/{missingVehicleRequest}', [MissingVehicleRequestsController::class, 'destroy'])->name('missing-vehicle-requests.destroy');
     Route::get('/imported-products/export-shopify', [ImportedProductsController::class, 'exportShopify'])->name('imported-products.export-shopify');
+    Route::get('/imported-products/export-all-radios', [ImportedProductsController::class, 'exportAllRadios'])->name('imported-products.export-all-radios');
+    Route::get('/imported-products/{product}/supplier-variants', [\App\Http\Controllers\CatalogVariantMatchController::class, 'show'])->middleware('throttle:10,1')->name('supplier-variants.show');
+    Route::post('/imported-products/{product}/supplier-variants', [\App\Http\Controllers\CatalogVariantMatchController::class, 'show'])->middleware('throttle:10,1')->name('supplier-variants.preview');
+    Route::post('/imported-products/{product}/supplier-variants/add', [\App\Http\Controllers\CatalogVariantMatchController::class, 'create'])->middleware('throttle:10,1')->name('supplier-variants.create');
+    Route::post('/imported-products/{product}/supplier-variants/add-manual', [\App\Http\Controllers\CatalogVariantMatchController::class, 'createManual'])->name('supplier-variants.create-manual');
+    Route::post('/imported-products/{product}/supplier-variants/attempt', [\App\Http\Controllers\CatalogVariantMatchController::class, 'attempt'])->middleware('throttle:10,1')->name('supplier-variants.attempt');
+    Route::post('/imported-products/{product}/supplier-variants/recreate', [\App\Http\Controllers\CatalogVariantMatchController::class, 'recreate'])->middleware('throttle:10,1')->name('supplier-variants.recreate');
+    Route::post('/imported-products/{product}/variants/{variant}/supplier-match', [\App\Http\Controllers\CatalogVariantMatchController::class, 'store'])->middleware('throttle:10,1')->name('supplier-variants.match');
+    Route::delete('/imported-products/{product}/variants/{variant}/supplier-match', [\App\Http\Controllers\CatalogVariantMatchController::class, 'destroy'])->name('supplier-variants.destroy');
+    Route::patch('/imported-products/{product}/variants/{variant}/supplier-match', [\App\Http\Controllers\CatalogVariantMatchController::class, 'rename'])->name('supplier-variants.rename');
+    Route::post('/imported-products/recover-dsers', [ImportedProductsController::class, 'recoverDsers'])->middleware('throttle:10,1')->name('imported-products.recover-dsers');
+    Route::post('/imported-products/price-update', [\App\Http\Controllers\CatalogPriceUpdateController::class, 'start'])->middleware('throttle:3,1')->name('price-update.start');
+    Route::get('/imported-products/price-rules', [\App\Http\Controllers\AutogenesiPriceRulesController::class, 'show'])->name('price-rules.show');
+    Route::post('/imported-products/price-rules', [\App\Http\Controllers\AutogenesiPriceRulesController::class, 'save'])->name('price-rules.save');
+    Route::post('/imported-products/price-rules/preview', [\App\Http\Controllers\AutogenesiPriceRulesController::class, 'preview'])->name('price-rules.preview');
+    Route::post('/imported-products/price-update/{run}/stop', [\App\Http\Controllers\CatalogPriceUpdateController::class, 'stop'])->name('price-update.stop');
+    Route::post('/imported-products/price-update/{run}/reset', [\App\Http\Controllers\CatalogPriceUpdateController::class, 'reset'])->name('price-update.reset');
+    Route::post('/imported-products/price-update/{run}/resume', [\App\Http\Controllers\CatalogPriceUpdateController::class, 'resume'])->middleware('throttle:3,1')->name('price-update.resume');
+    Route::get('/imported-products/{product}/sheet', [\App\Http\Controllers\CatalogProductSheetController::class, 'show'])->whereNumber('product')->name('imported-products.sheet');
+    Route::get('/imported-products/{product}/sheet/export', [\App\Http\Controllers\CatalogProductSheetController::class, 'export'])->whereNumber('product')->name('imported-products.sheet.export');
+    foreach ([
+        ['post', '/stop-processing', 'stop-processing'], ['post', '/description-link', 'description-link'], ['post', '/reimport-images', 'reimport-images'], ['patch', '', 'update'], ['post', '/variants', 'store-variant'], ['delete', '/variants', 'destroy-variant'],
+        ['post', '/dashboard-image', 'dashboard-image'], ['patch', '/images/layout', 'image-layout'], ['post', '/images', 'upload-images'],
+        ['get', '/images/{index}', 'image'], ['delete', '/images/{index}', 'remove-image'],
+        ['post', '/images/{index}/ai', 'edit-image'], ['post', '/images/{index}/white', 'white-image'], ['post', '/images/{index}/upscale', 'upscale-image'], ['post', '/images/{index}/clean-ai', 'clean-ai-image'], ['post', '/images/{index}/restore', 'restore-image'],
+        ['post', '/images/{index}/paint', 'paint-image'], ['post', '/images/{index}/crop', 'crop-image'],
+        ['post', '/images/{index}/cleanup-text', 'cleanup-text'], ['post', '/images/{index}/clean', 'clean-image'],
+    ] as [$verb, $path, $name]) {
+        $sheetRoute = Route::$verb('/imported-products/{product}/sheet'.$path, [\App\Http\Controllers\CatalogProductSheetController::class, 'action'])->whereNumber(['product', 'index'])->name('imported-products.sheet.'.$name);
+        if (in_array($name, ['reimport-images', 'description-link', 'clean-ai-image'], true)) $sheetRoute->middleware('throttle:10,1');
+    }
     Route::patch('/imported-products/{product}/price', [ImportedProductsController::class, 'updatePrice'])->name('imported-products.price');
     Route::patch('/imported-products/{product}/variants', [ImportedProductsController::class, 'updateVariants'])->name('imported-products.variants');
     Route::patch('/imported-products/{product}/description', [ImportedProductsController::class, 'updateDescription'])->name('imported-products.description');

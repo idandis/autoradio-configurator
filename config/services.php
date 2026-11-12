@@ -45,6 +45,12 @@ return [
         'version' => env('SHOPIFY_API_VERSION', '2026-04'),
     ],
 
+    'aliexpress' => [
+        'app_key' => env('ALIEXPRESS_APP_KEY'),
+        'app_secret' => env('ALIEXPRESS_APP_SECRET'),
+        'redirect_uri' => env('ALIEXPRESS_REDIRECT_URI', 'https://www.autoradioitaliano.it/autogenesi/aliexpress/relay'),
+    ],
+
     'openai' => [
         'api_key' => env('OPENAI_API_KEY'),
         'image_model' => env('OPENAI_IMAGE_MODEL', 'gpt-image-1-mini'),

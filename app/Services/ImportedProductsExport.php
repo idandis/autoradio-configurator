@@ -31,11 +31,34 @@ class ImportedProductsExport
         $ids = $this->idsOnDate($date);
         $products = ConfiguratorProduct::with('variants')->whereIn('id', $ids)->orderBy('id')->get();
         if ($products->isEmpty()) throw new \RuntimeException('Nessun prodotto importato nella data selezionata.');
+        return $this->writeProducts($products, $date, 'prodotti-importati-'.$date.'-shopify.xlsx');
+    }
+
+    public function writeProduct(ConfiguratorProduct $product): string
+    {
+        return $this->writeProducts(collect([$product->fresh()->load('variants')]), 'Prodotto '.$product->id, 'prodotto-'.$product->id.'-shopify.xlsx');
+    }
+
+    public function writeAllRadios(): string
+    {
+        $products = ConfiguratorProduct::with('variants')->where('category', 'screen')
+            ->where(fn ($q) => $q->whereNull('meta->type')->orWhere('meta->type', '!=', 'DASHCAM'))
+            ->whereNot(fn ($q) => $q->where('title', 'like', 'DVR %')->orWhere('title', 'like', 'Dashcam %')
+                ->orWhere('title', 'like', 'Marco %')->orWhere('title', 'Donation'))
+            ->orderBy('id')->get();
+        if ($products->isEmpty()) throw new \RuntimeException('Nessuna radio nel catalogo.');
+        return $this->writeProducts($products, 'Tutte le radio', 'tutte-le-radio-shopify.xlsx');
+    }
+
+    private function writeProducts(\Illuminate\Support\Collection $products, string $date, string $filename): string
+    {
         $template = app(AutogenesiTemplateExport::class);
         $rows = [];
         $analysis = [];
         foreach ($products as $p) {
-            if (mb_strlen($p->body_html ?? '') > 32767) throw new \RuntimeException('Descrizione troppo lunga per Excel: '.$p->title);
+            $html = $p->body_html ?? '';
+            if (mb_strlen($html) > 32767) $html = preg_replace('~(</(?:p|li|ul|ol|div|h[1-6])>)\s+(?=<)~iu', '$1', trim($html));
+            if (mb_strlen($html) > 32767) throw new \RuntimeException('Descrizione troppo lunga per Excel: '.$p->title);
             $images = collect([$p->image_url, ...($p->meta['gallery_images'] ?? []), ...$p->variants->pluck('image_url')->all(), ...array_column($p->meta['original_dashboard_images'] ?? [], 'url')])->filter()->unique()->values()->all();
             $references = [];
             foreach ($p->meta['original_dashboard_images'] ?? [] as $dashboard) {
@@ -50,14 +73,14 @@ class ImportedProductsExport
             $base = array_replace(array_fill_keys($template->columns(), ''), [
                 'Title' => $p->title, 'Handle' => $p->handle, 'ID' => $p->meta['shopify_product_id'] ?? '',
                 'Type' => ($p->meta['type'] ?? null) ?: match ($p->category) { 'screen' => 'Radio AM/FM', 'camera' => 'Cámara', 'speaker' => 'Altavoces', default => 'Accesorios' },
-                'Body HTML' => $p->body_html ?? '', 'Status' => 'Active', AutogenesiTemplateExport::BRAND => $p->brand ?? '',
-                AutogenesiTemplateExport::MODEL => empty($p->model) ? '' : (preg_match('/^\s*\d+\s*[:：]/u', $p->model) ? $p->model : '1:'.$p->model),
+                'Body HTML' => $html, 'Status' => 'Active', AutogenesiTemplateExport::BRAND => app(AutogenesiVehicleTransform::class)->fromFields($p->brand ?? '', $p->model ?? '')['brand'],
+                AutogenesiTemplateExport::MODEL => app(AutogenesiVehicleTransform::class)->fromFields($p->brand ?? '', $p->model ?? '')['model'],
                 AutogenesiTemplateExport::YEAR => $p->year_from && $p->year_to ? $p->year_from.'-'.$p->year_to : '',
                 AutogenesiTemplateExport::DIN => $p->meta['din'] ?? '', AutogenesiTemplateExport::DASHBOARD => $reference,
                 'Metafield: custom.altavoces [single_line_text_field]' => implode(' | ', (array) ($p->meta['speaker_sizes'] ?? [])),
                 'Metafield: shopify.vehicle-coaxial-speaker-nominal-size [list.metaobject_reference]' => $p->meta['speaker_nominal_size'] ?? '',
             ]);
-            $variants = $p->variants->values();
+            $variants = $p->variants->sortBy(fn ($v) => app(CatalogPriceUpdater::class)->variantOrder($v))->values();
             $offset = count($rows);
             for ($i = 0; $i < max($variants->count(), count($images), 1); $i++) {
                 $row = $base;
@@ -70,22 +93,26 @@ class ImportedProductsExport
                     $row['Variant ID'] = $v->shopify_variant_id ?? '';
                     $row['Variant SKU'] = $v->sku ?? '';
                     $row['Variant Price'] = $v->price ?? '';
+                    $row['Variant Inventory Tracker'] = '';
+                    $row['Variant Inventory Policy'] = 'continue';
                     foreach (['Italia' => 'italia', 'Resto del Mondo' => 'resto_del_mondo', 'USA-CANADA' => 'usa_canada', 'spagna' => 'spagna'] as $label => $key) $row['Price / '.$label] = $v->meta['regional_prices'][$key] ?? '';
                 } elseif ($i === 0 && $variants->isEmpty()) {
                     $row['Option1 Value'] = 'Default Title';
                     $row['Variant Price'] = $p->price_min ?? '';
+                    $row['Variant Inventory Tracker'] = '';
+                    $row['Variant Inventory Policy'] = 'continue';
                 }
                 $row['Image Src'] = isset($images[$i]) ? $this->imageUrl($images[$i]) : '';
                 if (isset($images[$i]) && ! $row['Image Src']) $analysis[] = $this->note($p, 'Immagine', 'Da completare', 'URL pubblico non disponibile: '.$images[$i]);
                 $rows[] = $row;
             }
             $analysis[] = $this->note($p, 'Data importazione', 'Esportato', $date.' · Europe/Rome · Products!A'.($offset + 2));
-            if ($dashboard && ! $reference) $analysis[] = $this->note($p, 'Foto cruscotto', 'Da completare', 'La foto è selezionata nel configuratore. Per il metafield Shopify serve il nome esatto o GID del file già caricato in Shopify Files.');
+            if (!empty($p->meta['original_dashboard_images']) && ! $reference) $analysis[] = $this->note($p, 'Foto cruscotto', 'Da completare', 'La foto è selezionata nel configuratore. Per il metafield Shopify serve il nome esatto o GID del file già caricato in Shopify Files.');
             foreach ($p->meta['vehicle_compatibilities'] ?? [] as $entry) $analysis[] = $this->note($p, 'Compatibilità', 'Intervallo specifico', $entry['brand'].' '.$entry['model'].' '.$entry['year_from'].'-'.$entry['year_to']);
         }
         $disk = Storage::disk('local');
         $disk->makeDirectory('imported-products/exports');
-        $path = $disk->path('imported-products/exports/prodotti-importati-'.$date.'-shopify.xlsx');
+        $path = $disk->path('imported-products/exports/'.$filename);
         $template->writeRows($rows, $analysis, $path);
         return $path;
     }

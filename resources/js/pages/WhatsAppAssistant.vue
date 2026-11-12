@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Head, useForm } from '@inertiajs/vue3';
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import axios from 'axios';
 import { Eye, MessageCircle, RefreshCw, Save, ShieldCheck, SlidersHorizontal, Trash2, Zap } from '@lucide/vue';
 
@@ -48,6 +48,126 @@ const chatPage = ref(1);
 const chatLastPage = ref(1);
 const chatError = ref('');
 const changingChat = ref<number | null>(null);
+const drafting = ref<number | null>(null);
+type Lesson = { id: number; scope: 'general' | 'product' | 'client'; target: string; instruction: string; question: string | null; locale: string };
+const recontact = ref<{ phone: string; text: string; subject: string; evidence: string; messages: number; attachments: number; products: string[]; lessons: Lesson[]; locale: string; source: 'ai' | 'bot' | 'memory'; input_tokens: number | null; output_tokens: number | null; manual?: boolean; language?: string } | null>(null);
+const manualOpen = ref(false);
+const manualText = ref('');
+const manualLanguage = ref('Spagnolo');
+const manualError = ref('');
+const openManual = async (client: ClientChat) => {
+    if (recontact.value?.phone !== client.phone) recontact.value = null;
+    historyClient.value = client; recontactPhone.value = client.phone;
+    manualText.value = recontact.value?.text ?? ''; manualError.value = ''; manualOpen.value = true;
+    await nextTick();
+    document.getElementById('manual-message')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+};
+const prepareManual = async () => {
+    if (!historyClient.value || !manualText.value.trim() || !manualLanguage.value.trim()) return;
+    rewriting.value = true; manualError.value = ''; copyNotice.value = '';
+    try {
+        const { data } = await axios.post(`/dashboard/whatsapp/chats/${historyClient.value.id}/recontact/manual`, {
+            text: manualText.value, language: manualLanguage.value,
+        }, { timeout: 120000 });
+        recontact.value = data; manualOpen.value = false; recontactError.value = ''; rewriteError.value = '';
+        lessonOpen.value = false; lessonInstruction.value = ''; lessonProduct.value = '';
+    } catch (e: any) { manualError.value = e.response?.data?.message ?? 'Riscrittura non riuscita. Il tuo testo è conservato.'; }
+    finally { rewriting.value = false; }
+};
+const lessonOpen = ref(false);
+const lessonScope = ref('client');
+const lessonProduct = ref('');
+const lessonInstruction = ref('');
+const lessonQuestion = ref('');
+const lessonBusy = ref(false);
+const lessonNotice = ref('');
+const lessonError = ref('');
+const saveLesson = async () => {
+    if (!historyClient.value || !recontact.value) return;
+    lessonBusy.value = true; lessonNotice.value = ''; lessonError.value = '';
+    try {
+        const { data } = await axios.post(`/dashboard/whatsapp/chats/${historyClient.value.id}/lessons`, {
+            scope: lessonScope.value, product: lessonProduct.value || null, instruction: lessonInstruction.value,
+            question: lessonQuestion.value || null, text: recontact.value.text, locale: recontact.value.locale, manual: !!recontact.value.manual,
+        });
+        recontact.value.lessons = data.lessons; lessonNotice.value = 'Insegnamento approvato e salvato.'; lessonOpen.value = false;
+    } catch (e: any) { lessonError.value = e.response?.data?.message ?? 'Salvataggio non riuscito.'; }
+    finally { lessonBusy.value = false; }
+};
+const deleteLesson = async (id: number) => {
+    if (!historyClient.value || !recontact.value) return;
+    lessonBusy.value = true; lessonError.value = '';
+    try {
+        const { data } = await axios.delete(`/dashboard/whatsapp/chats/${historyClient.value.id}/lessons/${id}`);
+        recontact.value.lessons = data.lessons; lessonNotice.value = 'Insegnamento eliminato.';
+    } catch { lessonError.value = 'Eliminazione non riuscita.'; }
+    finally { lessonBusy.value = false; }
+};
+const recontactError = ref('');
+const recontactPhone = ref('');
+const rewriteInstructions = ref('');
+const rewriting = ref(false);
+const rewriteError = ref('');
+const rewriteRecontact = async () => {
+    if (!recontact.value || !historyClient.value || !rewriteInstructions.value.trim() || rewriting.value) return;
+    const current = recontact.value;
+    rewriting.value = true; rewriteError.value = ''; copyNotice.value = '';
+    try {
+        const { data } = await axios.post(`/dashboard/whatsapp/chats/${historyClient.value.id}/recontact/${current.manual ? 'manual' : 'rewrite'}`, {
+            text: current.text, instructions: rewriteInstructions.value, ...(current.manual ? { language: current.language ?? manualLanguage.value } : {}),
+        }, { timeout: 180000 });
+        if (recontact.value !== current) return;
+        recontact.value = data; lessonInstruction.value = rewriteInstructions.value; rewriteInstructions.value = ''; copyNotice.value = 'Bozza riscritta. Puoi modificarla ancora o copiarla.';
+    } catch (e: any) {
+        if (recontact.value !== current) return;
+        rewriteError.value = e.response?.status === 429 ? 'Attendi un minuto prima di chiedere un’altra riscrittura.'
+            : e.response?.data?.message ?? 'Riscrittura non riuscita. La bozza precedente è conservata.';
+    } finally { rewriting.value = false; }
+};
+const historyClient = ref<ClientChat | null>(null);
+const syncingHistory = ref(false);
+const historyNotice = ref('');
+const recoverHistory = async (client: ClientChat) => {
+    historyClient.value = client; recontactPhone.value = client.phone; recontact.value = null; manualOpen.value = false;
+    syncingHistory.value = true; historyNotice.value = ''; recontactError.value = '';
+    await nextTick();
+    document.getElementById('recontact-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    try {
+        const { data } = await axios.post(`/dashboard/whatsapp/chats/${client.id}/history`, {}, { timeout: 90000 });
+        historyNotice.value = data.message;
+    } catch (e: any) {
+        recontactError.value = e.response?.status === 429 ? 'Attendi un minuto prima di ripetere il recupero.'
+            : e.response?.data?.message ?? 'Recupero non riuscito. Verifica Docker e WAHA sul Mac.';
+    } finally { syncingHistory.value = false; }
+};
+const copyNotice = ref('');
+const prepareRecontact = async (client: ClientChat) => {
+    drafting.value = client.id; manualOpen.value = false; recontactError.value = ''; recontact.value = null; copyNotice.value = '';
+    rewriteInstructions.value = ''; rewriteError.value = '';
+    lessonOpen.value = false; lessonScope.value = 'client'; lessonInstruction.value = ''; lessonQuestion.value = ''; lessonNotice.value = ''; lessonError.value = '';
+    historyClient.value = client; historyNotice.value = '';
+    recontactPhone.value = client.phone;
+    await nextTick();
+    document.getElementById('recontact-panel')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    try {
+        const { data } = await axios.post(`/dashboard/whatsapp/chats/${client.id}/recontact`, {}, { timeout: 180000 });
+        recontact.value = data;
+        lessonProduct.value = data.products?.[0] ?? '';
+        document.getElementById('test-chat')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e: any) {
+        const status = e.response?.status;
+        recontactError.value = status === 429 ? 'Troppe richieste: attendi un minuto e riprova.'
+            : [401, 419].includes(status) ? 'Sessione scaduta. Ricarica la pagina e accedi nuovamente.'
+            : e.code === 'ECONNABORTED' ? 'La preparazione ha impiegato troppo tempo. Riprova.'
+            : e.response?.data?.message ?? 'Preparazione non riuscita. Verifica il collegamento locale e riprova.';
+    }
+    finally { drafting.value = null; }
+};
+const copyRecontact = async () => {
+    if (!recontact.value) return;
+    try { await navigator.clipboard.writeText(recontact.value.text); copyNotice.value = 'Messaggio copiato.'; }
+    catch { copyNotice.value = 'Seleziona il testo e copialo manualmente.'; }
+};
 const deletingChat = ref<number | 'all' | null>(null);
 let chatVersion = 0;
 const syncingChats = ref(false);
@@ -73,12 +193,14 @@ const syncChats = async () => {
     syncingChats.value = true; chatError.value = ''; syncNotice.value = '';
     try {
         let offset: number | null = 0;
+        let found = 0, imported = 0, skipped = 0;
         while (offset !== null) {
-            const { data }: { data: { next_offset: number | null } } = await axios.post('/dashboard/whatsapp/chats/sync', { offset, label_id: labelId });
+            const { data }: { data: { next_offset: number | null; found: number; imported: number; skipped: number } } = await axios.post('/dashboard/whatsapp/chats/sync', { offset, label_id: labelId });
+            found += data.found; imported += data.imported; skipped += data.skipped;
             offset = data.next_offset;
         }
         await loadChats(1);
-        syncNotice.value = labelId ? `Importazione completata: ${chatLabels.value.find(l => l.id === labelId)?.name ?? 'etichetta selezionata'}.` : 'Sincronizzazione di tutte le chat completata.';
+        syncNotice.value = `${labelId ? chatLabels.value.find(l => l.id === labelId)?.name ?? 'Etichetta selezionata' : 'Tutte le chat'}: ${imported} chat importate o aggiornate su ${found} trovate.${skipped ? ` ${skipped} chat escluse (gruppi o numero non risolvibile).` : ''}`;
     } catch { chatError.value = 'Sincronizzazione non riuscita. Verifica che WAHA locale sia collegato.'; }
     finally { syncingChats.value = false; }
 };
@@ -90,10 +212,14 @@ const loadChats = async (page = chatPage.value) => {
     loadingChats.value = true;
     const version = chatVersion;
     try {
-        const { data } = await axios.get('/dashboard/whatsapp/chats', { params: { page, q: chatSearch.value } });
+        const { data } = await axios.get('/dashboard/whatsapp/chats', { params: { page, q: chatSearch.value }, timeout: 15000 });
         if (version !== chatVersion) return;
         clients.value = data.data; chatPage.value = data.current_page; chatLastPage.value = data.last_page; chatError.value = '';
-    } catch { chatError.value = 'Impossibile aggiornare le chat. Riprova.'; }
+    } catch (e: any) {
+        chatError.value = [401, 419].includes(e.response?.status) ? 'Sessione scaduta. Ricarica la pagina e accedi nuovamente.'
+            : e.code === 'ECONNABORTED' ? 'Il server locale non risponde. Riattiva localhost e riprova.'
+            : 'Impossibile aggiornare le chat. Riprova.';
+    }
     finally { loadingChats.value = false; }
 };
 const toggleChat = async (client: ClientChat) => {
@@ -245,16 +371,18 @@ const toggleFields = [
             <p v-if="labelError" role="alert" class="mt-3 text-sm text-red-500">{{ labelError }}</p>
             <p v-if="syncNotice" role="status" class="mt-3 text-sm text-emerald-600">{{ syncNotice }}</p>
             <p v-if="chatError" role="alert" class="mt-3 text-sm text-red-500">{{ chatError }}</p>
+            <p v-if="recontactError" role="alert" class="mt-3 text-sm text-red-500">{{ recontactError }}</p>
             <div class="mt-4 max-h-[728px] overflow-auto"><table class="min-w-[760px] w-full text-left text-sm">
-                <thead class="sticky top-0 z-10 bg-card"><tr class="h-12 border-b text-muted-foreground"><th scope="col" class="py-3 pr-4">Cliente</th><th scope="col" class="py-3 pr-4" title="Etichetta scelta durante l’importazione">Etichetta</th><th scope="col" class="py-3 pr-4">Stato bot</th><th scope="col" class="py-3 pr-4">Motivo pausa</th><th scope="col" class="py-3 pr-4">Ultima attività</th><th scope="col" class="py-3">Azione</th></tr></thead>
-                <tbody><tr v-for="client in clients" :key="client.id" class="h-[68px] border-b last:border-0">
-                    <td class="py-3 pr-4 whitespace-nowrap">+{{ client.phone }}<span v-if="!client.authorized" class="mt-1 block text-xs text-muted-foreground">Fuori dai numeri di prova</span></td>
+                <thead class="sticky top-0 z-10 bg-card"><tr class="h-12 border-b text-muted-foreground"><th scope="col" class="py-3 pr-4">Cliente</th><th scope="col" class="py-3 pr-4" title="Etichetta scelta durante l’importazione">Etichetta</th><th scope="col" class="py-3 pr-4">Stato bot</th><th scope="col" class="py-3 pr-4">Motivo pausa</th><th scope="col" class="py-3 pr-4">Ultima attività</th><th scope="col" class="py-3 pr-4">Ricontatto</th><th scope="col" class="py-3">Azione</th></tr></thead>
+                <tbody><tr v-for="client in clients" :key="client.id" :aria-selected="historyClient?.id === client.id" class="h-[68px] border-b transition-colors last:border-0" :class="historyClient?.id === client.id ? 'bg-emerald-500/15 ring-1 ring-inset ring-emerald-500/50' : ''">
+                    <td class="py-3 pr-4 whitespace-nowrap" :class="historyClient?.id === client.id ? 'pl-3 font-semibold text-emerald-600 dark:text-emerald-400' : ''">+{{ client.phone }}<span v-if="historyClient?.id === client.id" class="mt-1 block text-xs font-medium">Cliente in analisi</span><span v-if="!client.authorized" class="mt-1 block text-xs text-muted-foreground">Fuori dai numeri di prova</span></td>
                     <td class="max-w-56 truncate whitespace-nowrap py-3 pr-4" :title="client.import_label_name ?? undefined">{{ client.import_label_name ?? '—' }}</td>
                     <td class="py-3 pr-4 whitespace-nowrap" :class="client.paused ? 'text-amber-600' : 'text-emerald-600'">{{ client.paused ? (['handoff', 'technical_handoff', 'photo_review'].includes(client.pause_reason ?? '') ? 'Operatore · standard attive' : 'In pausa') : 'Attivo' }}</td>
                     <td class="whitespace-nowrap py-3 pr-4">{{ client.pause_reason ? (pauseReasons[client.pause_reason] ?? 'In pausa') : '—' }}</td>
                     <td class="py-3 pr-4 whitespace-nowrap">{{ chatTime(client.last_activity_at) }}</td>
+                    <td class="whitespace-nowrap py-3 pr-4"><button type="button" :disabled="!runtime.local || lessonBusy || rewriting || syncingHistory || drafting !== null || deletingChat !== null || syncingChats" :aria-label="`Prepara ricontatto per +${client.phone}`" class="rounded-lg border border-emerald-600/40 px-3 py-2 font-medium text-emerald-600 hover:bg-emerald-500/10 disabled:opacity-50" @click="prepareRecontact(client)">{{ drafting === client.id ? 'Lettura chat e bozza…' : 'Prepara ricontatto' }}</button><button type="button" :disabled="!runtime.local || lessonBusy || rewriting || syncingHistory || drafting !== null" class="ml-2 rounded-lg border px-3 py-2 text-sm disabled:opacity-50" :aria-label="`Recupera storico per +${client.phone}`" @click="recoverHistory(client)">Recupera storico</button><button type="button" :disabled="lessonBusy || rewriting || syncingHistory || drafting !== null" class="ml-2 rounded-lg border px-3 py-2 text-sm disabled:opacity-50" @click="openManual(client)">Scrivi messaggio</button></td>
                     <td class="whitespace-nowrap py-3"><button type="button" :disabled="changingChat !== null || deletingChat !== null || syncingChats" :aria-label="`${client.paused ? 'Riprendi bot' : 'Metti in pausa'} per +${client.phone}`" class="whitespace-nowrap rounded-lg border px-3 py-2 font-medium hover:bg-muted disabled:opacity-50" @click="toggleChat(client)">{{ changingChat === client.id ? 'Salvataggio…' : client.paused ? 'Riprendi bot' : 'Metti in pausa' }}</button><button type="button" :disabled="deletingChat !== null || changingChat !== null || syncingChats" :aria-label="`Elimina riga per +${client.phone}`" title="Elimina riga" class="ml-2 inline-flex rounded-lg border border-red-500/30 p-2 text-red-600 hover:bg-red-500/10 disabled:opacity-50" @click="deleteChat(client)"><Trash2 class="size-4" /></button></td>
-                </tr><tr v-if="!clients.length"><td colspan="6" class="py-5 text-muted-foreground">{{ loadingChats ? 'Caricamento…' : 'Nessuna chat trovata. Importa le chat da un’etichetta oppure attendi un nuovo contatto gestito dal servizio.' }}</td></tr></tbody>
+                </tr><tr v-if="!clients.length"><td colspan="7" class="py-5 text-muted-foreground">{{ loadingChats ? 'Caricamento…' : 'Nessuna chat trovata. Importa le chat da un’etichetta oppure attendi un nuovo contatto gestito dal servizio.' }}</td></tr></tbody>
             </table></div>
             <div v-if="chatLastPage > 1" class="mt-3 flex items-center justify-end gap-3 text-sm"><button type="button" :disabled="chatPage <= 1 || loadingChats" class="rounded border px-3 py-1 disabled:opacity-50" @click="loadChats(chatPage - 1)">Precedente</button><span>{{ chatPage }} / {{ chatLastPage }}</span><button type="button" :disabled="chatPage >= chatLastPage || loadingChats" class="rounded border px-3 py-1 disabled:opacity-50" @click="loadChats(chatPage + 1)">Successiva</button></div>
         </section>
@@ -353,7 +481,64 @@ const toggleFields = [
                 <div v-if="Object.keys(form.errors).length" role="alert" class="rounded-lg border border-red-500/40 bg-red-500/10 p-4 text-sm text-red-500"><p v-for="(value, key) in form.errors" :key="key">{{ value }}</p></div>
             </form>
 
-            <aside class="space-y-5 xl:sticky xl:top-6">
+            <aside id="test-chat" class="space-y-5 xl:sticky xl:top-6">
+                <section v-if="recontactPhone && !recontact" id="recontact-panel" class="rounded-xl border bg-card p-5" aria-live="polite">
+                    <h2 class="text-lg font-semibold">Ricontatto cliente · +{{ recontactPhone }}</h2>
+                    <p v-if="drafting !== null" role="status" class="mt-3 flex items-center gap-2 text-sm"><RefreshCw class="size-4 animate-spin" />Lettura della conversazione e preparazione della bozza…</p>
+                    <p v-if="recontactError" role="alert" class="mt-3 text-sm text-red-500">{{ recontactError }}</p>
+                    <p v-if="syncingHistory" role="status" class="mt-3 flex items-center gap-2 text-sm"><RefreshCw class="size-4 animate-spin" />Recupero dei messaggi precedenti da WhatsApp…</p>
+                    <p v-if="historyNotice" role="status" class="mt-3 text-sm">{{ historyNotice }}</p>
+                    <div v-if="historyClient" class="mt-3 flex flex-wrap gap-2">
+                        <button type="button" :disabled="!runtime.local || lessonBusy || rewriting || syncingHistory || drafting !== null" class="rounded-lg border px-3 py-2 text-sm disabled:opacity-50" @click="recoverHistory(historyClient)">{{ syncingHistory ? 'Recupero…' : 'Recupera storico' }}</button>
+                        <button type="button" :disabled="!runtime.local || lessonBusy || rewriting || syncingHistory || drafting !== null" class="rounded-lg border px-3 py-2 text-sm disabled:opacity-50" @click="prepareRecontact(historyClient)">Prepara ricontatto</button>
+                        <button type="button" :disabled="lessonBusy || rewriting || syncingHistory || drafting !== null" class="rounded-lg border px-3 py-2 text-sm disabled:opacity-50" @click="openManual(historyClient)">Scrivi tu il messaggio</button>
+                    </div>
+                </section>
+                <section v-if="manualOpen" id="manual-message" class="rounded-xl border bg-card p-5">
+                    <h2 class="text-lg font-semibold">Prepara un messaggio dal tuo testo</h2>
+                    <p class="mt-1 text-xs text-muted-foreground">Funziona anche senza lo storico WAHA. L’AI usa solo il tuo testo, lo rende breve e naturale e non lo invia.</p>
+                    <label for="manual-language" class="mt-4 block text-sm font-medium">Lingua del messaggio</label>
+                    <input id="manual-language" v-model="manualLanguage" :disabled="rewriting" maxlength="60" placeholder="Es. Spagnolo, italiano, inglese…" class="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" />
+                    <label for="manual-text" class="mt-3 block text-sm font-medium">Il tuo testo, anche in italiano</label>
+                    <textarea id="manual-text" v-model="manualText" :disabled="rewriting" maxlength="6000" rows="5" class="mt-1 w-full rounded-lg border bg-background px-3 py-2 text-sm" />
+                    <button type="button" :disabled="rewriting || !manualText.trim() || !manualLanguage.trim()" class="mt-3 flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" @click="prepareManual"><RefreshCw v-if="rewriting" class="size-4 animate-spin" />{{ rewriting ? 'Preparazione…' : 'Sistema nella lingua scelta' }}</button>
+                    <p v-if="manualError" role="alert" class="mt-2 text-sm text-red-500">{{ manualError }}</p>
+                </section>
+                <section v-if="recontact" class="rounded-xl border border-emerald-600/40 bg-card p-5">
+                    <h2 class="text-lg font-semibold">Ricontatto cliente · bozza</h2>
+                    <p class="mt-2 text-sm">+{{ recontact.phone }} · {{ recontact.manual ? `Dal tuo testo · ${recontact.language}` : `${recontact.messages} messaggi letti` }}</p>
+                    <p class="mt-1 text-xs font-medium text-emerald-600">{{ recontact.source === 'bot' ? 'Bot · 0 token AI' : recontact.source === 'memory' ? 'Bozza dalla memoria · 0 token AI' : `AI${recontact.input_tokens !== null ? ` · ${recontact.input_tokens} token input · ${recontact.output_tokens ?? 0} output` : ''}` }}</p>
+                    <p v-if="!recontact.manual" class="mt-2 text-sm font-medium">Richiesta individuata: {{ recontact.subject }}</p>
+                    <p v-if="!recontact.manual" class="mt-1 whitespace-pre-wrap text-xs text-muted-foreground">Dalla conversazione: «{{ recontact.evidence }}»</p>
+                    <p class="mt-1 text-xs text-muted-foreground">Solo anteprima: nessun invio al cliente.</p>
+                    <button v-if="historyClient" type="button" :disabled="rewriting || lessonBusy" class="mt-3 rounded-lg border px-3 py-2 text-sm disabled:opacity-50" @click="openManual(historyClient)">Scrivi tu il messaggio</button>
+                    <p v-if="recontact.attachments" class="mt-1 text-xs text-muted-foreground">{{ recontact.attachments }} allegati presenti: contenuti non analizzati.</p>
+                    <label for="recontact-draft" class="mt-4 block text-sm font-medium">Messaggio personalizzato · modificabile</label>
+                    <textarea id="recontact-draft" v-model="recontact.text" :disabled="rewriting || lessonBusy" maxlength="6000" rows="7" class="mt-2 w-full rounded-lg border bg-background px-3 py-2.5 text-sm disabled:opacity-50" @input="copyNotice = ''" />
+                    <label for="recontact-instructions" class="mt-4 block text-sm font-medium">Come vuoi modificare il messaggio? Scrivi in italiano</label>
+                    <textarea id="recontact-instructions" v-model="rewriteInstructions" :disabled="rewriting" maxlength="2000" rows="3" placeholder="Es. Rendilo più breve e informale. Togli la proposta di inviare foto e chiedi se ha ancora dubbi prima di acquistare." class="mt-2 w-full rounded-lg border bg-background px-3 py-2.5 text-sm disabled:opacity-50" />
+                    <p class="mt-1 text-xs text-muted-foreground">L’AI applica le tue indicazioni alla bozza, mantenendo la lingua del cliente. Nessun invio.</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <button type="button" :disabled="lessonBusy || rewriting || !rewriteInstructions.trim() || !recontact.text.trim()" class="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-semibold disabled:opacity-50" @click="rewriteRecontact"><RefreshCw v-if="rewriting" class="size-4 animate-spin" />{{ rewriting ? 'Riscrittura…' : 'Riscrivi con AI' }}</button>
+                        <button type="button" :disabled="lessonBusy || rewriting || !recontact.text.trim()" class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" @click="copyRecontact">Copia messaggio</button>
+                    </div>
+                    <p v-if="rewriteError" role="alert" class="mt-2 text-sm text-red-500">{{ rewriteError }}</p>
+                    <p v-if="copyNotice" role="status" class="mt-2 text-sm">{{ copyNotice }}</p>
+                    <div class="mt-5 border-t pt-4">
+                        <button type="button" :disabled="rewriting || lessonBusy" class="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50" @click="lessonOpen = !lessonOpen">{{ lessonOpen ? 'Chiudi insegnamento' : 'Salva come insegnamento' }}</button>
+                        <div v-if="lessonOpen" class="mt-3 space-y-3">
+                            <label class="block text-sm">Valido per<select v-model="lessonScope" class="mt-1 w-full rounded-lg border bg-background px-3 py-2"><option value="client">Solo questo cliente</option><option value="product" :disabled="!recontact.products?.length">Solo un prodotto</option><option value="general">Regola generale per tutti</option></select></label>
+                            <label v-if="lessonScope === 'product'" class="block text-sm">Prodotto<select v-model="lessonProduct" class="mt-1 w-full rounded-lg border bg-background px-3 py-2"><option v-for="handle in recontact.products" :key="handle" :value="handle">{{ handle }}</option></select></label>
+                            <label class="block text-sm">Regola da approvare, in italiano<textarea v-model="lessonInstruction" maxlength="1500" rows="3" class="mt-1 w-full rounded-lg border bg-background px-3 py-2" placeholder="Es. Non riproporre foto già inviate. Chiedi solo se restano dubbi sul preventivo." /></label>
+                            <label class="block text-sm">Domanda esatta da riconoscere senza AI (facoltativa)<input v-model="lessonQuestion" maxlength="500" class="mt-1 w-full rounded-lg border bg-background px-3 py-2" /></label>
+                            <p class="text-xs text-muted-foreground">Approvi la regola e la bozza visibile. Se indichi una domanda esatta, il bot riuserà questa risposta senza AI nella stessa lingua e nell’ambito scelto. I dettagli di un prodotto vanno salvati solo per quel prodotto.</p>
+                            <button type="button" :disabled="lessonBusy || rewriting || !lessonInstruction.trim() || !recontact.text.trim() || (lessonScope === 'product' && !lessonProduct)" class="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50" @click="saveLesson">{{ lessonBusy ? 'Salvataggio…' : 'Approva e salva insegnamento' }}</button>
+                        </div>
+                        <p v-if="lessonNotice" role="status" class="mt-2 text-sm text-emerald-600">{{ lessonNotice }}</p>
+                        <p v-if="lessonError" role="alert" class="mt-2 text-sm text-red-500">{{ lessonError }}</p>
+                        <details v-if="recontact.lessons?.length" class="mt-3 text-sm"><summary class="cursor-pointer">Insegnamenti applicabili ({{ recontact.lessons.length }})</summary><div v-for="item in recontact.lessons" :key="item.id" class="mt-2 rounded-lg border p-3"><p class="text-xs text-muted-foreground">{{ item.scope === 'general' ? 'Generale' : item.scope === 'product' ? 'Prodotto' : 'Questo cliente' }}</p><p class="mt-1 whitespace-pre-wrap">{{ item.instruction }}</p><button type="button" :disabled="lessonBusy || rewriting" class="mt-2 text-xs text-red-500 disabled:opacity-50" @click="deleteLesson(item.id)">Elimina insegnamento</button></div></details>
+                    </div>
+                </section>
                 <section class="overflow-hidden rounded-xl border bg-card">
                     <div class="border-b p-5"><h2 class="flex items-center gap-2 text-lg font-semibold"><Eye class="size-5 text-emerald-500" /> Anteprima della risposta</h2><button type="button" :disabled="busy || sendingPhotoEmail || !chat.length" class="mt-3 rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50" @click="resetChat">Reset chat</button><p class="mt-1 text-xs text-muted-foreground">Usa le regole salvate. Simula le stesse risposte di WhatsApp: benvenuto dopo 24 ore, saluti, memoria, attesa e passaggio a operatore. Reset chat riparte da un nuovo contatto. Non invia messaggi reali.</p></div>
                     <div class="p-5">

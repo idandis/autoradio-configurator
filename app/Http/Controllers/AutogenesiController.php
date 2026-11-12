@@ -33,17 +33,22 @@ class AutogenesiController extends Controller
 {
     public function index()
     {
-        return Inertia::render('Autogenesi', ['local' => app()->environment('local'), 'detection' => session('autogenesi_detection'), 'detectionMaxYear' => now()->year - 1, 'search' => session('autogenesi_search'), 'directImport' => session('autogenesi_direct_import'),
+        return Inertia::render('Autogenesi', ['reimportImagesResult' => session('reimport_images_result'), 'local' => app()->environment('local'), 'workerError' => session('errors')?->first('worker'), 'detection' => session('autogenesi_detection'), 'detectionMaxYear' => now()->year - 1, 'search' => session('autogenesi_search'), 'directImport' => session('autogenesi_direct_import'),
+            'apiConnection' => app()->environment('local') ? app(\App\Services\AutogenesiAliExpressAuth::class)->status(auth()->id()) : null,
             'batches' => fn () => AutogenesiBatch::with('items')->latest()->limit(10)->get(),
             'products' => fn () => AutogenesiProduct::where('status', 'draft')->latest()->get()->map(function ($p) {
                 $data = $p->toArray();
+                $data['processing_epoch'] = app(\App\Services\ProductSheetProcessing::class)->epoch('draft', $p->id);
+                $entries = $p->metadata['vehicle_compatibilities'] ?? [];
+                if (!$entries) $entries = array_map(fn ($e) => $e + ['year_from' => $p->year_from, 'year_to' => $p->year_to], app(\App\Services\VehicleImageResolver::class)->vehicleEntries($p->brand, $p->model));
+                $data['vehicle_groups'] = app(\App\Services\AutogenesiVehicleTransform::class)->groups($entries);
                 unset($data['metadata']['source_text']);
                 unset($data['metadata']['description_source']['html'], $data['metadata']['previous_copy'], $data['metadata']['capture_directory']);
                 $data['images'] = array_map(fn ($image, $i) => ['url' => route('autogenesi.image', [$p, $i, 'v' => $image['sha256']]), 'id' => $image['sha256'],
-                    'ai_edited' => (bool) ($image['ai_edited'] ?? false), 'manually_cropped' => (bool) (($image['manually_cropped'] ?? false) || ($image['manually_painted'] ?? false)),
+                    'ai_edited' => (bool) ($image['ai_edited'] ?? false), 'image_reframed' => (bool) ($image['image_reframed'] ?? false), 'resolution_upscaled' => (bool) ($image['resolution_upscaled'] ?? false), 'manually_cropped' => (bool) (($image['manually_cropped'] ?? false) || ($image['manually_painted'] ?? false)),
                     'dashboard_selected' => in_array($image['sha256'], array_column(\App\Services\AutogenesiImageLayout::dashboards($p), 'sha256'), true), 'shopify_file_reference' => $image['shopify_file_reference'] ?? '',
                     'ai_generated' => (bool) ($image['ai_generated'] ?? false), 'web_sources' => $image['web_sources'] ?? [],
-                    'local_only' => (bool) (($image['uploaded'] ?? false) || ($image['ai_generated'] ?? false) || ($image['ai_edited'] ?? false) || ($image['square_cropped'] ?? false) || ($image['manually_painted'] ?? false)),
+                    'local_only' => (bool) (($image['uploaded'] ?? false) || ($image['imported_at'] ?? false) || ($image['ai_generated'] ?? false) || ($image['ai_edited'] ?? false) || ($image['image_reframed'] ?? false) || ($image['resolution_upscaled'] ?? false) || ($image['square_cropped'] ?? false) || ($image['manually_painted'] ?? false)),
                     'role' => $image['role'], 'source_url' => $image['source_url'], 'width' => $image['width'], 'height' => $image['height']], $p->images, array_keys($p->images));
 
                 return $data;
@@ -53,14 +58,14 @@ class AutogenesiController extends Controller
     public function detectMissing(Request $request, \App\Services\AutogenesiDetection $detector)
     {
         abort_unless(app()->environment('local'), 403);
-        $data = $request->validate(['year' => 'required|integer|min:1900|max:'.(now()->year - 1)]);
+        $data = $request->validate(['mode' => 'sometimes|in:year,brand', 'brand' => ['required_if:mode,brand', 'nullable', 'string', 'max:80', 'not_regex:/[;|\r\n]/'], 'year' => 'required_unless:mode,brand|nullable|integer|min:1900|max:'.(now()->year - 1)]);
         try {
-            $result = $detector->detect($data['year']);
+            $result = ($data['mode'] ?? 'year') === 'brand' ? $detector->detectBrand($data['brand']) : $detector->detect($data['year']);
             $request->session()->put('autogenesi_detection', $result);
-            return back()->with('status', 'Rilevati '.count($result['cars']).' modelli su 50: '.$result['counts']['missing'].' mancanti, pronti in Importa lista.');
+            return back()->with('status', 'Rilevati '.count($result['cars']).' modelli: '.$result['counts']['missing'].' mancanti, pronti in Importa lista.');
         } catch (\Throwable $e) {
             report($e);
-            return back()->withErrors(['year' => $e instanceof \RuntimeException && !$e instanceof RequestException
+            return back()->withErrors([($data['mode'] ?? 'year') === 'brand' ? 'brand' : 'year' => $e instanceof \RuntimeException && !$e instanceof RequestException
                 ? $e->getMessage() : 'Rilevamento non completato. Verifica la connessione e la configurazione OpenAI e riprova.']);
         }
     }
@@ -152,7 +157,7 @@ class AutogenesiController extends Controller
         if ($zip->open($path, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
             abort(500, 'Creazione archivio non riuscita.');
         }
-        foreach (['manifest.json', 'popup.html', 'popup.js', 'background.js', 'capture.js', 'generic.js', 'ISTRUZIONI.txt'] as $file) {
+        foreach (['manifest.json', 'popup.html', 'popup.js', 'background.js', 'capture.js', 'generic.js', 'dsers.js', 'ISTRUZIONI.txt'] as $file) {
             $zip->addFile(base_path('scripts/autogenesi/chrome-extension/'.$file), $file);
         }
         $zip->close();
@@ -188,9 +193,15 @@ class AutogenesiController extends Controller
     public function importList(Request $request, AutogenesiList $lists)
     {
         abort_unless(app()->environment('local'), 403);
-        $data = $request->validate(['list' => 'required|string|max:30000']);
+        $data = $request->validate(['list' => 'required|string|max:30000', 'engine' => 'sometimes|in:api,browser',
+            'sort_by' => 'sometimes|in:price,sales,best_match', 'origin_policy' => 'sometimes|in:prefer_eu,eu,all']);
+        if (($data['engine'] ?? 'browser') === 'api') {
+            try { app(\App\Services\AutogenesiAliExpressAuth::class)->accessToken($request->user()->id); }
+            catch (\RuntimeException $e) { return back()->withErrors(['engine' => $e->getMessage()]); }
+        }
         app(AutogenesiRunControl::class)->activate();
-        $batch = $lists->create($data['list'], $request->user()->id);
+        $batch = $lists->create($data['list'], $request->user()->id, $data['engine'] ?? 'browser', array_intersect_key($data, array_flip(['sort_by', 'origin_policy'])));
+        app(\App\Services\AutogenesiWorker::class)->ensure();
 
         return back()->with('status', 'Lista #'.$batch->id.' avviata in background: '.$batch->total.' vetture.');
     }
@@ -224,6 +235,7 @@ class AutogenesiController extends Controller
             ProcessAutogenesiBatch::dispatch($current->id)->afterCommit();
         });
 
+        app(\App\Services\AutogenesiWorker::class)->ensure();
         return back()->with('status', 'Riprese le righe non completate.');
     }
 
@@ -264,6 +276,7 @@ class AutogenesiController extends Controller
             ProcessAutogenesiBatch::dispatch($current->id, $row->id)->afterCommit();
         });
 
+        app(\App\Services\AutogenesiWorker::class)->ensure();
         return back()->with('status', 'Avviata solo la richiesta selezionata.');
     }
 
@@ -294,13 +307,22 @@ class AutogenesiController extends Controller
         }
     }
 
+    public function variantPrice(Request $request)
+    {
+        abort_unless(app()->environment('local'), 403);
+        $data = $request->validate(['cost' => 'required|numeric|gt:0|max:999999|decimal:0,2']);
+        return response()->json(app(\App\Services\AutogenesiPrice::class)->quote(number_format((float) $data['cost'], 2, '.', '')));
+    }
+
     public function update(Request $request, AutogenesiProduct $product)
     {
-        $data = $request->validate(['title' => 'required|string|max:2000', 'body_html' => 'required|string|max:150000',
+        $catalog = $product instanceof \App\Models\CatalogProductSheet;
+        $data = $request->validate(['title' => 'required|string|max:'.($catalog ? 255 : 2000), 'body_html' => ($catalog ? 'nullable' : 'required').'|string|max:150000',
             'additional_source_urls' => 'sometimes|array|max:30', 'additional_source_urls.*' => ['nullable', 'url:http,https', 'max:4096', function ($attribute, $value, $fail) { if ($value && (parse_url($value, PHP_URL_USER) || parse_url($value, PHP_URL_PASS))) $fail('Inserisci un link senza credenziali.'); }],
-            'vehicles' => 'sometimes|required|array|min:1|max:100', 'vehicles.*.brand' => 'required|string|max:80', 'vehicles.*.model' => 'required|string|max:120',
+            'vehicles' => 'sometimes|required|array|min:1|max:100', 'vehicles.*.brand' => 'required|string|max:255', 'vehicles.*.model' => 'required|string|max:4000',
             'vehicles.*.year_from' => 'required|integer|min:1|max:65535', 'vehicles.*.year_to' => 'required|integer|gte:vehicles.*.year_from|max:65535',
-            'variants' => 'required|array|size:'.count($product->variants), 'variants.*.sku' => 'sometimes|required|string', 'variants.*.label' => 'sometimes|required|string|max:500', 'variants.*.selling_price' => 'nullable|numeric|gt:0|max:999999']);
+            'variants' => 'required|array|size:'.count($product->variants), 'variants.*.sku' => 'sometimes|required|string', 'variants.*.label' => 'sometimes|required|string|max:500',
+            'variants.*.supplier_price' => 'sometimes|'.($catalog ? 'nullable' : 'required').'|numeric|gt:0|max:999999|decimal:0,2', 'variants.*.selling_price' => 'nullable|numeric|gt:0|max:999999']);
         $variants = $product->variants;
         foreach ($variants as $i => &$variant) {
             if (isset($data['variants'][$i]['sku']) && $data['variants'][$i]['sku'] !== $variant['sku']) {
@@ -311,21 +333,45 @@ class AutogenesiController extends Controller
                 $variant['label_edited'] = true;
             }
             $price = $data['variants'][$i]['selling_price'] ?? null;
-            $variant['selling_price'] = $price !== null ? number_format(ceil((float) $price), 0, '.', '') : null;
+            $cost = isset($data['variants'][$i]['supplier_price']) ? number_format((float) $data['variants'][$i]['supplier_price'], 2, '.', '') : $variant['supplier_price'];
+            if ($cost !== $variant['supplier_price'] && $cost !== null) {
+                $variant['observed_supplier_price'] ??= $variant['supplier_price'];
+                $variant['supplier_price'] = $cost;
+                $variant['supplier_price_edited'] = true;
+                $variant['supplier_price_edited_at'] = now()->toIso8601String();
+                $useRule = !$catalog || app(\App\Services\CatalogPriceUpdater::class)->isRadio(\App\Models\ConfiguratorProduct::findOrFail($product->id));
+                $variant['pricing'] = $useRule ? app(\App\Services\AutogenesiPrice::class)->quote($cost) : null;
+                if ($useRule && ($price === null || (isset($variant['selling_price']) && (float) $price === (float) $variant['selling_price']))) {
+                    $price = $variant['pricing']['selling_price'];
+                }
+            }
+            $variant['selling_price'] = $price !== null ? ($catalog ? number_format((float) $price, 2, '.', '') : number_format(ceil((float) $price), 0, '.', '')) : null;
         }
         unset($variant);
-        $variants = app(AutogenesiVariants::class)->normalize($variants);
+        $variants = $catalog ? $variants : app(AutogenesiVariants::class)->normalize($variants);
         $vehicleData = [];
         if (isset($data['vehicles'])) {
-            $entries = array_values(array_map(fn ($v) => ['brand' => mb_strtoupper(trim($v['brand'])), 'model' => mb_strtoupper(trim($v['model'])),
-                'year_from' => (int) $v['year_from'], 'year_to' => (int) $v['year_to'], 'origin' => 'manual'], $data['vehicles']));
-            $brands = array_values(array_unique(array_column($entries, 'brand')));
-            $models = array_values(array_unique(array_map(fn ($v) => (array_search($v['brand'], $brands, true) + 1).':'.$v['model'], $entries)));
-            $brand = implode(' | ', $brands);
-            if (mb_strlen($brand) > 255) throw ValidationException::withMessages(['vehicles' => 'Elenco marche troppo lungo.']);
+            $entries = [];
+            foreach ($data['vehicles'] as $v) {
+                $brandCount = count(array_unique(array_filter(array_map(fn ($b) => mb_strtoupper(trim($b)), explode('|', $v['brand'])))));
+                if ($brandCount > 1 && collect(explode('|', $v['model']))->contains(fn ($m) => !preg_match('/^\s*\d+\s*[:：]\s*.+$/u', $m))) {
+                    throw ValidationException::withMessages(['vehicles' => 'Con più marche numera ogni modello: 1:Ducato | 2:Jumper | 3:Boxer.']);
+                }
+                $pairs = app(\App\Services\VehicleImageResolver::class)->vehicleEntries($v['brand'], $v['model']);
+                if (!$pairs) throw ValidationException::withMessages(['vehicles' => 'Associazioni marca/modello non valide.']);
+                foreach ($pairs as $pair) {
+                    $pair = ['brand' => mb_strtoupper(trim($pair['brand'])), 'model' => app(\App\Services\AutogenesiVehicleTransform::class)->model(trim($pair['model']), true)];
+                    if (mb_strlen($pair['model']) > 120) throw ValidationException::withMessages(['vehicles' => 'Nome modello troppo lungo.']);
+                    $key = implode('|', $pair).'|'.$v['year_from'].'|'.$v['year_to'];
+                    $entries[$key] = $pair + ['year_from' => (int) $v['year_from'], 'year_to' => (int) $v['year_to'], 'origin' => 'manual'];
+                }
+            }
+            $entries = array_values($entries);
+            $fields = app(\App\Services\AutogenesiVehicleTransform::class)->fields($entries);
+            if (mb_strlen($fields['brand']) > 255 || mb_strlen($fields['model']) > 255) throw ValidationException::withMessages(['vehicles' => 'Elenco marche/modelli troppo lungo.']);
             $meta = $product->metadata;
             $meta['vehicle_compatibilities'] = $entries;
-            $vehicleData = ['brand' => $brand, 'model' => count($models) === 1 ? $entries[0]['model'] : implode(' | ', $models),
+            $vehicleData = $fields + [
                 'year_from' => min(array_column($entries, 'year_from')), 'year_to' => max(array_column($entries, 'year_to')), 'metadata' => $meta];
         }
         if (array_key_exists('additional_source_urls', $data)) {
@@ -333,10 +379,41 @@ class AutogenesiController extends Controller
             $meta['additional_source_urls'] = array_values(array_unique(array_filter($data['additional_source_urls'], fn ($url) => $url && $url !== $product->source_url)));
             $vehicleData['metadata'] = $meta;
         }
-        $product->update($vehicleData + ['title' => $data['title'], 'body_html' => ProductHtml::sanitize($data['body_html']), 'variants' => $variants]);
+        $product->update($vehicleData + ['title' => $data['title'], 'body_html' => ProductHtml::sanitize($data['body_html'] ?? ''), 'variants' => $variants]);
         app(AutogenesiExport::class)->writeFiles($product->fresh());
 
-        return back()->with('status', 'Bozza aggiornata.');
+        return back()->with('status', $catalog ? 'Scheda prodotto aggiornata nel catalogo.' : 'Bozza aggiornata.');
+    }
+
+    public function storeVariant(Request $request, AutogenesiProduct $product)
+    {
+        abort_unless(app()->environment('local'), 403);
+        $catalog = $product instanceof \App\Models\CatalogProductSheet;
+        $useRule = !$catalog || app(\App\Services\CatalogPriceUpdater::class)->isRadio(\App\Models\ConfiguratorProduct::findOrFail($product->id));
+        $data = $request->validate(['label' => ['required', 'string', 'max:500', 'not_regex:/360/u'],
+            'supplier_price' => ['required', 'numeric', 'gt:0', 'max:999999', 'decimal:0,2'],
+            'selling_price' => ($useRule ? 'nullable' : 'required').'|numeric|gt:0|max:999999']);
+        DB::transaction(function () use ($product, $data, $useRule, $catalog) {
+            $current = $product->locked();
+            abort_unless($current->status === 'draft', 409);
+            $variants = $current->variants;
+            if (count($variants) >= 100) throw ValidationException::withMessages(['label' => 'Massimo 100 varianti per bozza.']);
+            $label = trim($data['label']);
+            if (collect($variants)->contains(fn ($v) => mb_strtolower(trim($v['label'])) === mb_strtolower($label))) {
+                throw ValidationException::withMessages(['label' => 'Esiste già una variante con questo nome.']);
+            }
+            $cost = number_format((float) $data['supplier_price'], 2, '.', '');
+            $pricing = $useRule ? app(\App\Services\AutogenesiPrice::class)->quote($cost) : null;
+            $prefix = ($current->metadata['source_platform'] ?? '') === 'web' ? 'WEB-' : 'AE-';
+            do { $sku = $prefix.$current->source_id.'-M'.\Illuminate\Support\Str::upper(\Illuminate\Support\Str::random(8)); }
+            while (in_array($sku, array_column($variants, 'sku'), true));
+            $variants[] = ['label' => $label, 'source_label' => $label, 'label_edited' => true, 'sku' => $sku,
+                'supplier_price' => $cost, 'currency' => 'EUR', 'selling_price' => isset($data['selling_price']) ? ($catalog ? number_format((float) $data['selling_price'], 2, '.', '') : (string) (int) ceil((float) $data['selling_price'])) : $pricing['selling_price'],
+                'pricing' => $pricing, 'source_options' => [], 'observed_at' => now()->toIso8601String(), 'manual' => true];
+            $current->update(['variants' => $current instanceof \App\Models\CatalogProductSheet ? $variants : app(AutogenesiVariants::class)->normalize($variants)]);
+        });
+        app(AutogenesiExport::class)->writeFiles($product->fresh());
+        return back()->with('status', 'Variante aggiunta.');
     }
 
     public function destroyVariant(Request $request, AutogenesiProduct $product)
@@ -344,7 +421,7 @@ class AutogenesiController extends Controller
         abort_unless(app()->environment('local'), 403);
         $data = $request->validate(['sku' => 'required|string|max:160']);
         DB::transaction(function () use ($product, $data) {
-            $current = AutogenesiProduct::lockForUpdate()->findOrFail($product->id);
+            $current = $product->locked();
             $variants = $current->variants;
             $index = array_search($data['sku'], array_column($variants, 'sku'), true);
             abort_if($index === false, 404);
@@ -375,14 +452,18 @@ class AutogenesiController extends Controller
     public function editImage(Request $request, AutogenesiProduct $product, int $index, AutogenesiImageEditor $editor)
     {
         abort_unless(app()->environment('local'), 403);
-        $data = $request->validate(['image_id' => 'required|regex:/^[a-f0-9]{64}$/', 'points' => 'sometimes|array|min:3|max:100', 'points.*' => 'array|size:2', 'points.*.*' => 'required|integer|min:0', 'cutout_mode' => 'sometimes|in:manual,auto', 'mask' => 'required_if:cutout_mode,auto|file|mimetypes:image/png|max:8192']);
+        $data = $request->validate(['image_id' => 'required|regex:/^[a-f0-9]{64}$/', 'sharpness' => 'sometimes|integer|min:0|max:100', 'points' => 'sometimes|array|min:3|max:100', 'points.*' => 'array|size:2', 'points.*.*' => 'required|integer|min:0', 'cutout_mode' => 'sometimes|in:manual,auto', 'mask' => $request->routeIs('autogenesi.clean-ai-image', 'imported-products.sheet.clean-ai-image') ? 'required|file|mimetypes:image/png|max:8192' : 'required_if:cutout_mode,auto|file|mimetypes:image/png|max:8192']);
         abort_unless(collect($product->images)->contains('sha256', $data['image_id']), 404);
         try {
-            if ($request->routeIs('autogenesi.restore-image')) {
+            if ($request->routeIs('autogenesi.restore-image', 'imported-products.sheet.restore-image')) {
                 $editor->restore($product, $data['image_id']);
+            } elseif ($request->routeIs('autogenesi.upscale-image', 'imported-products.sheet.upscale-image')) {
+                app(\App\Services\AutogenesiImageUpscale::class)->upscale($product, $data['image_id'], $data['sharpness'] ?? 35);
             } else {
                 $editor->edit($product, $data['image_id'], match (true) {
-                    $request->routeIs('autogenesi.white-image') => 'white', $request->routeIs('autogenesi.clean-image') => 'clean', default => 'scene'
+                    $request->routeIs('autogenesi.white-image', 'imported-products.sheet.white-image') => 'white',
+                    $request->routeIs('autogenesi.clean-ai-image', 'imported-products.sheet.clean-ai-image') => 'dashboard_clean',
+                    default => 'scene'
                 }, $data['points'] ?? [], $request->file('mask'));
             }
             app(AutogenesiExport::class)->writeFiles($product->fresh());
@@ -391,7 +472,7 @@ class AutogenesiController extends Controller
         } catch (\Throwable $e) {
             report($e);
 
-            return back()->withErrors(['image_ai' => 'Modifica foto non completata. Verifica la configurazione AI e riprova.']);
+            return back()->withErrors(['image_ai' => $e instanceof \RuntimeException ? $e->getMessage() : 'Modifica foto non completata. Verifica la configurazione AI e riprova.']);
         }
     }
 
@@ -402,12 +483,52 @@ class AutogenesiController extends Controller
             $generator->generate($product);
             app(AutogenesiExport::class)->writeFiles($product->fresh());
 
-            return back()->with('status', 'Cruscotto generato con AI e aggiunto alla bozza. Verifica la corrispondenza con la vettura.');
+            return back()->with('status', 'Foto reale del cruscotto importata. Verifica modello e fonte prima di pubblicarla.');
         } catch (\Throwable $e) {
             report($e);
 
             return back()->withErrors(['dashboard' => $e instanceof \RuntimeException && ! $e instanceof RequestException
-                ? $e->getMessage() : 'Generazione non completata. Verifica la configurazione AI e riprova.']);
+                ? $e->getMessage() : 'Ricerca foto non completata. Riprova.']);
+        }
+    }
+
+    public function stopProcessing(AutogenesiProduct $product)
+    {
+        $kind = $product instanceof \App\Models\CatalogProductSheet ? 'catalog' : 'draft';
+        $epoch = app(\App\Services\ProductSheetProcessing::class)->stop($kind, $product->id);
+        return response()->json(['epoch' => $epoch, 'message' => 'Elaborazioni della scheda interrotte. Le modifiche già salvate restano conservate.']);
+    }
+
+    public function descriptionFromLink(Request $request, AutogenesiProduct $product, \App\Services\AutogenesiApiImport $importer)
+    {
+        abort_unless(app()->environment('local'), 403);
+        set_time_limit(900);
+        try {
+            $result = $importer->regenerateDescription($product, $request->user()->id);
+            $current = $product->fresh();
+            app(AutogenesiExport::class)->writeFiles($current);
+            if ($request->expectsJson()) return response()->json(['body_html' => $current->body_html, 'changed' => $result['changed'],
+                'notes' => $result['notes'], 'generation' => $current->metadata['description_generation'], 'source' => $current->metadata['description_source']])->header('Cache-Control', 'no-store');
+            return back();
+        } catch (\Throwable $e) {
+            report($e);
+            $message = $e instanceof \RuntimeException ? $e->getMessage() : 'Generazione non completata: descrizione precedente conservata.';
+            if ($request->expectsJson()) return response()->json(['message' => $message], 422);
+            return back()->withErrors(['description_link' => $message]);
+        }
+    }
+
+    public function reimportImages(Request $request, AutogenesiProduct $product, \App\Services\AutogenesiApiImport $importer)
+    {
+        abort_unless(app()->environment('local'), 403);
+        set_time_limit(420);
+        try {
+            $result = $importer->reimportImages($product, $request->user()->id);
+            app(AutogenesiExport::class)->writeFiles($product->fresh());
+            return back()->with('reimport_images_result', ($result['added'] ? $result['added'].' immagini aggiunte.' : 'Nessuna nuova foto aggiunta: le immagini selezionate sono già presenti o non utilizzabili.').' '.implode(' ', $result['warnings']));
+        } catch (\Throwable $e) {
+            report($e);
+            return back()->withErrors(['reimport_images' => $e instanceof \RuntimeException ? $e->getMessage() : 'Reimportazione immagini non completata. Le foto esistenti sono conservate.']);
         }
     }
 
@@ -437,9 +558,9 @@ class AutogenesiController extends Controller
         $data = $request->validate(['image_id' => 'required|regex:/^[a-f0-9]{64}$/', 'mask' => 'required|file|mimetypes:image/png|max:8192', 'strength' => 'sometimes|integer|min:1|max:100']);
         abort_unless(collect($product->images)->contains('sha256', $data['image_id']), 404);
         try {
-            $editor->edit($product, $data['image_id'], $request->file('mask'), $data['strength'] ?? 12);
+            $editor->edit($product, $data['image_id'], $request->file('mask'), $data['strength'] ?? 12, $request->routeIs('autogenesi.clean-image', 'imported-products.sheet.clean-image'));
             app(AutogenesiExport::class)->writeFiles($product->fresh());
-            return back()->with('status', 'Sfocatura applicata solo alle zone selezionate.');
+            return back()->with('status', $request->routeIs('autogenesi.clean-image', 'imported-products.sheet.clean-image') ? 'Nitidezza migliorata senza rigenerazione. Sfocatura applicata solo sulle eventuali scritte selezionate.' : 'Sfocatura applicata solo alle zone selezionate.');
         } catch (\Throwable $e) {
             report($e);
             return back()->withErrors(['mask' => $e instanceof \RuntimeException && !$e instanceof RequestException ? $e->getMessage() : 'Sfocatura non completata. Riprova.']);
@@ -449,7 +570,7 @@ class AutogenesiController extends Controller
     public function paintImage(Request $request, AutogenesiProduct $product, int $index, \App\Services\AutogenesiImagePaint $painter)
     {
         abort_unless(app()->environment('local'), 403);
-        $data = $request->validate(['image_id' => 'required|regex:/^[a-f0-9]{64}$/', 'photo' => 'required|file|mimetypes:image/png|max:16384']);
+        $data = $request->validate(['image_id' => 'required|regex:/^[a-f0-9]{64}$/', 'photo' => 'required|file|mimetypes:image/png,image/webp|max:16384']);
         abort_unless(collect($product->images)->contains('sha256', $data['image_id']), 404);
         try {
             $painter->save($product, $data['image_id'], $request->file('photo'));

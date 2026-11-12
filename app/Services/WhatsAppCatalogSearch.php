@@ -138,6 +138,11 @@ class WhatsAppCatalogSearch
                         unset($vehicle['model']);
                     }
                 }
+                if (! $model && empty($vehicle['_model_candidates']) && $brand
+                    && preg_match('/\b'.preg_quote($this->normalize($brand), '/').'\s+([a-z0-9]+(?:\s+[a-z0-9]+){0,3}?)\s+(?:(?:del|de|anno|ano|year)\s+)?(?:19|20)\d{2}\b/u', $text, $explicit)
+                    && ! preg_match('/\b(del|de|di|anno|ano|year|radio|pantalla|schermo|carplay|android|para|per|for|modelo|modello|model)\b/u', $explicit[1])) {
+                    $model = Str::title($explicit[1]);
+                }
                 if ($model) {
                     unset($vehicle['_model_candidates']);
                 }

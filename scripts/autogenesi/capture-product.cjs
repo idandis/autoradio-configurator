@@ -6,6 +6,7 @@ const readDescription = require('./read-description.cjs');
 const { eligibleOption } = require('./product-filter.cjs');
 const assertAccessible = require('./assert-accessible.cjs');
 const log = require('./import-log.cjs');
+const { readVariants } = require('./read-variants.cjs');
 
 const [source, out] = process.argv.slice(2);
 const allowed = host => ['alicdn.com', 'aliexpress-media.com'].some(d => host === d || host.endsWith('.' + d));
@@ -55,24 +56,9 @@ const imageUrl = value => {
     }));
     const combinations = initial.groups.reduce((list, group) => list.flatMap(row => group.options.filter(o => !o.disabled && eligibleOption(o.label)).map(option => [...row, { name: group.name, ...option }])), [[]]);
     log('varianti_rilevate', { groups: initial.groups.length, combinations: combinations.length, gallery: initial.gallery.length });
-    if (!combinations.length || combinations.length > 20) throw new Error('This prototype supports up to 20 variant combinations');
-    const variants = [];
-    for (const options of combinations) {
-      for (const option of options) {
-        await assertAccessible(page);
-        log('selezione_variante', { key: option.key, label: option.label });
-        const el = page.locator(`[data-sku-col="${option.key}"]`);
-        await el.click({ timeout: 8000 });
-        await page.waitForFunction(key => document.querySelector(`[data-sku-col="${key}"]`)?.className.includes('selected'), option.key, { timeout: 8000 });
-      }
-      await page.waitForLoadState('networkidle', { timeout: 3000 }).catch(() => {});
-      log('lettura_prezzo', { variant: options.map(o => o.label).join(' / ') });
-      const priceText = await page.locator('[class*="price-default--current--"]').first().innerText();
-      const raw = priceText.replace(/[^\d,.]/g, '');
-      const value = raw.includes(',') && raw.lastIndexOf(',') > raw.lastIndexOf('.') ? raw.replace(/\./g, '').replace(',', '.') : raw.replace(/,/g, '');
-      if (!priceText.includes('€') || !/^\d+(?:\.\d{1,2})?$/.test(value)) throw new Error('Variant price or currency not readable');
-      variants.push({ label: options.map(o => o.label).join(' / '), options, supplier_price: value, currency: 'EUR', selling_price: null, observed_at: new Date().toISOString() });
-    }
+    if (!combinations.length) throw new Error('No eligible variant combinations');
+    const acquisition = await readVariants(page, combinations, assertAccessible, log);
+    const { variants } = acquisition;
     log('lettura_descrizione');
     const description = await readDescription(page);
     log('descrizione_letta', { characters: description.text.length, specifications: description.specifications.length, images: description.image_urls.length });
@@ -109,10 +95,11 @@ const imageUrl = value => {
     const seller = initial.text.match(/Vendido por ([^\n]+?)(?:, tramitado|\n)/)?.[1] || null;
     const manifest = {
       source_id: url.pathname.match(/\d+/)[0], source_url: url.origin + url.pathname,
+      variant_acquisition: { complete: !acquisition.skipped.length, detected: acquisition.detected, captured: variants.length, skipped: acquisition.skipped },
       source_title: initial.title, seller, captured_at: new Date().toISOString(), variants, images,
       description: { text: description.text, html: description.html, specifications: description.specifications, images: descriptionImages, unavailable_images: unavailableImages, complete: true },
       source_text: initial.text.slice(0, 40000),
-      warnings: ['Compatibilità, cablaggi e accessori da verificare.', 'Foto del cruscotto originale non identificata.', 'Origine e consegna della variante alla destinazione non verificate.', 'Prezzi di acquisto osservati; prezzo di vendita calcolato secondo le regole AutoGenesi.', 'Riepilogo AI AliExpress escluso dalla descrizione generata.'],
+      warnings: [...(acquisition.warning ? [acquisition.warning] : []), 'Compatibilità, cablaggi e accessori da verificare.', 'Foto del cruscotto originale non identificata.', 'Origine e consegna della variante alla destinazione non verificate.', 'Prezzi di acquisto osservati; prezzo di vendita calcolato secondo le regole AutoGenesi.', 'Riepilogo AI AliExpress escluso dalla descrizione generata.'],
     };
     fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify(manifest, null, 2));
     await page.screenshot({ path: path.join(out, 'source.png') });

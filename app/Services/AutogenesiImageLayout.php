@@ -25,7 +25,7 @@ class AutogenesiImageLayout
     public function update(AutogenesiProduct $product, array $data): void
     {
         DB::transaction(function () use ($product, $data) {
-            $current = AutogenesiProduct::lockForUpdate()->findOrFail($product->id);
+            $current = $product->locked();
             $images = $current->images;
             $selected = array_column(self::dashboards($current), 'sha256');
             if (array_key_exists('order', $data)) {

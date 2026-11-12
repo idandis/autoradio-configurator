@@ -9,6 +9,7 @@ class AutogenesiExport
 {
     public function writeFiles(AutogenesiProduct $p): array
     {
+        if ($p instanceof \App\Models\CatalogProductSheet) return [];
         $disk = Storage::disk('local');
         $dir = 'autogenesi/exports/'.$p->id;
         $disk->makeDirectory($dir);

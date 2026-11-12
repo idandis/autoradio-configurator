@@ -94,6 +94,7 @@ class AutogenesiCatalogImport
                 }
                 unset($image);
                 $row = app(AutogenesiTemplateExport::class)->rows($source)[0];
+                $vehicleFields = app(AutogenesiVehicleTransform::class)->fromFields($source->brand, $source->model);
                 $meta = array_replace($product->meta ?? [], ['imported_at' => now()->toIso8601String(), 'type' => 'Radio AM/FM', 'din' => $row[AutogenesiTemplateExport::DIN],
                     'vehicle_compatibilities' => $source->metadata['vehicle_compatibilities'] ?? [],
                     'gallery_images' => array_values(array_unique($gallery)), 'original_dashboard_images' => $dashboard,
@@ -105,13 +106,15 @@ class AutogenesiCatalogImport
                     $product->fill(['body_html_it' => null, 'body_html_en' => null]);
                 }
                 $product->fill(['handle' => $source->handle, 'category' => 'screen', 'subtype' => null, 'title' => $source->title,
-                    'body_html' => $source->body_html, 'brand' => mb_strtoupper($source->brand), 'model' => mb_strtoupper($source->model),
+                    'body_html' => $source->body_html, 'brand' => $vehicleFields['brand'], 'model' => $vehicleFields['model'],
                     'year_from' => $source->year_from, 'year_to' => $source->year_to, 'option_name' => 'Versión',
                     'price_min' => min(array_column($source->variants, 'selling_price')), 'image_url' => $gallery[0], 'meta' => $meta])->save();
                 foreach ($source->variants as $variant) {
                     $record = $product->variants()->firstOrNew(['sku' => $variant['sku']]);
                     $values = ['title' => $variant['label'], 'option_value' => $variant['label'], 'price' => $variant['selling_price'],
-                        'image_url' => $gallery[0], 'meta' => array_replace($record->meta ?? [], ['variant_cost' => $variant['supplier_price'], 'regional_prices' => $variant['regional_prices'] ?? []])];
+                        'image_url' => $gallery[0], 'meta' => array_replace($record->meta ?? [], ['variant_cost' => $variant['supplier_price'],
+                            'source_sku_id' => $variant['source_sku_id'] ?? '', 'source_product_id' => $variant['source_product_id'] ?? $source->source_id,
+                            'source_options' => $variant['source_options'] ?? [], 'regional_prices' => $variant['regional_prices'] ?? []])];
                     if (! empty($variant['shopify_variant_id'])) {
                         $values['shopify_variant_id'] = $variant['shopify_variant_id'];
                     }

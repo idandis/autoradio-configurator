@@ -147,6 +147,10 @@ class AutogenesiImport
                     $written[] = $image['uncropped_path'];
                 }
             }
+            $selectedImages = app(AutogenesiExtraImages::class)->curate($images, $data, $copy);
+            $discarded = array_diff(array_column($images, 'path'), array_column($selectedImages, 'path'));
+            $disk->delete(array_values($discarded));
+            $images = $selectedImages;
             if (! empty($copy['before_after_image'])) {
                 $data['warnings'] = array_values(array_filter($data['warnings'] ?? [], fn ($w) => $w !== 'Foto del cruscotto originale non identificata.'));
             }
@@ -156,6 +160,7 @@ class AutogenesiImport
 
                 return ['label' => $v['label'], 'supplier_price' => $cost, 'currency' => 'EUR', 'selling_price' => $pricing['selling_price'],
                     'pricing' => $pricing, 'sku' => ($web ? 'WEB-' : 'AE-').$data['source_id'].'-'.($i + 1), 'source_options' => $v['options'] ?? [],
+                    'source_sku_id' => (string) ($v['source_sku_id'] ?? ''), 'source_product_id' => $data['source_id'],
                     'observed_at' => $v['observed_at'] ?? ($data['captured_at'] ?? null)];
             }, $data['variants'], array_keys($data['variants']));
             $variants = app(AutogenesiVariants::class)->normalize($variants, $copy['variant_specs'] ?? []);
@@ -165,7 +170,7 @@ class AutogenesiImport
             return AutogenesiProduct::create($vehicle + ['source_id' => $data['source_id'], 'source_url' => $data['source_url'],
                 'handle' => Str::slug($vehicle['brand'].'-'.$vehicle['model'].'-'.$vehicle['year_from'].'-'.$vehicle['year_to']).($web ? '-web-' : '-ae-').$data['source_id'],
                 'status' => 'draft', 'title' => $copy['title'], 'body_html' => $copy['body_html'], 'variants' => $variants, 'images' => $images,
-                'metadata' => ['requested_vehicle' => $requestedVehicle, 'vehicle_compatibilities' => $compatibility['entries'], 'source_platform' => $web ? 'web' : 'aliexpress', 'source_title' => $data['source_title'], 'seller' => $data['seller'] ?? null, 'captured_at' => $data['captured_at'] ?? null,
+                'metadata' => ['vehicle_transform' => ['rule' => 'TRASFORMA', 'applied_at' => now()->toIso8601String()], 'variant_acquisition' => $data['variant_acquisition'] ?? null, 'requested_vehicle' => $requestedVehicle, 'vehicle_compatibilities' => $compatibility['entries'], 'source_platform' => $web ? 'web' : 'aliexpress', 'source_title' => $data['source_title'], 'seller' => $data['seller'] ?? null, 'captured_at' => $data['captured_at'] ?? null,
                     'warnings' => array_values(array_unique(array_merge($data['warnings'] ?? [], $copy['notes']))), 'source_text' => $data['source_text'] ?? '', 'compatibility_verified' => false,
                     'description_source' => $data['description'], 'capture_directory' => dirname($manifest), 'description_generation' => array_diff_key($copy, array_flip(['title', 'body_html', 'notes']))]]);
         } catch (\Throwable $e) {

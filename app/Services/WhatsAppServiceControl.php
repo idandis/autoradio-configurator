@@ -29,8 +29,7 @@ class WhatsAppServiceControl
             if (! Cache::store('file')->add('waha-service-starting', true, now()->addSeconds(30))) {
                 throw new LogicException('Avvio già richiesto. Attendi 30 secondi prima di riprovare.');
             }
-            $cmd = 'nohup '.escapeshellarg(PHP_BINDIR.'/php').' '.escapeshellarg(base_path('artisan'))
-                .' whatsapp:test-bot --minutes=120 >> '.escapeshellarg(storage_path('logs/whatsapp-bot.log')).' 2>&1 < /dev/null &';
+            $cmd = ['/usr/bin/python3', base_path('scripts/start-whatsapp-bot.py'), base_path(), PHP_BINDIR.'/php'];
             Process::path(base_path())->timeout(5)->run($cmd)->throw();
         } finally {
             $lock->release();

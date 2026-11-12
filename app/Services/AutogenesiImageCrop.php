@@ -50,7 +50,7 @@ class AutogenesiImageCrop
         }
         try {
             DB::transaction(function () use ($product, $id, $target, $bytes, $image, $dw, $dh, $x, $y, $size, $height) {
-                $current = AutogenesiProduct::lockForUpdate()->findOrFail($product->id);
+                $current = $product->locked();
                 $images = $current->images;
                 $index = array_search($id, array_column($images, 'sha256'), true);
                 if ($index === false) {

@@ -14,7 +14,7 @@ class AutogenesiSquareImage
     {
         $info = is_file($path) && ! is_link($path) ? @getimagesize($path) : false;
         $ext = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'][$info['mime'] ?? ''] ?? null;
-        if (! $ext || min($info[0], $info[1]) < 200 || $info[0] * $info[1] > 25000000 || filesize($path) > 16 * 1024 * 1024) {
+        if (! $ext || $info[0] * $info[1] > 25000000 || filesize($path) > 16 * 1024 * 1024) {
             throw new RuntimeException('Immagine non valida.');
         }
         $bytes = file_get_contents($path);
@@ -26,7 +26,7 @@ class AutogenesiSquareImage
     {
         $info = @getimagesize($path);
         $ext = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'][$info['mime'] ?? ''] ?? null;
-        if (! $ext || min($info[0], $info[1]) < 200 || $info[0] * $info[1] > 25000000) {
+        if (! $ext || $info[0] * $info[1] > 25000000) {
             throw new RuntimeException('Immagine non valida.');
         }
         $bytes = file_get_contents($path);
@@ -104,7 +104,7 @@ class AutogenesiSquareImage
         };
         try {
             DB::transaction(function () use ($product, $normalize) {
-                $current = AutogenesiProduct::lockForUpdate()->findOrFail($product->id);
+                $current = $product->locked();
                 $images = $current->images;
                 foreach ($images as &$image) {
                     if (! empty($image['original'])) {

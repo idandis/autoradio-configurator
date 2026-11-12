@@ -24,19 +24,23 @@ class ProcessAutogenesiBatch implements ShouldQueue
 
     public ?int $itemId = null;
 
+    public ?string $runId = null;
+
     public function __construct(public int $batchId, ?int $itemId = null)
     {
         $this->itemId = $itemId;
+        $this->runId = app(\App\Services\AutogenesiRunControl::class)->state()['run_id'];
         $this->onConnection('autogenesi')->onQueue('autogenesi');
     }
 
     public function middleware(): array
     {
-        return [(new WithoutOverlapping('autogenesi-browser'))->shared()->releaseAfter(15)->expireAfter(1400)];
+        return [(new WithoutOverlapping('autogenesi-browser:'.($this->runId ?? 'legacy')))->shared()->releaseAfter(15)->expireAfter(1400)];
     }
 
     public function handle(AutogenesiSearch $search, AutogenesiImport $importer, AutogenesiExport $exporter): void
     {
+        if (!$this->active()) return;
         $batch = AutogenesiBatch::find($this->batchId);
         if (! $batch || ! in_array($batch->status, $this->itemId ? ['queued_single', 'running_single'] : ['queued', 'running'], true)) {
             return;
@@ -66,6 +70,22 @@ class ProcessAutogenesiBatch implements ShouldQueue
             return;
         }
         try {
+            if (($batch->engine ?? 'browser') === 'api') {
+                $p = app(\App\Services\AutogenesiApiImport::class)->importBest((int) $batch->user_id, $item->query, $item->vehicle,
+                    function (string $url) use ($item) {
+                        if (!$this->active()) throw new \RuntimeException('Importazione fermata manualmente.');
+                        $item->update(['status' => 'importing', 'source_url' => $url]);
+                    }, $batch->api_options ?? []);
+                if (!$this->active()) return;
+                if (!$p) {
+                    $item->update(['status' => 'not_found', 'error' => 'Nessuna autoradio completa specifica con variante valida trovata nei candidati API analizzati.', 'finished_at' => now()]);
+                } else {
+                    $exporter->writeFiles($p);
+                    $item->update(['status' => 'completed', 'source_url' => $p->source_url, 'product_id' => $p->id, 'error' => null, 'finished_at' => now()]);
+                }
+                $this->next();
+                return;
+            }
             $result = $search->search($item->query, 'best_price');
             if (! $this->active()) {
                 return;
@@ -90,6 +110,14 @@ class ProcessAutogenesiBatch implements ShouldQueue
                 return;
             }
             report($e);
+            if (($batch->engine ?? 'browser') === 'api') {
+                $auth = preg_match('/autorizzazione.*(?:scaduta|assente)|InvalidSession|InvalidAccessToken|IllegalAccessToken/i', $e->getMessage());
+                $item->update(['status' => $auth ? 'blocked' : 'failed', 'finished_at' => now(),
+                    'error' => $e instanceof \RuntimeException ? mb_substr($e->getMessage(), 0, 1000) : 'Importazione API non completata. Consulta il log.']);
+                if ($auth) AutogenesiBatch::whereKey($this->batchId)->update(['status' => 'blocked']);
+                $this->next();
+                return;
+            }
             $traffic = str_contains($e->getMessage(), 'Network traffic blocked');
             $blocked = $traffic || str_contains($e->getMessage(), 'Verification required');
             $item->update(['status' => $blocked ? 'blocked' : 'failed', 'finished_at' => now(),
@@ -113,11 +141,14 @@ class ProcessAutogenesiBatch implements ShouldQueue
 
     private function active(): bool
     {
-        return in_array(AutogenesiBatch::find($this->batchId)?->status, $this->itemId ? ['queued_single', 'running_single'] : ['queued', 'running'], true);
+        $state = app(\App\Services\AutogenesiRunControl::class)->state();
+        return !$state['stopped'] && $state['run_id'] === $this->runId
+            && in_array(AutogenesiBatch::find($this->batchId)?->status, $this->itemId ? ['queued_single', 'running_single'] : ['queued', 'running'], true);
     }
 
     private function next(): void
     {
+        if (!$this->active()) return;
         $batch = AutogenesiBatch::find($this->batchId);
         if (! $batch || $batch->status === 'blocked') {
             return;

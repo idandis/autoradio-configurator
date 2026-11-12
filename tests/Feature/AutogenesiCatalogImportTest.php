@@ -275,7 +275,7 @@ class AutogenesiCatalogImportTest extends TestCase
         $p = ConfiguratorProduct::firstOrFail();
         $this->assertCount(2, $p->meta['original_dashboard_images']);
         $this->assertStringContainsString($ids[1], $p->meta['original_dashboard_images'][0]['url']);
-        $file = app(\App\Services\ImportedProductsExport::class)->write(now()->format('Y-m-d'));
+        $file = app(\App\Services\ImportedProductsExport::class)->write(now('Europe/Rome')->format('Y-m-d'));
         $book = \PhpOffice\PhpSpreadsheet\IOFactory::load($file);
         $data = $book->getActiveSheet()->toArray();
         $col = array_search(AutogenesiTemplateExport::DASHBOARD, $data[0]);
@@ -346,7 +346,7 @@ class AutogenesiCatalogImportTest extends TestCase
         $ranges = [['brand' => 'FIAT', 'model' => '500X', 'year_from' => 2014, 'year_to' => 2020],
             ['brand' => 'HYUNDAI', 'model' => 'KONA', 'year_from' => 2019, 'year_to' => 2023]];
         $draft->update(['brand' => 'FIAT | HYUNDAI', 'model' => '1:500X | 2:KONA', 'year_from' => 2014, 'year_to' => 2023, 'metadata' => ['vehicle_compatibilities' => $ranges]]);
-        $this->assertSame('1:500X | 2:KONA', app(AutogenesiTemplateExport::class)->rows($draft)[0][AutogenesiTemplateExport::MODEL]);
+        $this->assertSame('1:500X | 2:Kona', app(AutogenesiTemplateExport::class)->rows($draft)[0][AutogenesiTemplateExport::MODEL]);
         $this->post('/autogenesi/'.$draft->id.'/import-configurator')->assertRedirect()->assertSessionHasNoErrors();
         $p = ConfiguratorProduct::firstOrFail();
         $this->assertSame($ranges, $p->meta['vehicle_compatibilities']);

@@ -4,8 +4,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { computed, reactive, ref } from 'vue';
 import DescriptionEditor from '@/components/DescriptionEditor.vue';
 import StockProductsManager from '@/components/StockProductsManager.vue';
+import CatalogPriceUpdate from '@/components/CatalogPriceUpdate.vue';
+import CopyProductTitle from '@/components/CopyProductTitle.vue';
 
 const props = defineProps<{
+    canRecoverDsers?: boolean;
+    priceUpdate?: InstanceType<typeof CatalogPriceUpdate>['$props']['run'];
     importDates?: string[];
     errors?: Record<string, string>;
     filters: {
@@ -31,7 +35,7 @@ const props = defineProps<{
             year_to: number | null;
             price_min: string | null;
             variants_count: number;
-            variants: Array<{ id: number; title: string | null; sku: string | null; price: string | null }>;
+            variants: Array<{ id: number; title: string | null; sku: string | null; price: string | null; supplier_cost?: string | null }>;
             source_url: string | null;
             image_url: string | null;
             images: string[];
@@ -47,6 +51,14 @@ const props = defineProps<{
 }>();
 
 const exportDate = ref(props.filters.date || props.importDates?.[0] || '');
+const newProductOpen = ref(false);
+const newProductForm = useForm({ source_url: '' });
+const createProduct = () => {
+    if (newProductForm.processing) return;
+    newProductForm.clearErrors();
+    newProductForm.post('/imported-products/new-from-aliexpress', { onError: () => { newProductOpen.value = true; } });
+};
+const openSupplier = (url: string) => { window.open(url, '_blank', 'noopener,noreferrer'); };
 const filters = reactive({
     category: props.filters.category || '',
     search: props.filters.search || '',
@@ -249,6 +261,28 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
 <template>
     <Head title="Prodotti importati" />
     <StockProductsManager class="mb-6" />
+    <CatalogPriceUpdate v-if="canRecoverDsers" :run="priceUpdate" />
+
+    <div v-if="canRecoverDsers" class="mb-6">
+        <button type="button" class="rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground" @click="newProductOpen = true">NUOVO PRODOTTO</button>
+    </div>
+
+    <Dialog v-model:open="newProductOpen">
+        <DialogContent class="sm:max-w-lg" @interact-outside="newProductForm.processing && $event.preventDefault()" @escape-key-down="newProductForm.processing && $event.preventDefault()">
+            <DialogHeader>
+                <DialogTitle>Nuovo prodotto</DialogTitle>
+                <DialogDescription>Inserisci il link del prodotto AliExpress. La scheda si aprirà con descrizione, foto e varianti da verificare.</DialogDescription>
+            </DialogHeader>
+            <form class="space-y-4" @submit.prevent="createProduct">
+                <div class="space-y-2">
+                    <label for="new-product-url" class="text-sm font-medium">Link AliExpress</label>
+                    <input id="new-product-url" v-model.trim="newProductForm.source_url" type="url" required placeholder="https://es.aliexpress.com/item/123456789.html" class="w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm" />
+                    <p v-if="newProductForm.errors.source_url" class="text-sm text-red-500">{{ newProductForm.errors.source_url }}</p>
+                </div>
+                <button type="submit" :disabled="newProductForm.processing" class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">{{ newProductForm.processing ? 'Importazione in corso…' : 'Apri scheda prodotto' }}</button>
+            </form>
+        </DialogContent>
+    </Dialog>
 
     <section class="rounded-xl border border-sidebar-border/70 bg-card">
         <div class="flex flex-col gap-4 border-b border-sidebar-border/70 p-6 lg:flex-row lg:items-end lg:justify-between">
@@ -304,6 +338,8 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
         <form action="/imported-products/export-shopify" method="get" class="flex flex-wrap items-end gap-3 border-b border-sidebar-border/70 px-6 py-4">
             <label class="grid gap-1 text-sm">Esporta prodotti importati in data<input v-model="exportDate" name="date" type="date" required class="rounded-lg border border-sidebar-border/70 bg-background px-3 py-2" /></label>
             <button type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Esporta Excel Shopify</button>
+            <a href="/imported-products/export-all-radios" class="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-black">Esporta tutte le radio · Excel Shopify</a>
+            <p class="w-full text-xs text-muted-foreground">«Esporta tutte le radio» include l’intero catalogo radio, con prezzi attuali, tutte le varianti, foto e metafield, indipendentemente da data, filtri e pagina. Esclude camere, dashcam, altoparlanti, accessori e bozze AutoGenesi.</p>
             <p class="w-full text-xs text-muted-foreground">Tutti i prodotti importati quel giorno, in ora italiana, indipendentemente dai filtri. Per gli import storici senza data registrata si usa la data di creazione. Trasferisci le foto su Aruba prima dell’importazione Shopify.</p>
             <p v-if="errors?.date || errors?.export_date" role="alert" class="w-full text-sm text-red-400">{{ errors?.date || errors?.export_date }}</p>
         </form>
@@ -337,7 +373,10 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                                     <p class="mt-1 break-all text-xs text-muted-foreground">
                                         {{ product.handle }}
                                     </p>
-                                    <a v-if="product.source_url" :href="product.source_url" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block text-xs text-primary underline underline-offset-2">Apri prodotto fornitore ↗</a>
+                                    <a v-if="product.source_url" :href="product.source_url" target="_blank" rel="noopener noreferrer" class="mt-2 inline-block text-xs text-primary underline underline-offset-2" @click.stop.prevent="openSupplier(product.source_url)">Apri prodotto fornitore ↗</a>
+                                    <CopyProductTitle :title="product.title" />
+                                    <a :href="`/imported-products/${product.id}/sheet`" class="ml-2 inline-block rounded-md border px-2 py-1 text-xs">Modifica scheda</a>
+                                    <button type="button" :disabled="deletingProduct === product.id" class="ml-2 rounded-md border border-red-500/50 px-2 py-1 text-xs text-red-500 disabled:opacity-40" @click="deleteProduct(product)">{{ deletingProduct === product.id ? 'Eliminazione…' : 'Elimina prodotto' }}</button>
                                 </div>
                             </div>
                         </td>
@@ -489,6 +528,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                         <div class="min-w-0">
                             <label :for="`variant-price-${v.id}`" class="break-words font-medium">{{ variantProduct?.variants[i]?.title || `Variante ${v.id}` }}</label>
                             <p v-if="variantProduct?.variants[i]?.sku" class="mt-1 break-all text-xs text-muted-foreground">SKU: {{ variantProduct.variants[i].sku }}</p>
+                            <p v-if="variantProduct?.variants[i]?.supplier_cost" class="mt-1 text-xs text-muted-foreground">Costo fornitore: {{ variantProduct.variants[i].supplier_cost }} €</p>
                         </div>
                         <div>
                             <div class="flex items-center gap-2">

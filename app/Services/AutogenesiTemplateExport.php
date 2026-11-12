@@ -26,16 +26,17 @@ class AutogenesiTemplateExport
 
     public function columns(): array
     {
-        return [...json_decode(file_get_contents(resource_path('autogenesi/export-columns.json')), true, flags: JSON_THROW_ON_ERROR), 'Status'];
+        return [...json_decode(file_get_contents(resource_path('autogenesi/export-columns.json')), true, flags: JSON_THROW_ON_ERROR), 'Status', 'Variant Inventory Tracker', 'Variant Inventory Policy'];
     }
 
     public function rows(AutogenesiProduct $p): array
     {
         $images = $this->images($p);
+        $fields = app(AutogenesiVehicleTransform::class)->fromFields($p->brand, $p->model);
         $base = array_replace(array_fill_keys($this->columns(), ''), [
             'Title' => $p->title, 'Handle' => $p->handle, 'ID' => $p->metadata['shopify_product_id'] ?? '',
-            'Type' => 'Radio AM/FM', 'Body HTML' => $p->body_html, self::BRAND => mb_strtoupper($p->brand),
-            self::DIN => $this->din($p), self::MODEL => preg_match('/^\s*\d+\s*[:：]/u', $p->model) ? $p->model : '1:'.$p->model, self::YEAR => $p->year_from.'-'.$p->year_to,
+            'Type' => 'Radio AM/FM', 'Body HTML' => $p->body_html, self::BRAND => $fields['brand'],
+            self::DIN => $this->din($p), self::MODEL => $fields['model'], self::YEAR => $p->year_from.'-'.$p->year_to,
             self::DASHBOARD => $this->dashboard($p), 'Status' => 'Active',
         ]);
         $rows = [];
@@ -54,6 +55,8 @@ class AutogenesiTemplateExport
                 $row['Variant ID'] = $variant['shopify_variant_id'] ?? '';
                 $row['Variant SKU'] = $variant['sku'];
                 $row['Variant Price'] = $variant['selling_price'] ?? '';
+                $row['Variant Inventory Tracker'] = '';
+                $row['Variant Inventory Policy'] = 'continue';
                 foreach (['Italia' => 'italia', 'Resto del Mondo' => 'resto_del_mondo', 'USA-CANADA' => 'usa_canada', 'spagna' => 'spagna'] as $label => $key) {
                     $row['Price / '.$label] = $variant['regional_prices'][$key] ?? '';
                 }
@@ -84,10 +87,12 @@ class AutogenesiTemplateExport
             'Body HTML' => ['Bozza', 'Descrizione HTML corrente, comprese le modifiche manuali.'],
             self::BRAND => ['Vettura', 'Marca in maiuscolo dai campi compatibilità.'],
             self::DIN => ['Titolo / specifiche', 'Questo metafield contiene il DIN (1DIN/2DIN), non i pollici, come nel modello e nell’importatore.'],
-            self::MODEL => ['Vettura', '1: associa il modello alla prima marca, come nel formato allegato.'],
+            self::MODEL => ['Vettura', 'TRASFORMA: indici soltanto quando ci sono più marche.'],
             self::YEAR => ['Vettura', 'Intervallo anni salvato nella bozza.'],
             self::DASHBOARD => ['Shopify Files', 'Foto scelta con il flag Cruscotto originale. Nome file della stessa foto presente in Image Src, oppure riferimento Shopify manuale. Il file deve essere disponibile in Shopify per risolvere il metafield.'],
             'Status' => ['Aggiunta necessaria', 'Active: il prodotto viene importato come attivo, come richiesto.'],
+            'Variant Inventory Tracker' => ['Scorte non monitorate', 'Vuoto: disattiva il monitoraggio delle scorte durante l’importazione.'],
+            'Variant Inventory Policy' => ['Vendita consentita', 'continue: consente l’acquisto anche senza quantità disponibile.'],
         ];
         $audit = [];
         foreach ($this->columns() as $column) {

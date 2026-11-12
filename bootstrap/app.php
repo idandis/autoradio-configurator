@@ -45,12 +45,13 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleAppearance::class,
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
+            \App\Http\Middleware\ControlProductSheetProcessing::class,
         ]);
 
         //
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*', 'dashboard/in-stock', 'dashboard/in-stock/*', 'dashboard/whatsapp/chats', 'dashboard/whatsapp/chats/*', 'dashboard/whatsapp/preview', 'dashboard/whatsapp/preview/photo-email'),
+            fn (Request $request) => $request->is('api/*', 'autogenesi/variant-price', 'imported-products/price-rules*', 'imported-products/*/sheet/stop-processing', 'autogenesi/*/stop-processing', 'autogenesi/*/description-link', 'imported-products/*/sheet/description-link', 'imported-products/*/supplier-variants', 'imported-products/*/supplier-variants/*', 'imported-products/*/variants/*/supplier-match', 'dashboard/in-stock', 'dashboard/in-stock/*', 'dashboard/whatsapp/chats', 'dashboard/whatsapp/chats/*', 'dashboard/whatsapp/preview', 'dashboard/whatsapp/preview/photo-email'),
         );
     })->create();

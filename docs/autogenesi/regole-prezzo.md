@@ -39,3 +39,35 @@ Esempio con IVA 21%: dazio 32,02 €, IVA importazione 54,75 €, servizi 32,66 
 L'aggiustamento della base non viene sommato una seconda volta al prezzo: serve solo alla ricostruzione della stima. Sotto 150 € l'assenza della maggiorazione doganale è una regola commerciale richiesta, non una dichiarazione di esenzione fiscale.
 
 Il calcolo usa centesimi interi e arrotondamento delle singole voci ai centesimi; soltanto il totale finale viene arrotondato all'euro per eccesso. I dettagli della stima restano nei dati della variante. Il prezzo finale resta modificabile manualmente.
+
+### Abbinamento sigle OSSURET / HIZPO
+
+Profilo specifico della tabella QS/T con Qualcomm 6115 / Allwinner A100 fornita dal gestore; non è una regola universale per tutte le marche o generazioni.
+
+| Sigla | Nuclei | RAM GB | Memoria GB |
+| --- | --- | --- | --- |
+| QS1 | 8 | 3 | 32 |
+| QS2 | 8 | 4 | 32 |
+| QS4 | 8 | 4 | 32 |
+| QS6 | 8 | 6 | 64 |
+| QS8 | 8 | 8 | 128 |
+| T1 | 4 | 1 | 32 |
+| T2CP | 4 | 2 | 32 |
+| T3CP | 4 | 2 | 64 |
+| T0 | non determinati | 1 | 16 |
+
+Attivare per OSSURET/HIZPO riconoscibili nel prodotto o nella fonte API. Per altri marchi richiedere evidenza della famiglia equivalente: più codici QS, un codice T2CP/T3CP e processore 6115/A100 nel contesto prodotto. Sigle isolate di marchi diversi non bastano. Non rinominare le varianti: conservare nome e SKU originali, registrando il profilo nell’audit dell’abbinamento.
+
+QS2 e QS4 hanno la stessa memoria ma non sono intercambiabili automaticamente: usare il codice esatto se presente; altrimenti lasciare la scelta manuale. Nomi LOW/HIGH, CAM e risoluzioni esplicite restano vincoli. DVR/360 restano esclusi; specifiche esplicite discordanti con questa tabella richiedono verifica manuale. Non dedurre per T0 un numero di nuclei non indicato. Applicare i consueti controlli su disponibilità, unicità dell’abbinamento e preferenza del magazzino.
+
+
+### Estensione seconda tabella: serie P
+
+Per lo stesso profilo OSSURET/HIZPO e famiglie equivalenti documentate: P1 = 4Core 1GB/32GB; P2CP = 4Core 2GB/32GB; P3CP = 4Core 2GB/64GB. P1L = 1GB/16GB con nuclei non specificati: il prefisso P non autorizza a dedurre 4Core per questa variante.
+
+P1/P2CP/P3CP nella seconda tabella riportano Android 13, mentre la precedente serie T riportava Android 14: non considerare P e T automaticamente intercambiabili sulla sola base della memoria. Questa estensione serve all’abbinamento dei codici, senza attribuire universalmente Android, chip radio o altre caratteristiche a prodotti diversi.
+
+
+### Alias serie S / QS
+
+Nel solo profilo OSSURET/HIZPO e famiglie equivalenti riconosciute, normalizzare S1→QS1, S2→QS2, S4→QS4, S6→QS6, S8→QS8 per il confronto. RAM/ROM e nuclei seguono la tabella QS. Conservare il nome fornitore originale e tutti i qualificatori (LOW/HIGH, CAM, risoluzione). Non estendere la mappa a sigle non documentate come S9 o ad altri marchi senza evidenza della famiglia. Se S6 e QS6 sono due SKU distinti senza altri elementi per distinguerli, mantenere l’ambiguità invece di sceglierne uno arbitrariamente.

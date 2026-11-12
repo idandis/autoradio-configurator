@@ -1,5 +1,14 @@
 const button = document.getElementById('capture');
 const status = document.getElementById('status');
+document.getElementById('dsers').addEventListener('click', async event => {
+  event.target.disabled = true;
+  try {
+    const result = await chrome.runtime.sendMessage({ type: 'autogenesi-dsers' });
+    if (!result?.ok) throw new Error(result?.error || 'Recupero non completato.');
+    status.textContent = `Scaricato ${result.filename}. Caricalo in Prodotti importati → Recupero link DSers.`;
+  } catch (error) { status.textContent = error.message; }
+  finally { event.target.disabled = false; }
+});
 button.addEventListener('click', async () => {
   button.disabled = true;
   status.textContent = 'Acquisizione in corso. Non cambiare prodotto o variante in questa scheda…';

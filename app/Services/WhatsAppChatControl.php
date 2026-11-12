@@ -10,6 +10,7 @@ use RuntimeException;
 
 class WhatsAppChatControl
 {
+    public array $importStats = ['found' => 0, 'imported' => 0, 'skipped' => 0];
     public function contact(string $phone): WhatsAppChat
     {
         $chat = WhatsAppChat::withTrashed()->firstOrCreate(['session' => config('waha.session'), 'phone' => preg_replace('/\D/', '', $phone)]);
@@ -52,6 +53,7 @@ class WhatsAppChatControl
             ? $api->get("/api/{$session}/labels/".rawurlencode($labelId).'/chats')->throw()->json()
             : $api->get("/api/{$session}/chats/overview", ['limit' => 100, 'offset' => $offset])->throw()->json();
         if (! is_array($rows) || ! array_is_list($rows)) throw new RuntimeException('Elenco chat WAHA non valido.');
+        $this->importStats = ['found' => count($rows), 'imported' => 0, 'skipped' => 0];
         $mapped = [];
         foreach ($rows as $row) {
             $id = is_string($row) ? $row : ($row['id'] ?? $row['chatId'] ?? '');
@@ -63,11 +65,12 @@ class WhatsAppChatControl
                 }
                 $id = $mapped[$id];
             }
-            if (! is_string($id) || ! preg_match('/^([1-9]\d{7,14})@c\.us$/', $id, $m)) continue;
+            if (! is_string($id) || ! preg_match('/^([1-9]\d{7,14})@c\.us$/', $id, $m)) { $this->importStats['skipped']++; continue; }
             $chat = $existingOnly
                 ? WhatsAppChat::where('session', config('waha.session'))->where('phone', $m[1])->first()
                 : $this->contact($m[1]);
             if (! $chat) continue;
+            $this->importStats['imported']++;
             if ($chat->trashed()) $chat->restore();
             if ($label !== null) $chat->update(['import_label_id' => $label['id'], 'import_label_name' => $label['name']]);
             if (is_array($row) && is_array($row['lastMessage'] ?? null)) $this->observe($chat, [$row['lastMessage']]);

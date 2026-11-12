@@ -17,6 +17,7 @@ class AutogenesiCompatibility
                 'brand' => 'required|string|max:80', 'model' => 'required|string|max:120',
                 'year_from' => 'required|integer|min:1|max:65535', 'year_to' => 'required|integer|gte:year_from|max:65535',
                 'evidence' => 'required|string|max:4000', 'source_file' => 'nullable|string',
+                'display_model' => 'nullable|string|max:120', 'shared_fitment_evidence' => 'nullable|string|max:4000',
             ])->fails()) continue;
             $evidence = $this->normalize($entry['evidence']);
             if (preg_match('/\b(?:(?:no|not|non)\s+(?:es\s+|e\s+)?compatib|not confirmed|non confermat|no confirmad|por ejemplo|for example)/u', $evidence)) continue;
@@ -26,17 +27,23 @@ class AutogenesiCompatibility
                     || ! str_contains($evidence, $this->normalize($entry['model']))
                     || ! str_contains($evidence, (string) $entry['year_from']) || ! str_contains($evidence, (string) $entry['year_to'])) continue;
             } elseif (! in_array($entry['source_file'], $files, true)) continue;
+            $display = trim($entry['display_model'] ?? '');
+            $shared = $this->normalize($entry['shared_fitment_evidence'] ?? '');
+            if ($display && !preg_match('/[|:\r\n]/', $display) && mb_strlen($shared) >= 12
+                && (!empty($entry['source_file']) || str_contains($text, $shared))) {
+                $entry['source_model'] = $entry['model'];
+                $entry['model'] = $display;
+            }
             $entry['brand'] = mb_strtoupper(trim($entry['brand']));
-            $entry['model'] = mb_strtoupper(trim($entry['model']));
+            $entry['model'] = app(AutogenesiVehicleTransform::class)->model(mb_strtoupper(trim($entry['model'])));
             $entry['year_from'] = (int) $entry['year_from'];
             $entry['year_to'] = (int) $entry['year_to'];
             $entries[$entry['brand'].'|'.$entry['model'].'|'.$entry['year_from'].'|'.$entry['year_to']] = $entry;
         }
-        if (! $entries) return ['vehicle' => $requested, 'entries' => [], 'warnings' => ['Compatibilità non ricavata con certezza dalla descrizione: verificare marca, modello e anni.']];
+        if (! $entries) return ['vehicle' => array_replace($requested, app(AutogenesiVehicleTransform::class)->fromFields($requested['brand'] ?? '', $requested['model'] ?? '')),
+            'entries' => [], 'warnings' => ['Compatibilità non ricavata con certezza dalla descrizione: verificare marca, modello e anni.']];
         $entries = array_values($entries);
-        $brands = array_values(array_unique(array_column($entries, 'brand')));
-        $models = array_values(array_unique(array_map(fn ($e) => (array_search($e['brand'], $brands, true) + 1).':'.$e['model'], $entries)));
-        $vehicle = ['brand' => implode(' | ', $brands), 'model' => count($models) === 1 ? $entries[0]['model'] : implode(' | ', $models),
+        $vehicle = app(AutogenesiVehicleTransform::class)->fields($entries) + [
             'year_from' => min(array_column($entries, 'year_from')), 'year_to' => max(array_column($entries, 'year_to'))];
         return ['vehicle' => $vehicle, 'entries' => $entries, 'warnings' => count($entries) !== count($copy['compatibilities'] ?? []) ? ['Alcune compatibilità senza riscontro sono state escluse.'] : []];
     }

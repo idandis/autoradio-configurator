@@ -24,6 +24,25 @@ class WhatsAppTestBotTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_explicit_unknown_model_is_preserved_in_mixed_radio_and_installation_request(): void
+    {
+        ConfiguratorProduct::create(['handle' => 'opel-astra-only', 'category' => 'screen', 'title' => 'Pantalla Opel Astra',
+            'brand' => 'OPEL', 'model' => 'Astra', 'year_from' => 2010, 'year_to' => 2020]);
+        $zone = \App\Models\InstallationZone::create(['name' => 'Barcelona', 'active' => true]);
+        $zone->services()->create(['name' => 'Pantalla', 'price' => 150]);
+        $text = 'Buenos días. Estoy en Barcelona. Busco una pantalla con android carplay para Opel cascada 2016. Qué opción tiene? Necesito certeza de compatibilidad para poder hacer la instalación en Barcelona. Tiene alguna indicación para la instalación aquí? Gracias';
+        app(WhatsAppAssistantSettings::class)->save(['language' => 'es']);
+        $context = app(WhatsAppCatalogSearch::class)->search([$text]);
+        $this->assertSame(['brand' => 'OPEL', 'model' => 'Cascada', 'year' => 2016], $context['vehicle']);
+        $this->assertSame(0, $context['matching_specific_screens']);
+        $r = app(WhatsAppTestBot::class)->conversationAnswer($text);
+        $this->assertSame('missing_submitted', $r['mode']);
+        $this->assertSame('Cascada', $r['context']['vehicle']['model']);
+        $this->assertStringNotContainsString('¿Cuál es el modelo', $r['text']);
+        $this->assertStringNotContainsString('/products/opel-astra-only', $r['text']);
+        Http::assertNothingSent();
+    }
+
     public function test_dimensions_followup_answers_inches_without_operator(): void
     {
         foreach ([9, 7] as $size) {

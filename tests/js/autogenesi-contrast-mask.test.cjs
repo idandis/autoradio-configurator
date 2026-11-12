@@ -27,3 +27,14 @@ test('automatic contour reports images with no light background', () => {
   for(let i = 3; i < data.length; i += 4) data[i] = 255;
   assert.throws(() => mask(data, 100, 100, 40), /Sfondo chiaro/);
 });
+test('optional interior cleanup removes large white openings but keeps small light details', () => {
+  const w = 120, h = 100, data = new Uint8ClampedArray(w * h * 4).fill(255);
+  const fill = (x0, y0, x1, y1, rgb) => { for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) data.set([...rgb, 255], (y * w + x) * 4); };
+  fill(15, 10, 104, 89, [20, 20, 20]);
+  fill(35, 55, 75, 78, [255, 255, 255]);
+  fill(40, 20, 43, 23, [255, 255, 255]);
+  const result = mask(data, w, h, 40, true);
+  assert.equal(result[65 * w + 55], 0);
+  assert.equal(result[21 * w + 41], 1);
+  assert.equal(result[65 * w + 34], 1);
+});

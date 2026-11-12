@@ -51,3 +51,20 @@ Per le bozze esistenti usare «Rileggi e ricrea descrizione»: sostituisce titol
 
 ## Compatibilità dalla descrizione originale
 Marca, modello e anni inseriti sono una query, non una prova. Estrarre tutte le coppie marca/modello realmente compatibili dalla descrizione, specifiche e immagini originali, con gli intervalli completi dichiarati. Correggere il modello richiesto quando la fonte descrive un’altra vettura. Escludere riferimenti negativi, non confermati o ipotetici. Restituire compatibilities con citazione letterale e, se letta in immagine, nome esatto del file. Non ricavare gli anni dal titolo appena generato e non troncare il range al solo anno cercato. Per più marche usare associazioni indicizzate e conservare l’intervallo di ciascuna coppia; nessuna combinazione marca/modello inventata.
+## TRASFORMA — campi configuratore
+
+Usare la lista più corta possibile senza unire compatibilità tecnicamente diverse. Non distinguere carrozzerie e versioni (Coupé, Cabrio, Touring, Sedan, 3/5 porte) quando condividono plancia, vano radio, sistema multimediale e cablaggi necessari per questo stesso prodotto. Separare soltanto quando tali caratteristiche cambiano. Usare nomi semplici ed evitare codici telaio superflui.
+
+In compatibilities conservare model ed evidence letterali per verificare la fonte. Se la fonte conferma la medesima plancia/soluzione radio/cablaggi, proporre il nome semplificato in display_model e riportare la prova letterale in shared_fitment_evidence. Esempi condizionali: MINI F55/F56/F57 → MINI; BMW Serie 1 E81/E82/E87/E88 → Serie 1 E8x. Senza prova della compatibilità condivisa entrambi i campi aggiuntivi sono null; non accorpare per sola somiglianza dei nomi. Non unire intervalli separati inventando copertura intermedia.
+
+Formato TRASFORMA: una sola marca scritta una volta, modelli separati da « | » senza numerazione (Marca: VOLVO; Modello: S60 | V70 | XC70). Più marche separate da « | » e modelli con l'indice della propria marca (Marca: FIAT | CITROEN | PEUGEOT; Modello: 1:Ducato | 2:Jumper | 3:Boxer). Al comando conversazionale TRASFORMA restituire soltanto i due campi Marca e Modello pronti da copiare, senza spiegazioni.
+Maiuscole TRASFORMA: marche sempre tutte MAIUSCOLE. Per ogni nome modello usare soltanto l’iniziale maiuscola, conservando codici e sigle interamente MAIUSCOLI (esempi: Galaxy, Serie 1 E8X, S60, RAV4, C-HR). Applicare lo stesso stile ai due campi pronti da copiare.
+
+
+### Foto da conservare nel prodotto
+
+- Importazione e reimportazione, sia nelle bozze sia nel catalogo, conservano al massimo 3 foto prodotto, 1 foto accessori/package list e 1 confronto prima/dopo, quando presenti e riconosciuti.
+- Preferire 2–3 fotografie chiare e distinte dell’autoradio; anche le immagini delle varianti sono candidate valide e prioritarie. Escludere tabelle delle versioni, schede RAM/CPU, pubblicità di funzioni e immagini non pertinenti.
+- Riutilizzare i criteri AutoGenesi per accessori inclusi e confronto del cruscotto originale; non inventare categorie mancanti.
+- Gli originali mantengono le proporzioni. Le immagini candidate non selezionate non entrano nella galleria del prodotto.
+- Le foto già salvate o modificate manualmente non vengono eliminate dalla reimportazione. Evitare duplicati e aggiungere solo i tipi mancanti, rispettando i limiti.
