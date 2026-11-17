@@ -1,0 +1,20 @@
+# Prompt immagini — 13 novembre 2026
+
+Strumento: imagegen integrato. Finali WEBP 1536×1024 qualità 90.
+
+## combo
+
+Use case: product-mockup. One photorealistic studio vehicle catalogue photograph of a silver metallic Opel Combo C second generation high-roof compact panel van, representative 2006 from the 2001–2011 body generation. Correct Corsa C based front end with angular headlights, short hood, tall boxy cargo body, two front cabin doors and sliding cargo door, NOT Combo D Fiat Doblo based and NOT later Peugeot based Combo E. Factory stock, no signwriting. Front three-quarter view facing left, whole vehicle centered with generous margins, all wheels visible. Landscape 1536x1024. Seamless flat uniform background exactly #121212 with matching floor and natural soft contact shadow. Soft studio lighting. Blank license plate, no text, people, watermark or scenery.
+
+PNG: `/Users/pollong/.codex/generated_images/01a1a6b8-0380-70a1-9930-8eea033471a6/exec-758c8fe7-6819-49d0-9473-b9684cfaddd3.png`.
+
+## astra
+
+Use case: background-extraction. Edit the reference Opel Astra J catalogue photograph. Preserve the exact silver five-door hatchback body generation, proportions, front three-quarter camera angle, whole car, wheels, reflections and blank plate. Replace the black studio backdrop and floor with a seamless flat uniform #121212 background and matching floor. Retain only a natural soft contact shadow beneath the car. Keep the whole car centered with comfortable margins. No text, people, scenery, watermark. Landscape 1536x1024. Do not change the vehicle.
+
+PNG: `/Users/pollong/.codex/generated_images/01a1a6b8-0380-70a1-9930-8eea033471a6/exec-67093de5-7734-4dd7-98b6-27b174321c29.png`.
+
+## Cascade
+
+Copia senza modifiche della Cascada già generata: `public/images/vehicles-dark/opel-cascada-2009-2018.webp` → `public/images/vehicles-dark/opel-cascade-2009-2018.webp`. Stessa carrozzeria, nessuna nuova generazione. Prompt originale in `output/post-import-cascada-2026-11-12/PROMPT-IMMAGINE.md`.
+

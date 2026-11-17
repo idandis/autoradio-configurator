@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\ConfiguratorProduct;
 use App\Models\ConfiguratorVariant;
 use App\Services\AutogenesiAliExpressApi;
+use App\Services\AutogenesiPrice;
 use App\Services\CatalogPriceUpdater;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,6 +14,42 @@ use Illuminate\Validation\ValidationException;
 
 class CatalogVariantMatchController extends Controller
 {
+    public function reprice(ConfiguratorProduct $product, ConfiguratorVariant $variant, AutogenesiPrice $price, CatalogPriceUpdater $updater, AutogenesiAliExpressApi $api)
+    {
+        abort_unless(app()->environment('local'), 403);
+        abort_unless((int) $variant->configurator_product_id === $product->id, 404);
+        abort_unless($updater->isRadio($product), 422, 'La regola prezzo si applica soltanto alle autoradio.');
+        $meta = $variant->meta ?? [];
+        if (empty($meta['variant_cost']) && !empty($meta['source_product_id']) && !empty($meta['source_sku_id'])) {
+            $source = (string) $meta['source_product_id'];
+            abort_unless(in_array($source, $updater->sources($product), true), 422, 'Il link fornitore abbinato non appartiene più al prodotto.');
+            try {
+                $offers = $updater->offers($api->product(auth()->id(), $source), $source);
+            } catch (\RuntimeException $e) { return response()->json(['message' => $e->getMessage()], 422); }
+            $matches = array_values(array_filter($offers, fn ($offer) => $offer['sku_id'] === (string) $meta['source_sku_id']));
+            if (count($matches) !== 1) return response()->json(['message' => 'Costo della variante AliExpress non disponibile. Ricarica i dati varianti.'], 422);
+            $result = $updater->apply($product->id, $matches, null, $variant->id, true);
+            if ($result['skipped']) return response()->json(['message' => 'Costo della variante non salvato. Ricarica i dati varianti.'], 422);
+            $quote = $price->quote((string) $matches[0]['cost']);
+            return response()->json(['message' => 'Costo recuperato e prezzo ricalcolato nel DB.', 'price' => $quote['selling_price'], 'rule_price' => $quote['selling_price'], 'pricing' => $quote]);
+        }
+        try { $result = DB::transaction(function () use ($product, $variant, $price) {
+            $current = $variant->newQuery()->lockForUpdate()->findOrFail($variant->id);
+            $meta = $current->meta ?? [];
+            $quote = $price->quote((string) ($meta['variant_cost'] ?? ''));
+            $old = $current->price;
+            $meta['price_update'] = array_merge($meta['price_update'] ?? [], [
+                'checked_at' => now()->toIso8601String(), 'old_price' => $old, 'new_price' => $quote['selling_price'],
+                'currency' => 'EUR', 'pricing' => $quote, 'mode' => 'manual_recalculate',
+            ]);
+            $current->update(['price' => $quote['selling_price'], 'meta' => $meta]);
+            $product->update(['price_min' => $product->variants()->min('price')]);
+            return $quote;
+        }); }
+        catch (\InvalidArgumentException) { return response()->json(['message' => 'Costo fornitore non disponibile o non valido.'], 422); }
+        return response()->json(['message' => 'Prezzo ricalcolato e salvato nel DB.', 'price' => $result['selling_price'], 'rule_price' => $result['selling_price'], 'pricing' => $result]);
+    }
+
     public function show(Request $request, ConfiguratorProduct $product, AutogenesiAliExpressApi $api, CatalogPriceUpdater $updater)
     {
         abort_unless(app()->environment('local'), 403);
@@ -43,9 +80,17 @@ class CatalogVariantMatchController extends Controller
         return response()->json(['app' => $product->variants->sortBy(fn ($v) => $updater->variantOrder($v))->values()->map(fn ($v) => [
             'id' => $v->id, 'label' => $v->title ?: $v->option_value ?: 'Variante '.$v->id, 'sku' => $v->sku,
             'price' => $v->price, 'source_id' => $v->meta['source_product_id'] ?? null, 'sku_id' => $v->meta['source_sku_id'] ?? null,
-            'rule_price' => $v->meta['price_update']['pricing']['selling_price'] ?? null,
+            'rule_price' => $this->currentRulePrice($v),
             'supplier_label' => $v->meta['supplier_variant_label'] ?? null, 'supplier_cost' => $v->meta['variant_cost'] ?? null,
         ]), 'aliexpress' => $suppliers, 'errors' => $errors])->header('Cache-Control', 'no-store');
+    }
+
+    private function currentRulePrice(ConfiguratorVariant $variant): ?string
+    {
+        $cost = $variant->meta['variant_cost'] ?? null;
+        if ($cost === null) return null;
+        try { return app(AutogenesiPrice::class)->quote((string) $cost)['selling_price']; }
+        catch (\InvalidArgumentException) { return null; }
     }
 
     public function store(Request $request, ConfiguratorProduct $product, ConfiguratorVariant $variant, AutogenesiAliExpressApi $api, CatalogPriceUpdater $updater)
@@ -73,7 +118,9 @@ class CatalogVariantMatchController extends Controller
             unset($meta['supplier_match_required']);
             $meta['supplier_match_manual'] = ['user_id' => $request->user()->id, 'matched_at' => now()->toIso8601String()];
             $current->update(['meta' => $meta]);
-            return $updater->apply($product->id, $matches, null, $variant->id, true);
+            $result = $updater->apply($product->id, $matches, null, $variant->id, true);
+            if ($result['skipped']) throw ValidationException::withMessages(['sku_id' => 'Costo e prezzo non salvati. Ricarica le varianti e riprova.']);
+            return $result;
         });
         return response()->json(['message' => ($replacement ? 'Nuovo link e abbinamento salvati nel DB.' : 'Abbinamento salvato.') . ' Costo aggiornato e prezzo di vendita reimpostato secondo la regola attiva.', 'result' => $result]);
     }
@@ -228,6 +275,46 @@ class CatalogVariantMatchController extends Controller
             'app_variant' => ['id' => $variant->id, 'label' => $variant->title, 'sku' => $variant->sku,
                 'price' => $variant->price, 'rule_price' => null, 'supplier_label' => null,
                 'supplier_cost' => null, 'source_id' => null, 'sku_id' => null]]);
+    }
+
+    public function createVersion(ConfiguratorProduct $product, CatalogPriceUpdater $updater)
+    {
+        abort_unless(app()->environment('local') && $updater->isRadio($product), 403);
+        $result = DB::transaction(function () use ($product, $updater) {
+            $p = $product->newQuery()->lockForUpdate()->findOrFail($product->id);
+            $variants = $p->variants()->lockForUpdate()->get();
+            if ($variants->isEmpty()) throw ValidationException::withMessages(['variants' => 'Nessuna variante da duplicare.']);
+            $letters = $variants->map(fn ($v) => $updater->variantVersion($v->title ?: $v->option_value ?: ''))->filter();
+            if ($letters->isNotEmpty() && $letters->count() !== $variants->count()) {
+                throw ValidationException::withMessages(['variants' => 'Completa i suffissi delle varianti esistenti prima di creare una nuova versione.']);
+            }
+            $next = $letters->isEmpty() ? 'B' : chr(max($letters->map(fn ($letter) => ord($letter))->all()) + 1);
+            if ($next > 'Z') throw ValidationException::withMessages(['variants' => 'Non sono disponibili altre lettere di versione.']);
+            $bases = [];
+            foreach ($variants as $variant) {
+                $title = trim($variant->title ?: $variant->option_value ?: '');
+                $base = preg_replace('/-[A-Z]$/i', '', $title);
+                if ($base === '') throw ValidationException::withMessages(['variants' => 'Una variante non ha un nome valido.']);
+                if ($letters->isEmpty()) $variant->update(['title' => $base.'-A', 'option_value' => $base.'-A']);
+                if ($letters->isEmpty()) $bases[$variant->id] = [$base, $variant];
+                elseif (!isset($bases[$base]) || $updater->variantVersion($title) === 'A') $bases[$base] = [$base, $variant];
+            }
+            foreach ($bases as [$base, $variant]) {
+                $title = $base.'-'.$next;
+                if (mb_strlen($title) > 255) throw ValidationException::withMessages(['variants' => 'Nome variante troppo lungo per la nuova versione.']);
+                $p->variants()->create(['title' => $title, 'option_value' => $title, 'sku' => 'VERSION-'.$p->id.'-'.Str::uuid(),
+                    'price' => $variant->price, 'image_url' => $variant->image_url,
+                    'meta' => ['created_manually' => true, 'versioned_from_variant_id' => $variant->id]]);
+            }
+            return ['letter' => $next, 'created' => count($bases)];
+        });
+        $app = $product->fresh()->variants->sortBy(fn ($v) => $updater->variantOrder($v))->values()->map(fn ($v) => [
+            'id' => $v->id, 'label' => $v->title ?: $v->option_value, 'sku' => $v->sku, 'price' => $v->price,
+            'source_id' => $v->meta['source_product_id'] ?? null, 'sku_id' => $v->meta['source_sku_id'] ?? null,
+            'rule_price' => $this->currentRulePrice($v), 'supplier_label' => $v->meta['supplier_variant_label'] ?? null,
+            'supplier_cost' => $v->meta['variant_cost'] ?? null,
+        ]);
+        return response()->json(['message' => "Versione {$result['letter']} creata: {$result['created']} varianti da abbinare.", 'app' => $app, ...$result]);
     }
 
     public function create(Request $request, ConfiguratorProduct $product, AutogenesiAliExpressApi $api, CatalogPriceUpdater $updater)

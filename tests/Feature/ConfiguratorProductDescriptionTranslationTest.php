@@ -18,6 +18,7 @@ class ConfiguratorProductDescriptionTranslationTest extends TestCase
         Http::preventStrayRequests();
         config(['services.openai.api_key' => null]);
         $handles = [
+            'opel-astra-j-2009-2018-ae-1005007712837802',
             'citroen-saxo-1996-2003-ae-1005013445297851',
             'citroen-xsara-picasso-1999-2010-ae-1005012872013801',
             'ford-mondeo-3-2000-2007-ae-1005013260877939',

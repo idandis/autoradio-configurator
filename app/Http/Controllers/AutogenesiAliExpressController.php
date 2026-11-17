@@ -33,7 +33,6 @@ class AutogenesiAliExpressController extends Controller
 
         $url = 'https://api-sg.aliexpress.com/oauth/authorize?'.http_build_query([
             'response_type' => 'code',
-            'force_auth' => 'true',
             'client_id' => config('services.aliexpress.app_key'),
             'redirect_uri' => config('services.aliexpress.redirect_uri'),
             'state' => $state,

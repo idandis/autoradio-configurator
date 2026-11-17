@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\ProcessAutogenesiBatch;
+use App\Jobs\SyncMissingShopifyIds;
 use App\Models\AutogenesiBatch;
 use App\Models\AutogenesiBatchItem;
 use App\Models\AutogenesiProduct;
@@ -24,6 +25,7 @@ use Illuminate\Http\Client\RequestException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Process;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
@@ -34,6 +36,7 @@ class AutogenesiController extends Controller
     public function index()
     {
         return Inertia::render('Autogenesi', ['reimportImagesResult' => session('reimport_images_result'), 'local' => app()->environment('local'), 'workerError' => session('errors')?->first('worker'), 'detection' => session('autogenesi_detection'), 'detectionMaxYear' => now()->year - 1, 'search' => session('autogenesi_search'), 'directImport' => session('autogenesi_direct_import'),
+            'shopifyIdSync' => fn () => Cache::get('shopify-id-sync:'.auth()->id()),
             'apiConnection' => app()->environment('local') ? app(\App\Services\AutogenesiAliExpressAuth::class)->status(auth()->id()) : null,
             'batches' => fn () => AutogenesiBatch::with('items')->latest()->limit(10)->get(),
             'products' => fn () => AutogenesiProduct::where('status', 'draft')->latest()->get()->map(function ($p) {
@@ -53,6 +56,25 @@ class AutogenesiController extends Controller
 
                 return $data;
             })]);
+    }
+
+    public function syncShopifyIds(Request $request)
+    {
+        $key = 'shopify-id-sync:'.$request->user()->id;
+        if (in_array(Cache::get($key)['status'] ?? null, ['queued', 'running'], true)) {
+            return back()->withErrors(['shopify_ids' => 'Sincronizzazione già in corso.']);
+        }
+        Cache::put($key, ['status' => 'queued', 'total' => 0, 'checked' => 0, 'products' => 0, 'variants' => 0, 'missing' => 0, 'unmatched' => 0, 'errors' => 0], now()->addDay());
+        app(AutogenesiRunControl::class)->activate();
+        SyncMissingShopifyIds::dispatch($request->user()->id);
+        try {
+            app(\App\Services\AutogenesiWorker::class)->ensure();
+        } catch (\Throwable $e) {
+            Cache::put($key, ['status' => 'failed', 'total' => 0, 'checked' => 0, 'products' => 0, 'variants' => 0, 'missing' => 0, 'unmatched' => 0, 'errors' => 1], now()->addDay());
+            throw $e;
+        }
+
+        return back()->with('status', 'Ricerca degli ID Shopify avviata.');
     }
 
     public function detectMissing(Request $request, \App\Services\AutogenesiDetection $detector)

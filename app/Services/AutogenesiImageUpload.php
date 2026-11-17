@@ -28,14 +28,14 @@ class AutogenesiImageUpload
                 try {
                     $this->convert($file, $tmp);
                     $photo = app(AutogenesiSquareImage::class)->original($tmp);
-                    $base = 'autogenesi/products/'.$product->source_id.'/upload-'.Str::uuid();
-                    $path = $base.'.'.$photo['extension'];
+                    $originalName = mb_substr(basename($file->getClientOriginalName()), 0, 255);
+                    $path = app(AutogenesiImageFilename::class)->uploadPath($product->source_id, $originalName, $photo['extension']);
                     if (! $disk->put($path, $photo['bytes'])) {
                         throw new RuntimeException('Salvataggio foto non riuscito.');
                     }
                     $written[] = $path;
                     $pending[] = ['path' => $path, 'uncropped_path' => null, 'source_url' => null, 'uploaded' => true,
-                        'original_name' => mb_substr(basename($file->getClientOriginalName()), 0, 255), 'role' => $role, 'variant' => null,
+                        'original_name' => $originalName, 'role' => $role, 'variant' => null,
                         'width' => $photo['width'], 'height' => $photo['height'], 'sha256' => $photo['sha256'], 'square_cropped' => $photo['square_cropped']];
                 } finally {
                     if (is_file($tmp)) {

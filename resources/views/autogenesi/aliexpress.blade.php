@@ -15,7 +15,7 @@
 </form>
 <p>Risultati grezzi, destinazione Spagna, prezzi EUR. Compatibilità, origine UE e prezzo della variante da verificare. Questa prova non importa prodotti.</p>
 @if ($apiSearch)
-<p>{{ count($apiSearch['products']) }} risultati visualizzati su {{ $apiSearch['total'] }} restituiti.</p>
+<p>{{ count($apiSearch['products']) }} risultati pertinenti su {{ $apiSearch['scanned'] ?? 0 }} esaminati.</p>
 @foreach ($apiSearch['products'] as $p)
 <div style="padding:16px 0;border-bottom:1px solid #444">
 <a style="color:#9bd" href="{{ $p['url'] }}" target="_blank" rel="noopener noreferrer">{{ $p['title'] }}</a>

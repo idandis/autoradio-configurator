@@ -77,7 +77,7 @@ class AutogenesiCatalogImport
                     if ($hash !== $image['sha256']) {
                         throw new RuntimeException('Una foto è cambiata: riapri la bozza e riprova.');
                     }
-                    $target = 'autogenesi/catalog/'.$source->source_id.'/'.$hash.'.'.$ext;
+                    $target = app(AutogenesiImageFilename::class)->catalogPath($source->source_id, $image, $ext);
                     if (! $public->exists($target)) {
                         if (! $public->put($target, file_get_contents($path))) {
                             throw new RuntimeException('Copia foto nel configuratore non riuscita.');

@@ -24,7 +24,7 @@ class AutogenesiAliExpressAuth
         }
         try {
             $data = json_decode(Crypt::decryptString($disk->get($this->path($user))), true, 512, JSON_THROW_ON_ERROR);
-            if (($data['expires_at'] ?? 0) <= time() + 600 && empty($data['invalidated']) && $this->refreshValid($data)) {
+            if ($this->shouldRefresh($data)) {
                 $data = $this->refresh($user);
             }
             return ['connected' => ($data['expires_at'] ?? 0) > time(), 'expires_at' => $data['expires_at'] ?? null];
@@ -78,8 +78,19 @@ class AutogenesiAliExpressAuth
 
     private function refreshValid(array $data): bool
     {
-        $expiry = $data['refresh_expires_at'] ?? (strtotime($data['received_at'] ?? '') + (int) ($data['refresh_expires_in'] ?? 0));
-        return is_string($data['refresh_token'] ?? null) && $data['refresh_token'] !== '' && $expiry > time();
+        return is_string($data['refresh_token'] ?? null) && $data['refresh_token'] !== '' && $this->refreshExpiry($data) > time();
+    }
+
+    private function refreshExpiry(array $data): int
+    {
+        return (int) ($data['refresh_expires_at'] ?? (strtotime($data['received_at'] ?? '') + (int) ($data['refresh_expires_in'] ?? 0)));
+    }
+
+    private function shouldRefresh(array $data): bool
+    {
+        $lead = min(3600, max(60, (int) (($data['refresh_expires_in'] ?? 6000) / 10)));
+        return empty($data['invalidated']) && $this->refreshValid($data)
+            && (($data['expires_at'] ?? 0) <= time() + 600 || $this->refreshExpiry($data) <= time() + $lead);
     }
 
     private function refresh(int $user): array
@@ -88,7 +99,7 @@ class AutogenesiAliExpressAuth
         return Cache::lock('autogenesi.aliexpress.refresh.'.$user, 40)->block(5, function () use ($user) {
             $disk = Storage::disk('local');
             $data = json_decode(Crypt::decryptString($disk->get($this->path($user))), true, 512, JSON_THROW_ON_ERROR);
-            if (($data['expires_at'] ?? 0) > time() + 600 || empty($data['refresh_token']) || ! $this->refreshValid($data)) return $data;
+            if (! $this->shouldRefresh($data)) return $data;
             $params = [
                 'app_key' => (string) config('services.aliexpress.app_key'),
                 'refresh_token' => $data['refresh_token'],
@@ -106,9 +117,10 @@ class AutogenesiAliExpressAuth
                 || $fresh['access_token'] === '' || ! is_numeric($fresh['expires_in'] ?? null) || $fresh['expires_in'] <= 0) {
                 throw new RuntimeException('Rinnovo AliExpress non riuscito.');
             }
-            $oldExpiry = $data['refresh_expires_at'] ?? (strtotime($data['received_at'] ?? '') + (int) ($data['refresh_expires_in'] ?? 0));
+            $oldExpiry = $this->refreshExpiry($data);
             $fresh['refresh_token'] = $fresh['refresh_token'] ?? $data['refresh_token'];
-            $fresh['refresh_expires_at'] = min($oldExpiry, time() + (int) ($fresh['refresh_expires_in'] ?? 0));
+            $fresh['refresh_expires_at'] = is_numeric($fresh['refresh_expires_in'] ?? null) && $fresh['refresh_expires_in'] > 0
+                ? time() + (int) $fresh['refresh_expires_in'] : $oldExpiry;
             $fresh['expires_at'] = time() + (int) $fresh['expires_in'];
             $fresh['received_at'] = now()->toIso8601String();
             unset($fresh['code']);

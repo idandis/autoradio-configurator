@@ -17,7 +17,13 @@ class ImportedProductsController extends Controller
     public function createFromAliExpress(Request $request): RedirectResponse
     {
         abort_unless(app()->environment('local'), 403);
-        $data = $request->validate(['source_url' => ['required', 'url', 'max:2048']]);
+        $data = $request->validate([
+            'source_url' => ['required', 'url', 'max:2048'],
+            'brand' => ['nullable', 'required_with:model,year_from,year_to', 'string', 'max:100'],
+            'model' => ['nullable', 'required_with:brand,year_from,year_to', 'string', 'max:100'],
+            'year_from' => ['nullable', 'required_with:brand,model,year_to', 'integer', 'between:1950,2035'],
+            'year_to' => ['nullable', 'required_with:brand,model,year_from', 'integer', 'gte:year_from', 'max:2035'],
+        ]);
         try {
             set_time_limit(900);
             $url = app(\App\Services\AutogenesiSearch::class)->sourceUrl($data['source_url']);
@@ -31,7 +37,10 @@ class ImportedProductsController extends Controller
                 ->orWhere('meta->autogenesi->source_id', $id)
                 ->first();
             if (!$product) {
-                $draft = app(\App\Services\AutogenesiApiImport::class)->importUrl($request->user()->id, $url);
+                $vehicle = isset($data['brand']) ? array_intersect_key($data, array_flip(['brand', 'model', 'year_from', 'year_to'])) : null;
+                $draft = $vehicle
+                    ? app(\App\Services\AutogenesiApiImport::class)->importUrl($request->user()->id, $url, $vehicle)
+                    : app(\App\Services\AutogenesiApiImport::class)->importUrl($request->user()->id, $url);
                 $product = app(\App\Services\AutogenesiCatalogImport::class)->import($draft);
                 $paths = collect($draft->images)->flatMap(fn ($image) => [$image['path'] ?? null, $image['uncropped_path'] ?? null,
                     $image['original']['path'] ?? null, $image['original']['uncropped_path'] ?? null])->filter()->unique()->all();

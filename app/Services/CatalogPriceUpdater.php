@@ -78,14 +78,31 @@ class CatalogPriceUpdater
             $ram = (int) $ramMatch[1]; $rom = (int) $romMatch[1];
         } elseif (preg_match('/\b(\d{1,2})\s*(?:G(?:B)?)?\s*[-+\/ ,·]+\s*(16|32|64|128|256|512|1024)\s*G(?:B)?\b/iu', $label, $memory)) {
             $ram = (int) $memory[1]; $rom = (int) $memory[2];
+        } elseif (preg_match('/\b(\d{1,2})\s*G(?:B)?\s*[-+\/ ,·]+\s*(16|32|64|128|256|512|1024)\b/iu', $label, $memory)) {
+            $ram = (int) $memory[1]; $rom = (int) $memory[2];
+        } elseif ($profile === RadioVariantConfigurations::PROFILE) {
+            $resolved = app(RadioVariantConfigurations::class)->resolve($label, $profile, null, null);
+            if (!$resolved['memory']) return null;
+            [$ram, $rom] = $resolved['memory'];
         } else return null;
         if ($ram < 1 || $ram > 32 || $rom <= $ram) return null;
-        $cores = $this->explicitCores($label);
+        $cores = $this->cores($label, $profile);
         if ($cores === null && $profile === RadioVariantConfigurations::PROFILE) {
             $code = app(RadioVariantConfigurations::class)->code($label);
             $cores = $code === 'P1L' ? 4 : app(RadioVariantConfigurations::class)->resolve($label, $profile, [$ram, $rom], null)['cores'];
         }
-        return ($cores ? $cores.'Core ' : '').$ram.'G '.$rom.'G';
+        return ($cores ? $cores.'Core ' : '').$ram.'G '.$rom.'G'.(($version = $this->variantVersion($label)) ? '-'.$version : '');
+    }
+
+    public function variantVersion(string $label): ?string
+    {
+        if (preg_match('/-([A-Z])$/u', trim($label), $m)
+            || preg_match('/\b(?:MODEL(?:LO)?|VERSION(?:E)?|TYPE|TIPO)\s*[-:]?\s*([A-Z])\b/iu', $label, $m)
+            || preg_match('/\)\s*[- ]?\s*([A-Z])(?=$|[\s·,;])/iu', $label, $m)
+            || preg_match('/\b(?:16|32|64|128|256|512|1024)\s*G(?:B)?\s*[- ]\s*([A-Z])(?=$|[\s·,;])/iu', $label, $m)) {
+            return strtoupper($m[1]);
+        }
+        return null;
     }
 
     private function memory(string $label): ?array
@@ -148,6 +165,7 @@ class CatalogPriceUpdater
 
     private function compatibleNames(string $local, string $supplier, ?string $profile = null): bool
     {
+        if ($this->variantVersion($local) !== $this->variantVersion($supplier)) return false;
         $rules = app(RadioVariantConfigurations::class);
         $a = $rules->resolve($local, $profile, $this->memory($local), $this->cores($local, $profile));
         $b = $rules->resolve($supplier, $profile, $this->memory($supplier), $this->cores($supplier, $profile));
@@ -185,8 +203,19 @@ class CatalogPriceUpdater
                 $source = (string) ($meta['source_product_id'] ?? '');
                 $sourceSku = (string) ($meta['source_sku_id'] ?? '');
                 $attr = $this->attributes((string) $v->sku);
+                if ($variantId !== null && $resetPrice && !$byName) {
+                    $candidates[$v->id] = array_values(array_filter($offers, fn ($o) => in_array($o['source_id'], $sources, true)
+                        && $source === $o['source_id'] && $sourceSku !== '' && $sourceSku === $o['sku_id']));
+                    $methods[$v->id] = 'manual_selected_sku';
+                    if (count($candidates[$v->id]) === 1) {
+                        $key = $candidates[$v->id][0]['source_id'].':'.$candidates[$v->id][0]['sku_id'];
+                        $uses[$key] = ($uses[$key] ?? 0) + 1;
+                    }
+                    continue;
+                }
                 $matches = !empty($meta['supplier_match_required']) ? [] : array_values(array_filter($offers, fn ($o) => in_array($o['source_id'], $sources, true)
                     && (!$source || $source === $o['source_id'])
+                    && $this->variantVersion($v->title ?: $v->option_value ?: '') === $this->variantVersion($o['label'] ?? '')
                     && ($sourceSku ? $sourceSku === $o['sku_id'] : ($attr !== '' && $attr === $o['attr']))));
                 $methods[$v->id] = $sourceSku ? 'source_sku_id' : 'sku_attributes';
                 if (empty($meta['supplier_match_required'])) {

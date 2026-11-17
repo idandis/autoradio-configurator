@@ -202,8 +202,8 @@ class ConfiguratorCsvImporter
     private function readSpreadsheet(string $path): array
     {
         try {
-            $rows = IOFactory::load($path)
-                ->getActiveSheet()
+            $book = IOFactory::load($path);
+            $rows = ($book->getSheetByName('Products') ?? $book->getActiveSheet())
                 ->toArray(null, true, true, false);
         } catch (\Throwable $exception) {
             throw new RuntimeException('Unable to open Excel file.', previous: $exception);

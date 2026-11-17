@@ -12,6 +12,17 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class AutogenesiTemplateExport
 {
+    public const RADIO_CATEGORY = 'Vehicles & Parts > Vehicle Parts & Accessories > Motor Vehicle Electronics > Motor Vehicle A/V Players & In-Dash Systems';
+
+    public const CHANNELS = [
+        'Published: Online Store' => 'TRUE',
+        'Published: Point of Sale' => 'FALSE',
+        'Published: Shop' => 'TRUE',
+        'Published: Google & YouTube' => 'TRUE',
+        'Published: Facebook & Instagram' => 'TRUE',
+        'Published: TikTok' => 'TRUE',
+    ];
+
     public const SOURCE = 'Metafield: custom.aliexpress_url [url]';
 
     public const BRAND = 'Metafield: custom.radio_type [single_line_text_field]';
@@ -29,6 +40,26 @@ class AutogenesiTemplateExport
         return [...json_decode(file_get_contents(resource_path('autogenesi/export-columns.json')), true, flags: JSON_THROW_ON_ERROR), 'Status', 'Variant Inventory Tracker', 'Variant Inventory Policy'];
     }
 
+    public function uniqueVariantLabels(array $labels): array
+    {
+        $key = fn ($label) => mb_strtolower(trim((string) $label));
+        $counts = array_count_values(array_map($key, $labels));
+        $used = [];
+        foreach ($labels as $label) if ($counts[$key($label)] === 1) $used[$key($label)] = true;
+        foreach ($labels as $index => $label) {
+            if ($counts[$key($label)] === 1) continue;
+            $suffix = 0;
+            do {
+                $n = $suffix++; $letters = '';
+                do { $letters = chr(65 + $n % 26).$letters; $n = intdiv($n, 26) - 1; } while ($n >= 0);
+                $candidate = rtrim((string) $label).'-'.$letters;
+            } while (isset($used[$key($candidate)]));
+            $labels[$index] = $candidate;
+            $used[$key($candidate)] = true;
+        }
+        return $labels;
+    }
+
     public function rows(AutogenesiProduct $p): array
     {
         $images = $this->images($p);
@@ -38,8 +69,10 @@ class AutogenesiTemplateExport
             'Type' => 'Radio AM/FM', 'Body HTML' => $p->body_html, self::BRAND => $fields['brand'],
             self::DIN => $this->din($p), self::MODEL => $fields['model'], self::YEAR => $p->year_from.'-'.$p->year_to,
             self::DASHBOARD => $this->dashboard($p), 'Status' => 'Active',
+            'Vendor' => 'ARC', 'Category' => self::RADIO_CATEGORY, ...self::CHANNELS,
         ]);
         $rows = [];
+        $labels = $this->uniqueVariantLabels(array_column($p->variants, 'label'));
         for ($i = 0; $i < max(count($p->variants), count($images), 1); $i++) {
             $row = $base;
             if ($i > 0) {
@@ -51,7 +84,8 @@ class AutogenesiTemplateExport
                 }
             }
             if ($variant = $p->variants[$i] ?? null) {
-                $row['Option1 Value'] = $variant['label'];
+                $row['Option1 Name'] = 'Variantes';
+                $row['Option1 Value'] = $labels[$i];
                 $row['Variant ID'] = $variant['shopify_variant_id'] ?? '';
                 $row['Variant SKU'] = $variant['sku'];
                 $row['Variant Price'] = $variant['selling_price'] ?? '';
@@ -185,6 +219,20 @@ class AutogenesiTemplateExport
         $book = new Spreadsheet;
         $products = $book->getActiveSheet()->setTitle('Products');
         $this->fill($products, $rows);
+        $files = [];
+        $images = collect($rows)->pluck('Image Src')->filter()->keyBy(fn ($url) => rawurldecode(basename(parse_url($url, PHP_URL_PATH))))->all();
+        foreach ($rows as $row) {
+            foreach (preg_split('/\s*[,;\n]\s*/', $row[self::DASHBOARD] ?? '') as $reference) {
+                if ($reference && isset($images[$reference])) {
+                    $files[$reference] = ['File Name' => $reference, 'Command' => 'MERGE', 'Link' => $images[$reference]];
+                }
+            }
+        }
+        if ($files) {
+            $sheet = new Worksheet($book, 'Files');
+            $book->addSheet($sheet, 0);
+            $this->fill($sheet, array_values($files));
+        }
         $products->freezePane('A2')->setAutoFilter($products->calculateWorksheetDimension());
         foreach (['A' => 55, 'B' => 65, 'C' => 25, 'D' => 50, 'J' => 75] as $column => $width) {
             $products->getColumnDimension($column)->setWidth($width);
@@ -194,7 +242,7 @@ class AutogenesiTemplateExport
             $products->getStyle($cell)->getFill()->setFillType('solid')->getStartColor()->setARGB('FFFFE7A0');
             $products->getComment($cell)->setAuthor('AutoGenesi')->getText()->createText($note);
         }
-        $book->setActiveSheetIndex(0);
+        $book->setActiveSheetIndex($book->getIndex($products));
         (new Xlsx($book))->save($path);
         $book->disconnectWorksheets();
     }

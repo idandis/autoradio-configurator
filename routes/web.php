@@ -211,6 +211,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::post('/imported-products/new-from-aliexpress', [ImportedProductsController::class, 'createFromAliExpress'])->middleware('throttle:autogenesi')->name('imported-products.new-from-aliexpress');
     Route::get('/imported-products/{product}/variant-matcher', [ImportedProductsController::class, 'variantMatcher'])->name('imported-products.variant-matcher');
     Route::get('/autogenesi', [AutogenesiController::class, 'index'])->name('autogenesi.index');
+    Route::post('/autogenesi/sync-shopify-ids', [AutogenesiController::class, 'syncShopifyIds'])->name('autogenesi.sync-shopify-ids');
     Route::get('/autogenesi/aliexpress/callback', [\App\Http\Controllers\AutogenesiAliExpressController::class, 'callback'])->name('autogenesi.aliexpress.callback');
     Route::get('/autogenesi/aliexpress/status', [\App\Http\Controllers\AutogenesiAliExpressController::class, 'status'])->name('autogenesi.aliexpress.status');
     Route::post('/autogenesi/aliexpress/authorize', [\App\Http\Controllers\AutogenesiAliExpressController::class, 'authorize'])->middleware('throttle:aliexpress-authorization')->name('autogenesi.aliexpress.authorize');
@@ -282,9 +283,11 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::post('/imported-products/{product}/supplier-variants', [\App\Http\Controllers\CatalogVariantMatchController::class, 'show'])->middleware('throttle:10,1')->name('supplier-variants.preview');
     Route::post('/imported-products/{product}/supplier-variants/add', [\App\Http\Controllers\CatalogVariantMatchController::class, 'create'])->middleware('throttle:10,1')->name('supplier-variants.create');
     Route::post('/imported-products/{product}/supplier-variants/add-manual', [\App\Http\Controllers\CatalogVariantMatchController::class, 'createManual'])->name('supplier-variants.create-manual');
+    Route::post('/imported-products/{product}/supplier-variants/create-version', [\App\Http\Controllers\CatalogVariantMatchController::class, 'createVersion'])->name('supplier-variants.create-version');
     Route::post('/imported-products/{product}/supplier-variants/attempt', [\App\Http\Controllers\CatalogVariantMatchController::class, 'attempt'])->middleware('throttle:10,1')->name('supplier-variants.attempt');
     Route::post('/imported-products/{product}/supplier-variants/recreate', [\App\Http\Controllers\CatalogVariantMatchController::class, 'recreate'])->middleware('throttle:10,1')->name('supplier-variants.recreate');
     Route::post('/imported-products/{product}/variants/{variant}/supplier-match', [\App\Http\Controllers\CatalogVariantMatchController::class, 'store'])->middleware('throttle:10,1')->name('supplier-variants.match');
+    Route::post('/imported-products/{product}/variants/{variant}/reprice', [\App\Http\Controllers\CatalogVariantMatchController::class, 'reprice'])->name('supplier-variants.reprice');
     Route::delete('/imported-products/{product}/variants/{variant}/supplier-match', [\App\Http\Controllers\CatalogVariantMatchController::class, 'destroy'])->name('supplier-variants.destroy');
     Route::patch('/imported-products/{product}/variants/{variant}/supplier-match', [\App\Http\Controllers\CatalogVariantMatchController::class, 'rename'])->name('supplier-variants.rename');
     Route::post('/imported-products/recover-dsers', [ImportedProductsController::class, 'recoverDsers'])->middleware('throttle:10,1')->name('imported-products.recover-dsers');

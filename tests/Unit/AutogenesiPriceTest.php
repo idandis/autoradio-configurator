@@ -22,7 +22,7 @@ class AutogenesiPriceTest extends TestCase
 
     public function test_tier_boundaries_and_rounding_up_to_whole_euros(): void
     {
-        foreach ([['149.99', '110.00', '260'], ['150.00', '150.00', '397'], ['249.99', '150.00', '535'],
+        foreach ([['149.99', '110.00', '263'], ['150.00', '150.00', '397'], ['249.99', '150.00', '535'],
             ['250.00', '170.00', '555'], ['349.99', '170.00', '693'], ['350.00', '180.00', '703'],
             ['449.99', '180.00', '841'], ['450.00', '200.00', '861'], ['500.00', '200.00', '930']] as [$cost, $markup, $selling]) {
             $p = (new AutogenesiPrice)->quote($cost);
@@ -31,12 +31,12 @@ class AutogenesiPriceTest extends TestCase
         }
     }
 
-    public function test_below_150_uses_only_the_requested_markup_and_does_not_add_an_extra_euro(): void
+    public function test_below_150_adds_three_euros_in_fixed_customs_costs(): void
     {
         $p = (new AutogenesiPrice)->quote('100');
-        $this->assertSame('0.00', $p['customs_estimate']);
-        $this->assertSame('210.00', $p['before_rounding']);
-        $this->assertSame('210', $p['selling_price']);
+        $this->assertSame('3.00', $p['customs_estimate']);
+        $this->assertSame('213.00', $p['before_rounding']);
+        $this->assertSame('213', $p['selling_price']);
     }
 
     public function test_imported_variant_examples(): void

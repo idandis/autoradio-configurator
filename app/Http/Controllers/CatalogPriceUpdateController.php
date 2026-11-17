@@ -91,17 +91,22 @@ class CatalogPriceUpdateController extends Controller
                 $item['status'] = 'manual_updated';
                 unset($item['error']);
                 $previous = collect($item['result']['variants'] ?? [])->keyBy('id');
-                $rows = $product->variants->sortBy(fn ($v) => app(CatalogPriceUpdater::class)->variantOrder($v))->values()->map(function ($v) use ($isUpdated, $previous) {
+            $rows = $product->variants->sortBy(fn ($v) => app(CatalogPriceUpdater::class)->variantOrder($v))->values()->map(function ($v) use ($isUpdated, $previous) {
                     $row = $previous->get($v->id, ['id' => $v->id, 'title' => $v->title ?: $v->option_value, 'old_price' => $v->price, 'status' => 'skipped', 'reason' => 'Variante da verificare.']);
                     if (!$isUpdated($v)) return $row;
-                    $audit = $v->meta['price_update'];
+                    $audit = $v->meta['price_update'] ?? [];
+                    if (empty($v->meta['variant_cost']) || empty($audit['pricing'])) {
+                        return ['id' => $v->id, 'title' => $v->title ?: $v->option_value, 'status' => 'linked_unpriced',
+                            'old_price' => $v->price, 'supplier_label' => $v->meta['supplier_variant_label'] ?? '',
+                            'reason' => 'SKU abbinato; costo fornitore non disponibile e prezzo invariato.'];
+                    }
                     $byName = in_array($audit['match_method'] ?? '', ['memory_features', 'exact_variant_name'], true);
                     return ['id' => $v->id, 'title' => $v->title ?: $v->option_value, 'status' => $byName ? 'name_matched' : 'manual_matched',
                         'old_price' => $audit['old_price'] ?? '', 'new_price' => $v->price, 'cost' => $v->meta['variant_cost'] ?? null,
                         'minimum' => $audit['pricing']['selling_price'] ?? null, 'supplier_label' => $v->meta['supplier_variant_label'] ?? ''];
                 })->all();
                 $item['result'] = array_replace($item['result'] ?? ['supplier_variants' => 0], ['variants' => $rows,
-                    'skipped' => count(array_filter($rows, fn ($r) => $r['status'] === 'skipped'))]);
+                    'skipped' => count(array_filter($rows, fn ($r) => in_array($r['status'], ['skipped', 'linked_unpriced'], true)))]);
             }
             return $item;
         }, $visible);
@@ -124,8 +129,10 @@ class CatalogPriceUpdateController extends Controller
     {
         $meta = $v->meta ?? [];
         $at = strtotime($meta['supplier_match_manual']['matched_at'] ?? '');
-        return $at !== false && $at >= $run->created_at->timestamp && !empty($meta['price_update'])
-            && (string) ($meta['price_update']['source_sku_id'] ?? '') === (string) ($meta['source_sku_id'] ?? '')
-            && (string) ($meta['price_update']['source_product_id'] ?? '') === (string) ($meta['source_product_id'] ?? '');
+        if ($at === false || $at < $run->created_at->timestamp || empty($meta['source_sku_id']) || empty($meta['source_product_id'])) return false;
+        $audit = $meta['price_update'] ?? [];
+        return (!$audit && !empty($meta['supplier_match_manual']))
+            || ((string) ($audit['source_sku_id'] ?? '') === (string) $meta['source_sku_id']
+                && (string) ($audit['source_product_id'] ?? '') === (string) $meta['source_product_id']);
     }
 }

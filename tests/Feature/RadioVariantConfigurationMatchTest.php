@@ -96,6 +96,18 @@ class RadioVariantConfigurationMatchTest extends TestCase
         $this->assertNull(app(RadioVariantConfigurations::class)->code('S9'));
     }
 
+    public function test_s_and_qs_variants_with_6115_in_the_sku_names_can_be_recreated(): void
+    {
+        $s = app(CatalogPriceUpdater::class);
+        $raw = $this->raw('Other brand', ['P3CP(2G 64G)', 'QS1-6115 System', 'S1-7862 System', 'QS6-6115 System', 'S6-7862 System']);
+        $this->assertSame(RadioVariantConfigurations::PROFILE, app(RadioVariantConfigurations::class)->profile($raw));
+        $offers = $s->offers($raw, '123');
+        $this->assertSame('8Core 3G 32G', $s->recreatedVariantName($offers[1]['label'], $offers[1]['configuration_profile']));
+        $this->assertSame('8Core 3G 32G', $s->recreatedVariantName($offers[2]['label'], $offers[2]['configuration_profile']));
+        $this->assertSame('8Core 6G 64G', $s->recreatedVariantName($offers[3]['label'], $offers[3]['configuration_profile']));
+        $this->assertSame('8Core 6G 64G', $s->recreatedVariantName($offers[4]['label'], $offers[4]['configuration_profile']));
+    }
+
     public function test_conflicting_specifications_unknown_codes_and_t0_cpu_stay_unmatched(): void
     {
         $s = app(CatalogPriceUpdater::class);

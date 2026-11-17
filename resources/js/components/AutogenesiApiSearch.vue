@@ -26,6 +26,7 @@ const expiry = computed(() => connection.value?.expires_at ? new Date(connection
 type Candidate = { id: string; title: string; price: number | null; url: string; orders?: string };
 type Detail = { title: string; description: string; url: string; variants: { label: string; price: string; currency: string }[] };
 const query = ref('');
+const storefrontUrl = computed(() => `https://es.aliexpress.com/w/wholesale-${encodeURIComponent(query.value.trim().replace(/\s+/g, '-'))}.html?SearchText=${encodeURIComponent(query.value.trim())}`);
 watch(() => props.initialQuery, value => { if (value) query.value = value; });
 const sortBy = ref('price');
 const busy = ref(false);
@@ -33,7 +34,7 @@ const authorizing = ref(false);
 const authRetryUntil = ref(0);
 const authWait = computed(() => Math.max(0, Math.ceil((authRetryUntil.value - now.value) / 1000)));
 const error = ref('');
-const results = ref<{ products: Candidate[]; total: number; cached?: boolean } | null>(null);
+const results = ref<{ products: Candidate[]; scanned: number; pages: number; cached?: boolean } | null>(null);
 const detail = ref<Detail | null>(null);
 const selected = ref('');
 async function request(path: string, body: Record<string, string>) {
@@ -98,10 +99,11 @@ async function read(id: string) {
             <button class="self-end rounded-lg bg-blue-600 px-4 py-2 text-white disabled:opacity-50" :disabled="busy || !query.trim()">{{ busy && !selected ? 'Ricerca in corso…' : 'Cerca con API' }}</button>
         </form>
         <p class="text-sm text-muted-foreground">Senza browser · destinazione Spagna · prezzi EUR. Risultati da verificare: compatibilità, origine UE e variante. Non importa automaticamente nelle bozze.</p>
-        <p class="text-xs text-muted-foreground">Prezzo e vendite ordinano i risultati ricevuti. Migliore corrispondenza mantiene l’ordine restituito da AliExpress.</p>
+        <p class="text-xs text-muted-foreground">Mostriamo solo autoradio con marca e modello nel titolo, e controlliamo gli anni quando indicati. Esaminiamo fino a 3 pagine API; prezzo e vendite ordinano solo i risultati pertinenti ricevuti.</p>
         <p v-if="error" role="alert" class="text-sm text-red-500">{{ error }}</p>
         <template v-if="results">
-            <p class="text-sm">{{ results.products.length }} risultati visualizzati su {{ results.total }}. {{ !results.products.length ? 'Nessun prodotto trovato.' : '' }}</p>
+            <p class="text-sm">{{ results.products.length }} risultati pertinenti su {{ results.scanned }} esaminati ({{ results.pages }} pagine).</p>
+            <p v-if="!results.products.length" class="text-sm text-amber-500">L’API non ha restituito autoradio pertinenti nelle pagine esaminate. La ricerca sul sito AliExpress può mostrare prodotti diversi. <a :href="storefrontUrl" target="_blank" rel="noopener noreferrer" class="underline">Apri la ricerca sul sito ↗</a></p>
             <p v-if="results.cached" class="text-sm text-muted-foreground">Risultati recuperati dalla cache degli ultimi 5 minuti.</p>
             <div v-for="p in results.products" :key="p.id" class="flex flex-wrap items-center justify-between gap-3 border-t py-3">
                 <div class="min-w-0 flex-1"><a :href="p.url" target="_blank" rel="noopener noreferrer" class="text-sm text-blue-400 underline">{{ p.title }}</a><p class="mt-1 text-sm">{{ p.price !== null ? p.price.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' }) + ' · prezzo risultato' : 'Prezzo non disponibile' }}</p></div>

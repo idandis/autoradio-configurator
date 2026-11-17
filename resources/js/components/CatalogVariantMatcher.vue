@@ -19,6 +19,13 @@ const previewUrl = ref('');
 const comparison = ref<{ app: LocalVariant[]; aliexpress: SupplierVariant[]; errors: string[] } | null>(null);
 const supplierUrl = computed(() => previewUrl.value || comparison.value?.aliexpress.find(v => v.available)?.url || comparison.value?.aliexpress[0]?.url || '');
 onMounted(() => { if (props.autoLoad) load(); });
+function back() {
+    if (window.opener && !window.opener.closed) {
+        window.opener.location.reload();
+        window.close();
+    }
+    if (!window.closed) window.location.href = '/imported-products';
+}
 function refreshParent() {
     if (!props.autoLoad) router.reload({ only: ['products', 'priceUpdate'], preserveScroll: true, preserveState: true });
 }
@@ -108,6 +115,17 @@ function savePrice(variant: LocalVariant) {
         onFinish: () => { busy.value = false; },
     });
 }
+async function reprice(variant: LocalVariant) {
+    if (busy.value || (variant.supplier_cost == null && (!variant.source_id || !variant.sku_id))) return;
+    busy.value = true; error.value = ''; message.value = '';
+    try {
+        const data = await request(`/imported-products/${props.productId}/variants/${variant.id}/reprice`, {});
+        variant.price = data.price; variant.rule_price = data.rule_price; variant.supplier_cost = data.pricing.supplier_cost;
+        sortApp(); message.value = `${data.message} Regola ${data.pricing.rule_version}: costo ${data.pricing.supplier_cost} € + ricarico ${data.pricing.markup} € + costi fissi aggiuntivi ${data.pricing.extra_fixed_costs} € + dogana ${data.pricing.customs_estimate} € = ${data.price} €.`;
+        refreshParent();
+    } catch (e) { error.value = e instanceof Error ? e.message : 'Ricalcolo prezzo non riuscito.'; }
+    finally { busy.value = false; }
+}
 async function saveName(variant: LocalVariant) {
     if (busy.value) return;
     if (!variant.label.trim()) { error.value = 'Inserisci il nome variante.'; return; }
@@ -141,13 +159,33 @@ async function recreate() {
     } catch (e) { error.value = e instanceof Error ? e.message : 'Ricreazione varianti non riuscita.'; }
     finally { busy.value = false; }
 }
+async function createVersion() {
+    if (busy.value || !comparison.value) return;
+    busy.value = true; error.value = ''; message.value = ''; selected.value = null; adding.value = false;
+    try {
+        const data = await request(`/imported-products/${props.productId}/supplier-variants/create-version`, {});
+        comparison.value.app = data.app; sortApp(); message.value = data.message;
+        refreshParent();
+    } catch (e) { error.value = e instanceof Error ? e.message : 'Creazione versione non riuscita.'; }
+    finally { busy.value = false; }
+}
 </script>
 
 <template>
     <div class="mt-3 rounded-lg border border-amber-500/40 p-3">
-        <button type="button" :disabled="busy" class="rounded border px-3 py-2 text-sm disabled:opacity-50" @click="load(false)">{{ busy ? 'Lettura / salvataggio…' : opened ? 'Ricarica nomi varianti' : 'Mostra varianti app / AliExpress e abbina' }}</button>
-        <button v-if="allowReplacement" type="button" :disabled="busy" class="ml-2 rounded border border-sky-400/50 bg-sky-400/10 px-3 py-2 text-sm" @click="showReplacement = !showReplacement">Aggiorna nuovo link</button>
-        <a v-if="supplierUrl" :href="supplierUrl" target="_blank" rel="noopener noreferrer" class="ml-2 inline-flex rounded border px-3 py-2 text-sm">Apri scheda fornitore AliExpress ↗</a>
+        <div class="sticky top-0 z-30 -mx-3 -mt-3 border-b bg-background px-3 py-3 shadow-sm">
+            <div class="flex items-center gap-2 overflow-x-auto whitespace-nowrap">
+                <button v-if="autoLoad" type="button" class="shrink-0 rounded border px-3 py-2 text-sm" @click="back">← Indietro</button>
+                <button type="button" :disabled="busy" class="shrink-0 rounded border px-3 py-2 text-sm disabled:opacity-50" @click="load(false)">{{ busy ? 'Lettura / salvataggio…' : opened ? 'Ricarica dati varianti' : 'Mostra varianti e abbina' }}</button>
+                <button v-if="allowReplacement" type="button" :disabled="busy" class="shrink-0 rounded border border-sky-400/50 bg-sky-400/10 px-3 py-2 text-sm" @click="showReplacement = !showReplacement">Aggiorna nuovo link</button>
+                <button v-if="opened && comparison" type="button" :disabled="busy" class="shrink-0 rounded border border-emerald-500/50 px-3 py-2 text-sm disabled:opacity-40" @click="adding = true; selected = null; newTitle = ''; message = ''">+ Aggiungi variante</button>
+                <button v-if="opened && comparison" type="button" :disabled="busy || !comparison.aliexpress.some(v => v.available)" class="shrink-0 rounded border border-sky-400/50 bg-sky-400/10 px-3 py-2 text-sm disabled:opacity-40" @click="attempt">Tenta abbinamento</button>
+                <button v-if="opened && comparison" type="button" :disabled="busy" class="shrink-0 rounded border border-amber-400 bg-amber-400/15 px-3 py-2 text-sm font-medium text-amber-200 disabled:opacity-40" @click="recreate">Ricrea varianti</button>
+                <button v-if="opened && comparison" type="button" :disabled="busy || !comparison.app.length" class="shrink-0 rounded border border-violet-400/50 bg-violet-400/10 px-3 py-2 text-sm disabled:opacity-40" @click="createVersion">Crea versione varianti</button>
+                <a v-if="supplierUrl" :href="supplierUrl" target="_blank" rel="noopener noreferrer" class="inline-flex shrink-0 rounded border px-3 py-2 text-sm">Apri scheda fornitore AliExpress ↗</a>
+                <a v-if="opened && comparison" :href="`/imported-products/${productId}/sheet`" target="_blank" rel="noopener noreferrer" class="inline-flex shrink-0 rounded border px-3 py-2 text-sm">Apri scheda prodotto ↗</a>
+            </div>
+        </div>
         <form v-if="showReplacement" class="mt-3 space-y-2" @submit.prevent="load(true)">
             <label class="block text-sm">Nuovo link prodotto AliExpress<input v-model="replacementUrl" required type="url" maxlength="2048" :disabled="busy" placeholder="https://es.aliexpress.com/item/123.html" class="mt-1 w-full rounded border bg-background px-3 py-2" /></label>
             <button :disabled="busy || !replacementUrl.trim()" class="rounded bg-sky-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">Leggi varianti nuovo link</button>
@@ -160,10 +198,6 @@ async function recreate() {
             <p v-for="(warning, i) in comparison.errors" :key="i" class="my-2 text-amber-500">{{ warning }}</p>
             <div class="grid gap-3 md:grid-cols-2 md:items-start">
                 <div tabindex="0" aria-label="Scorri varianti app" class="min-w-0 md:max-h-[calc(100dvh-12rem)] md:overflow-y-auto md:overscroll-contain md:pr-2"><h3 class="mb-2 font-semibold">Varianti app</h3>
-                    <button type="button" :disabled="busy" class="mb-3 rounded border border-emerald-500/50 px-3 py-2 text-sm" @click="adding = true; selected = null; newTitle = ''; message = ''">+ Aggiungi variante</button>
-                    <button type="button" :disabled="busy || !comparison.aliexpress.some(v => v.available)" class="mb-3 ml-2 rounded border border-sky-400/50 bg-sky-400/10 px-3 py-2 text-sm disabled:opacity-40" @click="attempt">Tenta abbinamento</button>
-                    <button type="button" :disabled="busy" class="mb-3 ml-2 rounded border border-amber-400 bg-amber-400/15 px-3 py-2 text-sm font-medium text-amber-200 disabled:opacity-40" @click="recreate">RICREA VARIANTI</button>
-                    <a :href="`/imported-products/${productId}/sheet`" target="_blank" rel="noopener noreferrer" class="mb-3 ml-2 inline-flex rounded border px-3 py-2 text-sm">Apri scheda prodotto ↗</a>
                     <p class="mb-2 text-xs text-amber-400">Ricrea nel formato XCore RAM ROM, oppure RAM ROM se i core non sono leggibili. Esclude DVR e 360; a parità di configurazione sceglie il costo più basso. Le varianti senza RAM/ROM sono evidenziate in giallo e non importate.</p>
                     <p class="mb-3 text-xs text-muted-foreground">Tenta abbinamento usa nome, RAM/memoria e caratteristiche: esclude DVR/360 e salva solo corrispondenze univoche, con prezzi ricalcolati dalla regola.</p>
                     <div v-if="adding" class="mb-3 rounded border border-emerald-500 bg-emerald-500/10 p-3">
@@ -181,7 +215,7 @@ async function recreate() {
                     <label class="mt-2 block text-xs">Nome variante<input v-model="v.label" type="text" required maxlength="255" :disabled="busy" class="mt-1 w-full rounded border bg-background p-2" :aria-label="`Nome variante ${v.id}`" @click.stop @change="saveName(v)" @keydown.enter.prevent="($event.target as HTMLInputElement).blur()" /></label>
                     <p class="mt-2 text-xs">Costo prodotto: {{ v.supplier_cost != null ? `${v.supplier_cost} €` : 'Non disponibile' }}</p>
                     <p v-if="v.rule_price" class="mt-2 text-xs text-muted-foreground">Prezzo calcolato dalla regola: {{ v.rule_price }} €</p>
-                    <label class="mt-2 flex flex-wrap items-center gap-2 text-xs">Prezzo finale €<input v-model="v.price" type="number" min="0" max="999999.99" step="0.01" :disabled="busy" :aria-label="`Prezzo finale ${v.label}`" class="w-28 rounded border bg-background p-2" @click.stop @change="savePrice(v)" @keydown.enter.prevent="($event.target as HTMLInputElement).blur()" /></label>
+                    <label class="mt-2 flex flex-wrap items-center gap-2 text-xs">Prezzo finale €<input v-model="v.price" type="number" min="0" max="999999.99" step="0.01" :disabled="busy" :aria-label="`Prezzo finale ${v.label}`" class="w-28 rounded border bg-background p-2" @click.stop @change="savePrice(v)" @keydown.enter.prevent="($event.target as HTMLInputElement).blur()" /><button type="button" :disabled="busy || (v.supplier_cost == null && (!v.source_id || !v.sku_id))" class="rounded border border-amber-400 px-2 py-2 text-xs text-amber-200 disabled:opacity-40" :title="v.supplier_cost == null ? 'Recupera il costo AliExpress e ricalcola' : 'Ricalcola dal costo con la regola prezzo attiva'" @click.stop="reprice(v)">Ricalcola prezzo</button></label>
                     </div>
                     <button type="button" :disabled="busy || comparison.app.length < 2" class="shrink-0 rounded border border-red-500/50 px-2 py-1 text-xs text-red-500 disabled:opacity-40" :aria-label="`Elimina variante ${v.label}`" :title="comparison.app.length < 2 ? 'Deve rimanere almeno una variante' : 'Elimina variante app'" @click.stop.prevent="removeVariant(v)">Elimina</button>
                     </div>

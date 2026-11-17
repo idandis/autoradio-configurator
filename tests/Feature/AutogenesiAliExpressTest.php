@@ -53,6 +53,7 @@ class AutogenesiAliExpressTest extends TestCase
         $r = $this->post('/autogenesi/aliexpress/authorize')->assertRedirect();
         parse_str(parse_url($r->headers->get('Location'), PHP_URL_QUERY), $q);
         $this->assertSame(config('services.aliexpress.redirect_uri'), $q['redirect_uri']);
+        $this->assertArrayNotHasKey('force_auth', $q);
         $url = '/autogenesi/aliexpress/callback?'.http_build_query(['state' => $q['state'], 'code' => 'private-code']);
         $this->get($url)->assertRedirect(route('autogenesi.aliexpress.callback'));
         $this->assertNull(Cache::get('autogenesi.aliexpress.code.'.auth()->id()));
@@ -116,6 +117,30 @@ class AutogenesiAliExpressTest extends TestCase
         Http::assertSentCount(1);
     }
 
+    public function test_status_renews_before_refresh_token_expires_even_when_access_token_is_valid(): void
+    {
+        Cache::put('autogenesi.aliexpress.code.'.auth()->id(), Crypt::encryptString('code'), 60);
+        app(AutogenesiAliExpressAuth::class)->exchangePending(auth()->id());
+        $disk = Storage::disk('local');
+        $file = $disk->allFiles('autogenesi/aliexpress')[0];
+        $old = json_decode(Crypt::decryptString($disk->get($file)), true);
+        $old['expires_at'] = time() + 86400;
+        $old['refresh_expires_at'] = time() + 1800;
+        $old['refresh_expires_in'] = 86400;
+        $disk->put($file, Crypt::encryptString(json_encode($old)));
+        Http::swap(new \Illuminate\Http\Client\Factory);
+        Http::preventStrayRequests();
+        Http::fake(['api-sg.aliexpress.com/rest/auth/token/refresh' => Http::response([
+            'access_token' => 'renewed-token', 'refresh_token' => 'renewed-refresh',
+            'expires_in' => 86400, 'refresh_expires_in' => 172800,
+        ])]);
+        $this->getJson('/autogenesi/aliexpress/status')->assertOk()->assertJsonPath('connected', true);
+        $fresh = json_decode(Crypt::decryptString($disk->get($file)), true);
+        $this->assertSame('renewed-token', $fresh['access_token']);
+        $this->assertGreaterThan($old['refresh_expires_at'], $fresh['refresh_expires_at']);
+        Http::assertSentCount(1);
+    }
+
     public function test_invalid_state_and_non_admin_are_rejected(): void
     {
         $this->get('/autogenesi/aliexpress/callback?state=wrong&code=secret')->assertForbidden();
@@ -164,18 +189,39 @@ class AutogenesiAliExpressTest extends TestCase
         Http::swap(new \Illuminate\Http\Client\Factory);
         Http::preventStrayRequests();
         Http::fake(['api-sg.aliexpress.com/sync' => Http::response(['aliexpress_ds_text_search_response' => ['code' => '00', 'data' => ['totalCount' => 1, 'products' => ['selection_search_product' => [
-            ['itemId' => '12345', 'title' => 'Radio Kona', 'salePrice' => '100', 'salePriceCurrency' => 'CNY', 'targetSalePrice' => '13.00', 'orders' => '1.2k+'],
+            ['itemId' => '12345', 'title' => 'Radio Android Hyundai Kona 2017-2020', 'salePrice' => '100', 'salePriceCurrency' => 'CNY', 'targetSalePrice' => '13.00', 'orders' => '1.2k+'],
         ]]]]])]);
         $this->post('/autogenesi/aliexpress/search', ['query' => 'radio Hyundai Kona 2017 2020'])->assertRedirect()->assertSessionHas('aliexpress_search.products.0.price', 13.0);
         $this->postJson('/autogenesi/aliexpress/search', ['query' => 'radio Hyundai Kona 2017 2020'])->assertOk()->assertJsonPath('products.0.price', 13)->assertJsonPath('products.0.id', '12345');
         $this->assertSame(1200, app(\App\Services\AutogenesiAliExpressApi::class)->search(auth()->id(), 'radio Hyundai Kona 2017 2020')['products'][0]['sales']);
-        Http::assertSent(fn ($r) => $r['session'] === 'private-token' && $r['currency'] === 'EUR' && $r['keyWord'] === 'radio Hyundai Kona 2017 2020' && !isset($r['app_secret']));
+        Http::assertSent(fn ($r) => $r['session'] === 'private-token' && $r['currency'] === 'EUR' && $r['keyWord'] === 'radio Hyundai Kona 2017 2020' && $r['pageSize'] === '20' && $r['pageIndex'] === '1' && !isset($r['app_secret']));
         Http::swap(new \Illuminate\Http\Client\Factory);
         Http::fake(['api-sg.aliexpress.com/sync' => Http::response(['error_response' => ['code' => '15', 'sub_code' => 'SystemError', 'msg' => 'private-token test-secret']])]);
         $this->postJson('/autogenesi/aliexpress/search', ['query' => 'radio seat ibiza 2018'])->assertStatus(422)->assertJsonPath('message', 'Errore AliExpress SystemError (HTTP 200). Riprova; se persiste, segnala questo codice.');
         $log = Storage::disk('local')->get('autogenesi/aliexpress/last-api-'.auth()->id().'.json');
         $this->assertStringContainsString('SystemError', $log);
         $this->assertStringNotContainsString('private-token', $log);
+    }
+
+    public function test_api_search_skips_unrelated_products_and_reads_next_page(): void
+    {
+        Cache::put('autogenesi.aliexpress.code.'.auth()->id(), Crypt::encryptString('code'), 60);
+        app(AutogenesiAliExpressAuth::class)->exchangePending(auth()->id());
+        Http::swap(new \Illuminate\Http\Client\Factory);
+        Http::preventStrayRequests();
+        $unrelated = array_map(fn ($i) => ['itemId' => (string) $i, 'title' => 'Rear View Camera for Audi A1', 'targetSalePrice' => '20'], range(100, 119));
+        $relevant = [
+            ['itemId' => '200', 'title' => 'Autoradio Mercedes W210 1995-2002 Android', 'targetSalePrice' => '120'],
+            ['itemId' => '201', 'title' => 'Autoradio Mercedes W210 2005-2008 Android', 'targetSalePrice' => '100'],
+            ['itemId' => '202', 'title' => 'Universal Mercedes Radio Android', 'targetSalePrice' => '80'],
+        ];
+        $response = fn ($items) => ['aliexpress_ds_text_search_response' => ['code' => '00', 'data' => ['totalCount' => 0, 'products' => ['selection_search_product' => $items]]]];
+        Http::fake(['api-sg.aliexpress.com/sync' => Http::sequence()->push($response($unrelated))->push($response($relevant))]);
+        $this->postJson('/autogenesi/aliexpress/search', ['query' => 'radio mercedes w210 2000'])
+            ->assertOk()->assertJsonPath('products.0.id', '200')->assertJsonCount(1, 'products')
+            ->assertJsonPath('scanned', 23)->assertJsonPath('pages', 2);
+        Http::assertSentCount(2);
+        Http::assertSent(fn ($r) => $r['keyWord'] === 'radio mercedes w210 2000' && $r['pageIndex'] === '2');
     }
 
     public function test_api_failure_is_safe_and_expired_token_stops_calls(): void
@@ -216,9 +262,9 @@ class AutogenesiAliExpressTest extends TestCase
         app(AutogenesiAliExpressAuth::class)->exchangePending(auth()->id());
         Http::swap(new \Illuminate\Http\Client\Factory);
         Http::fake(['api-sg.aliexpress.com/sync' => Http::response(['aliexpress_ds_text_search_response' => ['code' => '00', 'data' => ['totalCount' => 3, 'products' => ['selection_search_product' => [
-            ['itemId' => '1', 'title' => 'First', 'targetSalePrice' => '50', 'orders' => '20'],
-            ['itemId' => '2', 'title' => 'Cheapest', 'targetSalePrice' => '10', 'orders' => '10'],
-            ['itemId' => '3', 'title' => 'Most sold', 'targetSalePrice' => '100', 'orders' => '1000+'],
+            ['itemId' => '1', 'title' => 'First Toyota Radio', 'targetSalePrice' => '50', 'orders' => '20'],
+            ['itemId' => '2', 'title' => 'Cheapest Toyota Radio', 'targetSalePrice' => '10', 'orders' => '10'],
+            ['itemId' => '3', 'title' => 'Most sold Toyota Radio', 'targetSalePrice' => '100', 'orders' => '1000+'],
         ]]]]])]);
         foreach (['price' => '2', 'sales' => '3', 'best_match' => '1'] as $sort => $first) {
             $this->postJson('/autogenesi/aliexpress/search', ['query' => 'radio Toyota', 'sort_by' => $sort])->assertOk()->assertJsonPath('products.0.id', $first)->assertJsonPath('sort_by', $sort);

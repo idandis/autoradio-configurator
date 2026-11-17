@@ -1,0 +1,15 @@
+resources/data/screen-titles-it.json
+resources/data/screen-titles-en.json
+resources/data/screen-descriptions-it.json
+resources/data/screen-descriptions-en.json
+resources/data/camera-titles-it.json
+resources/data/camera-titles-en.json
+resources/data/camera-descriptions-it.json
+resources/data/camera-descriptions-en.json
+resources/data/speaker-titles-it.json
+resources/data/speaker-titles-en.json
+resources/data/speaker-descriptions-it.json
+resources/data/speaker-descriptions-en.json
+public/images/vehicles-dark/opel-combo-2001-2011.webp
+public/images/vehicles-dark/opel-astra-j-2009-2018.webp
+public/images/vehicles-dark/opel-cascade-2009-2018.webp

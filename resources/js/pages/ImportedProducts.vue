@@ -52,7 +52,7 @@ const props = defineProps<{
 
 const exportDate = ref(props.filters.date || props.importDates?.[0] || '');
 const newProductOpen = ref(false);
-const newProductForm = useForm({ source_url: '' });
+const newProductForm = useForm({ source_url: '', brand: '', model: '', year_from: '', year_to: '' });
 const createProduct = () => {
     if (newProductForm.processing) return;
     newProductForm.clearErrors();
@@ -278,6 +278,14 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
                     <label for="new-product-url" class="text-sm font-medium">Link AliExpress</label>
                     <input id="new-product-url" v-model.trim="newProductForm.source_url" type="url" required placeholder="https://es.aliexpress.com/item/123456789.html" class="w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2 text-sm" />
                     <p v-if="newProductForm.errors.source_url" class="text-sm text-red-500">{{ newProductForm.errors.source_url }}</p>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <p class="col-span-2 text-sm text-muted-foreground">Se il veicolo non viene riconosciuto, compila tutti i campi seguenti e riprova.</p>
+                    <label v-for="field in (['brand', 'model', 'year_from', 'year_to'] as const)" :key="field" class="space-y-1 text-sm">
+                        <span>{{ { brand: 'Marca', model: 'Modello', year_from: 'Dal', year_to: 'Al' }[field] }}</span>
+                        <input v-model.trim="newProductForm[field]" :type="field.startsWith('year') ? 'number' : 'text'" class="w-full rounded-lg border border-sidebar-border/70 bg-background px-3 py-2" />
+                        <span v-if="newProductForm.errors[field]" class="text-red-500">{{ newProductForm.errors[field] }}</span>
+                    </label>
                 </div>
                 <button type="submit" :disabled="newProductForm.processing" class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50">{{ newProductForm.processing ? 'Importazione in corso…' : 'Apri scheda prodotto' }}</button>
             </form>

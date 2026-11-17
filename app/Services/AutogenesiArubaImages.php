@@ -30,7 +30,7 @@ class AutogenesiArubaImages
         if (hash_file('sha256', $path) !== $image['sha256']) {
             throw new RuntimeException('Foto modificata: riapri la bozza prima dell’export.');
         }
-        $relative = 'autogenesi/catalog/'.$product->source_id.'/'.$image['sha256'].'.'.$ext;
+        $relative = app(AutogenesiImageFilename::class)->catalogPath($product->source_id, $image, $ext);
 
         $public = Storage::disk('public');
         if (! $public->exists($relative) || hash_file('sha256', $public->path($relative)) !== $image['sha256']) {

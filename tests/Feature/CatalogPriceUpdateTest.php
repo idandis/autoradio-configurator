@@ -21,6 +21,12 @@ class CatalogPriceUpdateTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        Storage::fake('local');
+    }
+
     private function product(): ConfiguratorProduct
     {
         return ConfiguratorProduct::create(['handle' => 'test', 'category' => 'screen', 'title' => 'Radio', 'price_min' => '50',
@@ -41,7 +47,7 @@ class CatalogPriceUpdateTest extends TestCase
         ]]], '123');
         $result = $service->apply($p->id, $offers);
         $this->assertSame(1, $result['raised']); $this->assertSame(1, $result['unchanged']); $this->assertSame(1, $result['skipped']);
-        $this->assertSame('231.00', $a->fresh()->price);
+        $this->assertSame('234.00', $a->fresh()->price);
         $this->assertSame('900.00', $b->fresh()->price);
         $this->assertSame('200.25', $b->fresh()->meta['variant_cost']);
         $this->assertSame('100.00', $c->fresh()->price);
@@ -88,8 +94,8 @@ class CatalogPriceUpdateTest extends TestCase
             ['sku_id' => '7', 'sku_attr' => '14:-7;200007763:12', 'sku_price' => '140.00', 'currency_code' => 'EUR'],
         ]]], '123');
         $this->assertSame(2, $s->apply($p->id, $offers)['raised']);
-        $this->assertSame('210.00', $a->fresh()->price);
-        $this->assertSame('250.00', $b->fresh()->price);
+        $this->assertSame('213.00', $a->fresh()->price);
+        $this->assertSame('253.00', $b->fresh()->price);
     }
 
     public function test_duplicate_local_skus_are_not_assumed_to_be_the_same_supplier_variant(): void
@@ -114,7 +120,7 @@ class CatalogPriceUpdateTest extends TestCase
         $job = new UpdateCatalogPrices($run->id, 1);
         $job->handle($api, app(CatalogPriceUpdater::class));
         $this->assertSame('completed', $run->fresh()->status);
-        $this->assertSame('210.00', $v->fresh()->price);
+        $this->assertSame('213.00', $v->fresh()->price);
         $run->update(['status' => 'running', 'generation' => 2]);
         $job->handle($api, app(CatalogPriceUpdater::class));
         Queue::assertNothingPushed();
@@ -210,7 +216,7 @@ class CatalogPriceUpdateTest extends TestCase
         $this->assertCount(4, $result['variants']);
         $this->assertSame(['memory_features'], array_values(array_unique(array_column($result['variants'], 'match_method'))));
         $this->assertSame(4, $p->variants()->count());
-        $this->assertSame('210.00', $p->variants()->first()->price);
+        $this->assertSame('213.00', $p->variants()->first()->price);
     }
 
     public function test_name_matching_distinguishes_spanish_cores_and_p_s_prefixes(): void

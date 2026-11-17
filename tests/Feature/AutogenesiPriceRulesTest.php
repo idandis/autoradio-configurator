@@ -25,7 +25,7 @@ class AutogenesiPriceRulesTest extends TestCase
     public function test_current_defaults_match_the_existing_rule_and_loading_does_not_write_settings(): void
     {
         $this->getJson(route('price-rules.show'))->assertOk()->assertJsonCount(5, 'ranges')->assertJsonPath('ranges.0.fixed', '110.00')->assertJsonPath('ranges.4.max', null);
-        foreach (['100.00' => '210', '150.00' => '397', '250.00' => '555', '350.00' => '703', '450.00' => '861'] as $cost => $expected) {
+        foreach (['100.00' => '213', '150.00' => '397', '250.00' => '555', '350.00' => '703', '450.00' => '861'] as $cost => $expected) {
             $this->assertSame($expected, app(AutogenesiPrice::class)->quote($cost)['selling_price']);
         }
         Storage::disk('local')->assertMissing('autogenesi/pricing/rules.json');
@@ -35,16 +35,16 @@ class AutogenesiPriceRulesTest extends TestCase
     {
         $ranges = [['min' => '0', 'max' => null, 'percentage' => '10', 'fixed' => '20']];
         $price = app(AutogenesiPrice::class);
-        $this->assertSame('210', $price->quote('100')['selling_price']);
+        $this->assertSame('213', $price->quote('100')['selling_price']);
         $this->postJson(route('price-rules.preview'), ['cost' => '120.50', 'ranges' => $ranges])->assertOk()
-            ->assertJsonPath('markup_percentage', '12.05')->assertJsonPath('markup_fixed', '20.00')->assertJsonPath('selling_price', '153');
+            ->assertJsonPath('markup_percentage', '12.05')->assertJsonPath('markup_fixed', '20.00')->assertJsonPath('selling_price', '156');
         Storage::disk('local')->assertMissing('autogenesi/pricing/rules.json');
         $this->postJson(route('price-rules.save'), ['ranges' => $ranges])->assertOk();
-        $this->assertSame('130', $price->quote('100')['selling_price']);
-        $this->assertSame('153', $price->quote('120.50')['selling_price']);
+        $this->assertSame('133', $price->quote('100')['selling_price']);
+        $this->assertSame('156', $price->quote('120.50')['selling_price']);
         $ranges[0]['percentage'] = '0'; $ranges[0]['fixed'] = '50';
         $this->postJson(route('price-rules.save'), ['ranges' => $ranges])->assertOk();
-        $this->assertSame('150', $price->quote('100')['selling_price']);
+        $this->assertSame('153', $price->quote('100')['selling_price']);
     }
 
     public function test_gaps_overlaps_unbounded_middle_and_missing_final_range_are_rejected(): void
@@ -68,7 +68,7 @@ class AutogenesiPriceRulesTest extends TestCase
         Storage::disk('local')->assertMissing('autogenesi/pricing/rules.json');
         $this->postJson(route('price-rules.save'), ['ranges' => $ranges, 'vat_rate' => '7'])->assertOk()->assertJsonPath('vat_rate', '7.00');
         $this->assertSame('427', app(AutogenesiPrice::class)->quote('200')['selling_price']);
-        $this->assertSame('210', app(AutogenesiPrice::class)->quote('100')['selling_price']);
+        $this->assertSame('213', app(AutogenesiPrice::class)->quote('100')['selling_price']);
         $this->postJson(route('price-rules.save'), ['ranges' => $ranges])->assertOk()->assertJsonPath('vat_rate', '7.00');
         foreach ([-1, 101, 'bad', '21.123', null] as $rate) {
             $this->postJson(route('price-rules.save'), ['ranges' => $ranges, 'vat_rate' => $rate])->assertUnprocessable();
@@ -82,6 +82,23 @@ class AutogenesiPriceRulesTest extends TestCase
         Storage::disk('local')->put('autogenesi/pricing/rules.json', json_encode(['version' => 'old', 'ranges' => app(AutogenesiPriceRules::class)->defaults()['ranges']]));
         $this->getJson(route('price-rules.show'))->assertOk()->assertJsonPath('vat_rate', '21.00');
         $this->assertSame('21.00', app(AutogenesiPrice::class)->quote('200')['vat_rate']);
+    }
+
+    public function test_extra_fixed_cost_columns_are_saved_per_range_and_included_in_the_price(): void
+    {
+        $ranges = [
+            ['min' => '0', 'max' => '150', 'percentage' => '0', 'fixed' => '110', 'extra_fixed_costs' => ['30', '5']],
+            ['min' => '150', 'max' => null, 'percentage' => '0', 'fixed' => '150', 'extra_fixed_costs' => ['40', '5']],
+        ];
+        $this->postJson(route('price-rules.preview'), ['cost' => '100', 'ranges' => $ranges])->assertOk()
+            ->assertJsonPath('extra_fixed_costs', '35.00')->assertJsonPath('selling_price', '248');
+        $this->postJson(route('price-rules.save'), ['ranges' => $ranges])->assertOk()
+            ->assertJsonPath('ranges.0.extra_fixed_costs.0', '30.00')->assertJsonPath('ranges.1.extra_fixed_costs.0', '40.00');
+        $this->getJson(route('price-rules.show'))->assertJsonPath('ranges.1.extra_fixed_costs.0', '40.00');
+        $this->assertSame('248', app(AutogenesiPrice::class)->quote('100')['selling_price']);
+        $this->assertSame('511', app(AutogenesiPrice::class)->quote('200')['selling_price']);
+        $ranges[1]['extra_fixed_costs'] = ['40'];
+        $this->postJson(route('price-rules.save'), ['ranges' => $ranges])->assertUnprocessable();
     }
 
     public function test_rule_saving_is_admin_and_local_only(): void

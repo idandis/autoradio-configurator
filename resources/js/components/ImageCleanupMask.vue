@@ -55,9 +55,9 @@ const save = (ai = false) => {
 <template>
     <Teleport to="body">
         <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" @keydown.esc="!busy && emit('cancel')">
-            <section role="dialog" aria-modal="true" :aria-label="enhance ? 'Pulisci e migliora' : 'Sfoca scritte'" class="max-h-[95vh] w-[min(95vw,900px)] overflow-y-auto rounded-xl border bg-background p-5 text-foreground">
-                <h2 class="font-semibold">{{ enhance ? 'Pulisci e migliora' : 'Cancella scritte · sfocatura locale' }}</h2>
-                <p v-if="enhance" class="my-3 text-sm">Modalità manuale: nitidezza moderata e sfocatura delle scritte selezionate. Modalità AI: evidenzia le scritte o i loghi da eliminare; l’AI ricostruisce solo quelle zone seguendo linee e texture della foto originale.</p>
+            <section role="dialog" aria-modal="true" :aria-label="enhance ? 'Cancella scritte' : 'Sfoca scritte'" class="max-h-[95vh] w-[min(95vw,900px)] overflow-y-auto rounded-xl border bg-background p-5 text-foreground">
+                <h2 class="font-semibold">Cancella scritte</h2>
+                <p v-if="enhance" class="my-3 text-sm">Evidenzia le scritte o i loghi. Puoi sfocare le zone selezionate oppure farle ricostruire all’AI. Fuori dalla selezione resta la foto originale.</p>
                 <p v-else class="my-3 text-sm">Evidenzia in rosa le scritte da oscurare e regola la sfocatura. Il blur attenua anche i dettagli dentro la selezione; il resto della foto rimane originale. Nessuna ricostruzione AI.</p>
                 <div class="my-3 flex flex-wrap items-center gap-3 text-sm">
                     <label class="flex items-center gap-2">Pennello<input v-model.number="size" :disabled="busy" type="range" min="2" max="150" />{{ size }} px</label>
@@ -71,7 +71,7 @@ const save = (ai = false) => {
                 </div>
                 <p v-if="error || props.error" role="alert" class="mt-3 text-sm text-red-600">{{ error || props.error }}</p>
                 <p v-if="enhance" class="mt-3 text-xs text-muted-foreground">La ricostruzione usa la foto visibile, anche dopo un ritaglio. Fuori dalla selezione il contenuto resta invariato; l’output quadrato mantiene le proporzioni. Controlla le zone ricostruite.</p>
-                <div class="mt-4 flex flex-wrap justify-end gap-3"><button type="button" :disabled="busy" class="rounded border px-4 py-2" @click="emit('cancel')">Annulla</button><button v-if="enhance" type="button" :disabled="busy || !ready || drawing" class="rounded border border-violet-500 px-4 py-2 text-violet-500 disabled:opacity-50" @click="save(true)">{{ busy ? 'Elaborazione in corso…' : 'Ricostruisci selezione con AI' }}</button><button type="button" :disabled="busy || !ready || drawing" class="rounded bg-foreground px-4 py-2 text-background disabled:opacity-50" @click="save(false)">{{ busy ? 'Elaborazione in corso…' : enhance ? 'Applica nitidezza e pulizia' : 'Sfoca scritte selezionate' }}</button></div>
+                <div class="mt-4 flex flex-wrap justify-end gap-3"><button type="button" :disabled="busy" class="rounded border px-4 py-2" @click="emit('cancel')">Annulla</button><button v-if="enhance" type="button" :disabled="busy || !ready || drawing" class="rounded border border-violet-500 px-4 py-2 text-violet-500 disabled:opacity-50" @click="save(true)">{{ busy ? 'Elaborazione in corso…' : 'Ricostruisci zone selezionate' }}</button><button type="button" :disabled="busy || !ready || drawing" class="rounded bg-foreground px-4 py-2 text-background disabled:opacity-50" @click="save(false)">{{ busy ? 'Elaborazione in corso…' : 'Sfoca scritte selezionate' }}</button></div>
             </section>
         </div>
     </Teleport>

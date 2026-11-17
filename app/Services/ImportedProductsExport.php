@@ -79,8 +79,12 @@ class ImportedProductsExport
                 AutogenesiTemplateExport::DIN => $p->meta['din'] ?? '', AutogenesiTemplateExport::DASHBOARD => $reference,
                 'Metafield: custom.altavoces [single_line_text_field]' => implode(' | ', (array) ($p->meta['speaker_sizes'] ?? [])),
                 'Metafield: shopify.vehicle-coaxial-speaker-nominal-size [list.metaobject_reference]' => $p->meta['speaker_nominal_size'] ?? '',
+                'Vendor' => 'ARC',
+                'Category' => $p->category === 'screen' && ($p->meta['type'] ?? null) !== 'DASHCAM' ? AutogenesiTemplateExport::RADIO_CATEGORY : '',
+                ...AutogenesiTemplateExport::CHANNELS,
             ]);
             $variants = $p->variants->sortBy(fn ($v) => app(CatalogPriceUpdater::class)->variantOrder($v))->values();
+            $labels = $template->uniqueVariantLabels($variants->map(fn ($v) => $v->option_value ?: $v->title)->all());
             $offset = count($rows);
             for ($i = 0; $i < max($variants->count(), count($images), 1); $i++) {
                 $row = $base;
@@ -89,7 +93,8 @@ class ImportedProductsExport
                     foreach ($row as $key => $value) if (str_starts_with($key, 'Metafield:')) $row[$key] = '';
                 }
                 if ($v = $variants[$i] ?? null) {
-                    $row['Option1 Value'] = $v->option_value ?: $v->title;
+                    $row['Option1 Name'] = 'Variantes';
+                    $row['Option1 Value'] = $labels[$i];
                     $row['Variant ID'] = $v->shopify_variant_id ?? '';
                     $row['Variant SKU'] = $v->sku ?? '';
                     $row['Variant Price'] = $v->price ?? '';

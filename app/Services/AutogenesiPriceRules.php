@@ -38,16 +38,24 @@ class AutogenesiPriceRules
             'ranges.*.max' => 'nullable|numeric|min:0|max:1000000|decimal:0,2',
             'ranges.*.percentage' => 'required|numeric|min:0|max:1000|decimal:0,2',
             'ranges.*.fixed' => 'required|numeric|min:0|max:999999|decimal:0,2',
+            'ranges.*.extra_fixed_costs' => 'sometimes|array|max:10',
+            'ranges.*.extra_fixed_costs.*' => 'required|numeric|min:0|max:999999|decimal:0,2',
         ])->validate();
         $result = []; $next = 0;
+        $extraCount = count($data['ranges'][0]['extra_fixed_costs'] ?? []);
         foreach (array_values($data['ranges']) as $i => $r) {
+            if (count($r['extra_fixed_costs'] ?? []) !== $extraCount) {
+                throw ValidationException::withMessages(['ranges' => 'Ogni fascia deve avere lo stesso numero di costi fissi aggiuntivi.']);
+            }
             $min = (int) round((float) $r['min'] * 100);
             $max = isset($r['max']) && $r['max'] !== '' ? (int) round((float) $r['max'] * 100) : null;
             if ($min !== $next || ($max !== null && $max <= $min) || ($max === null && $i !== count($ranges) - 1)) {
                 throw ValidationException::withMessages(['ranges' => 'Le fasce devono partire da 0, essere contigue, senza sovrapposizioni e con limite superiore maggiore del minimo.']);
             }
-            $result[] = ['min' => number_format($min / 100, 2, '.', ''), 'max' => $max === null ? null : number_format($max / 100, 2, '.', ''),
+            $range = ['min' => number_format($min / 100, 2, '.', ''), 'max' => $max === null ? null : number_format($max / 100, 2, '.', ''),
                 'percentage' => number_format((float) $r['percentage'], 2, '.', ''), 'fixed' => number_format((float) $r['fixed'], 2, '.', '')];
+            if ($extraCount) $range['extra_fixed_costs'] = array_map(fn ($value) => number_format((float) $value, 2, '.', ''), $r['extra_fixed_costs']);
+            $result[] = $range;
             $next = $max;
         }
         if ($next !== null) throw ValidationException::withMessages(['ranges' => 'L’ultima fascia deve essere senza limite superiore.']);

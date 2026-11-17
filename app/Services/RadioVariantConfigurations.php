@@ -31,7 +31,7 @@ class RadioVariantConfigurations
         $variants = json_encode($product['ae_item_sku_info_dtos'] ?? []);
         preg_match_all('/\bQ?S[12468]\b/i', $variants, $qs);
         return count(array_unique(array_map(fn ($code) => preg_replace('/^S/', 'QS', strtoupper($code)), $qs[0]))) >= 2 && preg_match('/\b[TP][23]CP\b/i', $variants)
-            && preg_match('/\b(?:6115|A100)\b/i', $context) ? self::PROFILE : null;
+            && preg_match('/\b(?:6115|A100)\b/i', $context.' '.$variants) ? self::PROFILE : null;
     }
 
     public function resolve(string $label, ?string $profile, ?array $memory, ?int $cores): array

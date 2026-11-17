@@ -112,7 +112,7 @@ class AutogenesiTest extends TestCase
     public function test_live_cost_quote_applies_formula_and_rejects_invalid_cost(): void
     {
         $this->actingAs(User::factory()->create(['is_admin' => true]));
-        $this->postJson('/autogenesi/variant-price', ['cost' => '120.50'])->assertOk()->assertJsonPath('selling_price', '231');
+        $this->postJson('/autogenesi/variant-price', ['cost' => '120.50'])->assertOk()->assertJsonPath('selling_price', '234');
         $this->postJson('/autogenesi/variant-price', ['cost' => '200.25'])->assertOk()->assertJsonPath('vat_rate', '21.00')->assertJsonPath('selling_price', '466');
         $this->postJson('/autogenesi/variant-price', ['cost' => '-1'])->assertUnprocessable()->assertJsonValidationErrors('cost');
         $this->actingAs(User::factory()->create(['is_admin' => false]));
@@ -129,8 +129,8 @@ class AutogenesiTest extends TestCase
         $this->patch('/autogenesi/'.$p->id, ['title' => $p->title, 'body_html' => $p->body_html, 'variants' => $variants])->assertSessionHasNoErrors();
         $v = collect($p->fresh()->variants)->firstWhere('sku', $sku);
         $this->assertSame('120.50', $v['supplier_price']);
-        $this->assertSame('231', $v['selling_price']);
-        $this->assertSame('0.00', $v['pricing']['customs_estimate']);
+        $this->assertSame('234', $v['selling_price']);
+        $this->assertSame('3.00', $v['pricing']['customs_estimate']);
         $this->assertSame($original, $v['observed_supplier_price']);
         $this->assertTrue($v['supplier_price_edited']);
         $this->assertSame('draft', $p->fresh()->status);
@@ -482,6 +482,31 @@ class AutogenesiTest extends TestCase
         $this->assertFalse($uploaded['square_cropped']);
         $this->assertCount(4, array_filter(array_column(app(AutogenesiExport::class)->rows($p->fresh()), 'Image Src')));
         $this->get('/autogenesi')->assertInertia(fn (Assert $page) => $page->where('products.0.images.2.local_only', true));
+    }
+
+    public function test_uploaded_photo_names_keep_version_suffix_in_export_and_catalog(): void
+    {
+        $p = $this->import();
+        $this->actingAs(User::factory()->create(['is_admin' => true]));
+        $this->post('/autogenesi/'.$p->id.'/images', [
+            'photos' => [UploadedFile::fake()->image('Cruscotto-A.jpg', 90, 60), UploadedFile::fake()->image('Cruscotto-B.jpg', 91, 60)],
+            'role' => 'cruscotto_prima_dopo',
+        ])->assertSessionHasNoErrors();
+
+        $images = array_values(array_filter($p->fresh()->images, fn ($image) => $image['uploaded'] ?? false));
+        $this->assertCount(2, $images);
+        $this->assertMatchesRegularExpression('/Cruscotto-[A-Za-z0-9]+-A\.png$/', $images[0]['path']);
+        $this->assertMatchesRegularExpression('/Cruscotto-[A-Za-z0-9]+-B\.png$/', $images[1]['path']);
+
+        $rows = app(AutogenesiExport::class)->rows($p->fresh());
+        $urls = array_column($rows, 'Image Src');
+        $this->assertContains(config('autogenesi.media_base_url').'/autogenesi/catalog/'.$p->source_id.'/Cruscotto-A.png', $urls);
+        $this->assertContains(config('autogenesi.media_base_url').'/autogenesi/catalog/'.$p->source_id.'/Cruscotto-B.png', $urls);
+
+        $product = app(\App\Services\AutogenesiCatalogImport::class)->import($p->fresh());
+        $gallery = $product->meta['gallery_images'];
+        $this->assertContains('/storage/autogenesi/catalog/'.$p->source_id.'/Cruscotto-A.png', $gallery);
+        $this->assertContains('/storage/autogenesi/catalog/'.$p->source_id.'/Cruscotto-B.png', $gallery);
     }
 
     public function test_small_photo_upload_keeps_original_resolution(): void
@@ -896,6 +921,10 @@ class AutogenesiTest extends TestCase
         $this->assertSame('', $rows[0]['ID']);
         $this->assertSame('', $rows[0]['Variant ID']);
         $this->assertSame('', $rows[0]['Price / Italia']);
+        $this->assertSame('ARC', $rows[0]['Vendor']);
+        $this->assertSame(AutogenesiTemplateExport::RADIO_CATEGORY, $rows[0]['Category']);
+        $this->assertSame('Variantes', $rows[0]['Option1 Name']);
+        foreach (AutogenesiTemplateExport::CHANNELS as $channel => $value) $this->assertSame($value, $rows[0][$channel]);
         $this->assertSame('', $rows[1]['Variant SKU']);
         $this->assertNotSame('', $rows[0]['Body HTML']);
         $this->assertSame('', $rows[1]['Body HTML']);
@@ -905,14 +934,14 @@ class AutogenesiTest extends TestCase
         $this->assertSame($p->title, $rows[1]['Title']);
         $this->assertSame($p->handle, $rows[1]['Handle']);
         $columns = json_decode(file_get_contents(resource_path('autogenesi/export-columns.json')), true);
-        $this->assertSame($columns, array_slice(array_keys($rows[0]), 0, 21));
+        $this->assertSame($columns, array_slice(array_keys($rows[0]), 0, count($columns)));
         $required = (new \ReflectionClass(ConfiguratorCsvImporter::class))->getConstant('REQUIRED_HEADERS');
         $this->assertEmpty(array_diff($required, array_keys($rows[0])));
         $e->xlsx($p, $this->dir.'/export.xlsx');
         $book = IOFactory::load($this->dir.'/export.xlsx');
         $this->assertSame(['Products'], $book->getSheetNames());
         $sheet = $book->getSheetByName('Products')->toArray();
-        $this->assertSame($columns, array_slice($sheet[0], 0, 21));
+        $this->assertSame($columns, array_slice($sheet[0], 0, count($columns)));
         $this->assertContains('Active', $sheet[1]);
         $images = $p->images;
         $images[1]['role'] = 'cruscotto_da_verificare';
@@ -1246,7 +1275,7 @@ class AutogenesiTest extends TestCase
         $current = $p->fresh();
         $this->assertCount(count($before) + 1, $current->variants);
         $manual = collect($current->variants)->firstWhere('manual', true);
-        $this->assertSame('210', $manual['selling_price']);
+        $this->assertSame('213', $manual['selling_price']);
         $this->assertSame('100.00', $manual['supplier_price']);
         $this->assertStringStartsWith('AE-'.$p->source_id.'-M', $manual['sku']);
         $this->assertSame(array_column($before, 'sku'), array_values(array_filter(array_column($current->variants, 'sku'), fn ($sku) => $sku !== $manual['sku'])));

@@ -36,6 +36,20 @@ class ImportedProductsTest extends TestCase
             ->assertSessionHasErrors(['source_url' => 'OpenAI non ha risposto in tempo. Riprova l’importazione.']);
     }
 
+    public function test_new_product_accepts_manual_vehicle_when_title_does_not_expose_years(): void
+    {
+        $this->app->detectEnvironment(fn () => 'local');
+        $this->withoutMiddleware(\Illuminate\Foundation\Http\Middleware\PreventRequestForgery::class);
+        $vehicle = ['brand' => 'NISSAN', 'model' => 'Juke', 'year_from' => 2010, 'year_to' => 2019];
+        $this->mock(\App\Services\AutogenesiApiImport::class)->shouldReceive('importUrl')->once()
+            ->with(\Mockery::type('int'), 'https://es.aliexpress.com/item/1005012645079689.html', $vehicle)
+            ->andThrow(new \RuntimeException('Controllo importazione manuale'));
+
+        $this->actingAs(User::factory()->create(['is_admin' => true]))
+            ->post(route('imported-products.new-from-aliexpress'), ['source_url' => 'https://es.aliexpress.com/item/1005012645079689.html', ...$vehicle])
+            ->assertSessionHasErrors(['source_url' => 'Controllo importazione manuale']);
+    }
+
     public function test_new_product_identifies_invalid_import_data(): void
     {
         $this->app->detectEnvironment(fn () => 'local');
@@ -73,6 +87,24 @@ class ImportedProductsTest extends TestCase
         $this->assertSame([null, null], array_column($rows, 'Variant Inventory Tracker'));
         $this->assertSame(['continue', 'continue'], array_column($rows, 'Variant Inventory Policy'));
         $this->assertSame('<p>Descrizione aggiornata</p>', $rows[0]['Body HTML']);
+        $this->assertSame('ARC', $rows[0]['Vendor']);
+        $this->assertNull($rows[0]['Category']);
+        $this->assertSame('Variantes', $rows[0]['Option1 Name']);
+    }
+
+    public function test_sheet_export_distinguishes_variants_with_the_same_name(): void
+    {
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $p = ConfiguratorProduct::create(['handle' => 'seat-ateca', 'category' => 'screen', 'title' => 'Radio SEAT Ateca']);
+        $p->variants()->create(['title' => '8Core 8GB 128GB', 'sku' => 'AE-6', 'price' => 500]);
+        $p->variants()->create(['title' => '8Core 8GB 128GB', 'sku' => 'AE-7', 'price' => 550]);
+        $p->variants()->create(['title' => '8Core 8GB 128GB-A', 'sku' => 'AE-8', 'price' => 560]);
+        $sheet = \PhpOffice\PhpSpreadsheet\IOFactory::load(app(\App\Services\ImportedProductsExport::class)->writeProduct($p))->getSheetByName('Products');
+        $data = $sheet->toArray();
+        $headers = array_shift($data);
+        $rows = array_map(fn ($row) => array_combine($headers, $row), $data);
+        $this->assertSame(['8Core 8GB 128GB-B', '8Core 8GB 128GB-C', '8Core 8GB 128GB-A'], array_column($rows, 'Option1 Value'));
+        $this->assertSame(['AE-6', 'AE-7', 'AE-8'], array_column($rows, 'Variant SKU'));
     }
 
     public function test_excel_compacts_only_block_whitespace_when_description_exceeds_cell_limit(): void
@@ -317,7 +349,8 @@ class ImportedProductsTest extends TestCase
         $this->get(route('imported-products.export-shopify', ['date' => '2026-11-05']))->assertDownload('prodotti-importati-2026-11-05-shopify.xlsx');
         $book = \PhpOffice\PhpSpreadsheet\IOFactory::load(\Illuminate\Support\Facades\Storage::disk('local')->path('imported-products/exports/prodotti-importati-2026-11-05-shopify.xlsx'));
         $rows = $book->getSheetByName('Products')->toArray();
-        $this->assertSame(['Products'], $book->getSheetNames());
+        $this->assertSame(['Files', 'Products'], $book->getSheetNames());
+        $this->assertSame('Products', $book->getActiveSheet()->getTitle());
         $headers = array_shift($rows);
         $rows = array_map(fn ($row) => array_combine($headers, $row), $rows);
         $this->assertCount(2, $rows);
@@ -332,6 +365,10 @@ class ImportedProductsTest extends TestCase
         $this->assertSame('https://www.autoradioitaliano.it/storage/autogenesi/catalog/123/main.png', $rows[0]['Image Src']);
         $this->assertNotContains(\App\Services\AutogenesiTemplateExport::SOURCE, $headers);
         $this->assertSame(['Active', 'Active'], array_column($rows, 'Status'));
+        $this->assertSame('ARC', $rows[0]['Vendor']);
+        $this->assertSame(\App\Services\AutogenesiTemplateExport::RADIO_CATEGORY, $rows[0]['Category']);
+        $this->assertSame(['Variantes', 'Variantes'], array_column($rows, 'Option1 Name'));
+        foreach (\App\Services\AutogenesiTemplateExport::CHANNELS as $channel => $value) $this->assertSame($value, $rows[0][$channel]);
         $this->assertDatabaseCount('autogenesi_products', 0);
     }
 

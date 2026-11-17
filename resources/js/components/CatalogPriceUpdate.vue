@@ -14,6 +14,7 @@ const deleteError = ref('');
 const detailsOpen = ref(false);
 const openRows = ref<number[]>([]);
 const colorFilter = ref<PriceColor>('all');
+const nameFilter = ref('');
 const stateKey = (id: number) => `catalog-price-update-open:${id}`;
 watch(() => props.run?.id, id => {
     if (!id || typeof window === 'undefined') return;
@@ -55,9 +56,14 @@ const rowCategory = (item: Item): Exclude<PriceColor, 'all'> => {
     return 'green';
 };
 const rowColor = (item: Item) => ({ red: 'border-red-500/40 bg-red-500/10', blue: 'border-sky-400/40 bg-sky-400/10', green: 'border-emerald-500/40 bg-emerald-500/10', yellow: 'border-yellow-400/40 bg-yellow-400/10', none: '' })[rowCategory(item)];
-const visibleItems = computed(() => (props.run?.items || []).map((item, index) => ({ item, index })).filter(({ item }) => colorFilter.value === 'all' || rowCategory(item) === colorFilter.value));
+const visibleItems = computed(() => {
+    const name = nameFilter.value.trim().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+    return (props.run?.items || []).map((item, index) => ({ item, index })).filter(({ item }) =>
+        (colorFilter.value === 'all' || rowCategory(item) === colorFilter.value)
+        && (!name || item.title.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().includes(name)));
+});
 const setFilter = (color: PriceColor) => { colorFilter.value = color; detailsOpen.value = true; persistOpen(); };
-const labels: Record<string, string> = { name_matched: 'Tentato aggiornamento con nome variante con successo', manual_matched: 'Abbinamento manuale aggiornato con successo', manual_updated: 'Abbinamento aggiornato', running: 'In corso', pending: 'In coda', completed: 'Completato', error: 'Errore', blocked: 'Autorizzazione o verifica richiesta', stopped: 'Fermato', raised: 'Prezzo aumentato', unchanged: 'Già sufficiente', skipped: 'Da verificare' };
+const labels: Record<string, string> = { name_matched: 'Tentato aggiornamento con nome variante con successo', manual_matched: 'Abbinamento manuale aggiornato con successo', linked_unpriced: 'SKU abbinato · costo da verificare', manual_updated: 'Abbinamento aggiornato', running: 'In corso', pending: 'In coda', completed: 'Completato', error: 'Errore', blocked: 'Autorizzazione o verifica richiesta', stopped: 'Fermato', raised: 'Prezzo aumentato', unchanged: 'Già sufficiente', skipped: 'Da verificare' };
 let timer: ReturnType<typeof setInterval> | undefined;
 watch(() => props.run?.status, status => {
     if (timer) clearInterval(timer);
@@ -92,6 +98,7 @@ const action = (type: string) => form.post(type === 'start' ? '/imported-product
             <p>{{ labels[run.status] }} · {{ done }}/{{ run.items.length }} prodotti · {{ run.counts.raised }} varianti aumentate · {{ run.counts.unchanged }} già sufficienti · {{ run.counts.skipped }} da verificare</p>
             <p v-if="run.error" class="mt-2 text-amber-500">{{ run.error }}</p>
             <details class="mt-3" :open="detailsOpen" @toggle="toggleDetails"><summary class="cursor-pointer">Dettaglio prodotti e varianti</summary>
+                <input v-model="nameFilter" type="search" aria-label="Cerca radio per nome" placeholder="Cerca radio per nome" class="mt-3 w-full max-w-sm rounded-md border border-sidebar-border bg-background px-3 py-2 text-sm" />
                 <div class="mt-3 max-h-96 space-y-2 overflow-auto">
                     <details v-for="{ item, index } in visibleItems" :key="item.id" :open="openRows.includes(item.id)" class="rounded-lg border p-3" :class="rowColor(item)" @toggle="toggleRow(item.id, $event)">
                         <summary class="cursor-pointer"><span class="mr-2 inline-block min-w-8 font-semibold tabular-nums">{{ index + 1 }}.</span>{{ item.title }} · {{ labels[item.status] }}
@@ -109,7 +116,7 @@ const action = (type: string) => form.post(type === 'start' ? '/imported-product
                                 <span v-if="v.reason" class="text-amber-500"> · {{ v.reason }}</span>
                             </div>
                         </template>
-                        <a v-if="item.status === 'error' || item.manual_updated || item.result?.skipped" :href="`/imported-products/${item.id}/variant-matcher?replace=${item.status === 'error' || !item.result?.variants.some(v => v.status === 'raised') ? 1 : 0}`" target="_blank" rel="opener" class="mt-3 inline-flex rounded border border-amber-500/50 px-3 py-2 text-sm hover:bg-amber-500/10">Ricarica nomi varianti ↗</a>
+                        <a v-if="item.status === 'error' || item.manual_updated || item.result?.skipped" :href="`/imported-products/${item.id}/variant-matcher?replace=${item.status === 'error' || !item.result?.variants.some(v => v.status === 'raised') ? 1 : 0}`" target="_blank" rel="opener" class="mt-3 inline-flex rounded border border-amber-500/50 px-3 py-2 text-sm hover:bg-amber-500/10">Apri abbinamento varianti ↗</a>
                     </details>
                     <p v-if="!visibleItems.length" class="py-3 text-muted-foreground">Nessun prodotto per questo filtro.</p>
                 </div>

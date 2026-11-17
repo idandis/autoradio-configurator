@@ -22,6 +22,7 @@ class AutogenesiPrice
             && ($r['max'] === null || $cents < (int) round((float) $r['max'] * 100))) { $range = $r; break; }
         if ($range === null) throw new InvalidArgumentException('Nessuna fascia prezzo valida per questo costo.');
         $fixed = (int) round((float) $range['fixed'] * 100);
+        $extraFixed = array_sum(array_map(fn ($value) => (int) round((float) $value * 100), $range['extra_fixed_costs'] ?? []));
         $percentage = $this->percent($cents, (int) round((float) $range['percentage'] * 100));
         $markup = $fixed + $percentage;
         $vatRate = (float) ($rules['vat_rate'] ?? '21.00');
@@ -31,11 +32,11 @@ class AutogenesiPrice
         $duty = $cents >= 15000 ? $this->percent($base, 1400) : 0;
         $vat = $cents >= 15000 ? $this->percent($base + $duty, $vatPoints) : 0;
         $fees = $cents >= 15000 ? 2181 + 518 + $this->percent(2181 + 518, $vatPoints) : 0;
-        $customs = $duty + $vat + $fees;
-        $total = $cents + $markup + $customs;
+        $customs = $cents < 15000 ? 300 : $duty + $vat + $fees;
+        $total = $cents + $markup + $extraFixed + $customs;
 
         return ['rule_version' => $rules['version'], 'supplier_cost' => $this->money($cents), 'markup' => $this->money($markup),
-            'markup_fixed' => $this->money($fixed), 'markup_percentage' => $this->money($percentage), 'percentage_rate' => $range['percentage'], 'vat_rate' => number_format($vatRate, 2, '.', ''),
+            'markup_fixed' => $this->money($fixed), 'extra_fixed_costs' => $this->money($extraFixed), 'markup_percentage' => $this->money($percentage), 'percentage_rate' => $range['percentage'], 'vat_rate' => number_format($vatRate, 2, '.', ''),
             'customs_estimate' => $this->money($customs), 'customs_base_estimate' => $cents >= 15000 ? $this->money($base) : null,
             'inferred_base_adjustment' => $cents >= 15000 ? '18.32' : '0.00', 'duty_estimate' => $this->money($duty),
             'import_vat_estimate' => $this->money($vat), 'correos_estimate' => $this->money($fees),

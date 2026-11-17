@@ -19,5 +19,18 @@
     "Metafield: custom.modello_auto [single_line_text_field]",
     "Metafield: custom.anno [single_line_text_field]",
     "Metafield: shopify.vehicle-coaxial-speaker-nominal-size [list.metaobject_reference]",
-    "Metafield: custom.foto_cruscotto_originale [list.file_reference]"
+    "Metafield: custom.foto_cruscotto_originale [list.file_reference]",
+    "Vendor",
+    "Category",
+    "Option1 Name",
+    "Option2 Name",
+    "Option2 Value",
+    "Option3 Name",
+    "Option3 Value",
+    "Published: Online Store",
+    "Published: Point of Sale",
+    "Published: Shop",
+    "Published: Google & YouTube",
+    "Published: Facebook & Instagram",
+    "Published: TikTok"
 ]

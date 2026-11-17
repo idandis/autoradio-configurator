@@ -37,6 +37,35 @@ class CatalogVariantMatchTest extends TestCase
         ]]];
     }
 
+    public function test_reprice_uses_saved_supplier_cost_and_current_radio_rule(): void
+    {
+        $p = $this->product();
+        $v = $p->variants()->create(['title' => '8Core 8GB 128GB', 'price' => '31.00', 'meta' => ['variant_cost' => '100.00']]);
+        $this->postJson(route('supplier-variants.reprice', [$p, $v]))->assertOk()->assertJsonPath('price', '213');
+        $this->assertSame('213.00', $v->fresh()->price);
+        $this->assertSame('213.00', $p->fresh()->price_min);
+        $this->assertSame('manual_recalculate', $v->fresh()->meta['price_update']['mode']);
+
+        $v->update(['meta' => []]);
+        $this->postJson(route('supplier-variants.reprice', [$p, $v]))->assertUnprocessable();
+        $this->assertSame('213.00', $v->fresh()->price);
+
+        $p->update(['category' => 'camera']);
+        $this->postJson(route('supplier-variants.reprice', [$p, $v]))->assertUnprocessable();
+    }
+
+    public function test_reprice_uses_newly_saved_extra_fixed_costs(): void
+    {
+        $p = $this->product();
+        $v = $p->variants()->create(['title' => '8Core 8GB 128GB', 'price' => '213.00', 'meta' => ['variant_cost' => '100.00']]);
+        $ranges = [['min' => '0', 'max' => null, 'percentage' => '0', 'fixed' => '110', 'extra_fixed_costs' => ['30']]];
+        $this->postJson(route('price-rules.save'), ['ranges' => $ranges])->assertOk();
+        $this->postJson(route('supplier-variants.reprice', [$p, $v]))->assertOk()
+            ->assertJsonPath('price', '243')->assertJsonPath('pricing.extra_fixed_costs', '30.00');
+        $this->assertSame('243.00', $v->fresh()->price);
+        $this->assertSame('30.00', $v->fresh()->meta['price_update']['pricing']['extra_fixed_costs']);
+    }
+
     public function test_can_add_variant_without_supplier_and_match_it_later(): void
     {
         $p = $this->product();
@@ -53,7 +82,36 @@ class CatalogVariantMatchTest extends TestCase
         $this->postJson(route('supplier-variants.match', [$p, $v]), ['source_id' => '123', 'sku_id' => '999'])
             ->assertOk();
         $this->assertSame('999', $v->fresh()->meta['source_sku_id']);
-        $this->assertSame('210.00', $v->fresh()->price);
+        $this->assertSame('213.00', $v->fresh()->price);
+    }
+
+    public function test_manual_pairing_uses_selected_sku_even_when_supplier_name_differs(): void
+    {
+        $p = $this->product();
+        $v = $p->variants()->create(['title' => '2G-32G-A', 'price' => '403.82']);
+        $data = ['ae_item_sku_info_dtos' => ['ae_item_sku_info_d_t_o' => [[
+            'sku_id' => '999', 'sku_price' => '125.99', 'currency_code' => 'EUR',
+            'ae_sku_property_dtos' => ['ae_sku_property_d_t_o' => [['sku_property_id' => 14, 'sku_property_value' => 'P2 CP A · Polonia']]],
+        ]]]];
+        $this->mock(AutogenesiAliExpressApi::class, fn ($m) => $m->shouldReceive('product')->once()->andReturn($data));
+        $this->postJson(route('supplier-variants.match', [$p, $v]), ['source_id' => '123', 'sku_id' => '999'])
+            ->assertOk()->assertJsonPath('result.skipped', 0);
+        $this->assertSame('125.99', $v->fresh()->meta['variant_cost']);
+        $this->assertSame('999', $v->fresh()->meta['source_sku_id']);
+        $this->assertSame(app(\App\Services\AutogenesiPrice::class)->quote('125.99')['selling_price'].'.00', $v->fresh()->price);
+    }
+
+    public function test_reprice_recovers_cost_from_saved_supplier_sku(): void
+    {
+        $p = $this->product();
+        $v = $p->variants()->create(['title' => '2G-32G-A', 'price' => '403.82', 'meta' => [
+            'source_product_id' => '123', 'source_sku_id' => '999',
+            'supplier_match_manual' => ['matched_at' => now()->toIso8601String()],
+        ]]);
+        $this->mock(AutogenesiAliExpressApi::class, fn ($m) => $m->shouldReceive('product')->once()->andReturn($this->response()));
+        $this->postJson(route('supplier-variants.reprice', [$p, $v]))->assertOk()->assertJsonPath('price', '213');
+        $this->assertSame('100.00', $v->fresh()->meta['variant_cost']);
+        $this->assertSame('213.00', $v->fresh()->price);
     }
 
     public function test_compares_real_names_and_manual_pairing_changes_only_selected_variant(): void
@@ -66,7 +124,7 @@ class CatalogVariantMatchTest extends TestCase
             ->assertJsonPath('aliexpress.0.label', 'PX9 8GB 128GB')->assertJsonPath('aliexpress.1.available', false);
         $this->postJson(route('supplier-variants.match', [$p, $v]), ['source_id' => '123', 'sku_id' => '999'])
             ->assertOk()->assertJsonPath('result.raised', 1);
-        $this->assertSame('210.00', $v->fresh()->price);
+        $this->assertSame('213.00', $v->fresh()->price);
         $this->assertSame('999', $v->fresh()->meta['source_sku_id']);
         $this->assertSame('100.00', $v->fresh()->meta['variant_cost']);
         $this->assertSame('local-1', $v->fresh()->sku);
@@ -104,14 +162,14 @@ class CatalogVariantMatchTest extends TestCase
         $other = $p->variants()->create(['title' => '4GB', 'sku' => '14:-9', 'price' => 900]);
         $this->mock(AutogenesiAliExpressApi::class, fn ($m) => $m->shouldReceive('product')->twice()->withArgs(fn ($user, $id) => $id === '456')->andReturn($this->response()));
         $this->postJson(route('supplier-variants.preview', $p), ['source_url' => 'https://www.aliexpress.com/item/456.html?foo=bar'])->assertOk()
-            ->assertJsonPath('aliexpress.0.source_id', '456')->assertJsonPath('aliexpress.0.minimum', '210');
+            ->assertJsonPath('aliexpress.0.source_id', '456')->assertJsonPath('aliexpress.0.minimum', '213');
         $this->assertSame('https://es.aliexpress.com/item/123.html', $p->fresh()->meta['source_url']);
         $this->postJson(route('supplier-variants.match', [$p, $v]), ['source_id' => '456', 'sku_id' => '999', 'replacement_url' => 'https://es.aliexpress.com/item/456.html'])
             ->assertOk()->assertJsonPath('result.raised', 1);
         $this->assertSame('https://es.aliexpress.com/item/456.html', $p->fresh()->meta['source_url']);
         $this->assertSame('https://es.aliexpress.com/item/456.html', $p->fresh()->meta['autogenesi']['source_url']);
         $this->assertSame(['456'], app(\App\Services\CatalogPriceUpdater::class)->sources($p->fresh()));
-        $this->assertSame('210.00', $v->fresh()->price);
+        $this->assertSame('213.00', $v->fresh()->price);
         $this->assertSame('456', $v->fresh()->meta['source_product_id']);
         $this->assertSame('999', $v->fresh()->meta['source_sku_id']);
         $this->assertSame('900.00', $other->fresh()->price);
@@ -151,6 +209,26 @@ class CatalogVariantMatchTest extends TestCase
         $this->assertFalse(app(\App\Http\Controllers\CatalogPriceUpdateController::class)->snapshot(auth()->id())['items'][0]['manual_updated']);
     }
 
+    public function test_saved_sku_without_supplier_cost_replaces_stale_yellow_result(): void
+    {
+        $p = $this->product();
+        $v = $p->variants()->create(['title' => '2G-32G-A', 'price' => '403.82']);
+        \App\Models\ProductPriceUpdate::create(['user_id' => auth()->id(), 'status' => 'completed', 'items' => [[
+            'id' => $p->id, 'title' => $p->title, 'status' => 'completed', 'result' => ['variants' => [[
+                'id' => $v->id, 'title' => '2G-32G', 'status' => 'skipped', 'reason' => 'Nessuna corrispondenza certa tramite SKU; prezzo invariato.',
+            ]], 'supplier_variants' => 2, 'raised' => 0, 'unchanged' => 0, 'skipped' => 1],
+        ]]]);
+        $v->update(['meta' => ['source_product_id' => '123', 'source_sku_id' => '999',
+            'supplier_match_manual' => ['matched_at' => now()->addMinute()->toIso8601String()]]]);
+
+        $item = app(\App\Http\Controllers\CatalogPriceUpdateController::class)->snapshot(auth()->id())['items'][0];
+        $this->assertTrue($item['manual_updated']);
+        $this->assertSame('manual_updated', $item['status']);
+        $this->assertSame('linked_unpriced', $item['result']['variants'][0]['status']);
+        $this->assertSame('2G-32G-A', $item['result']['variants'][0]['title']);
+        $this->assertSame(1, $item['result']['skipped']);
+    }
+
     public function test_can_delete_selected_local_variant_and_refresh_minimum_but_preserves_last_variant(): void
     {
         $p = $this->product();
@@ -175,13 +253,13 @@ class CatalogVariantMatchTest extends TestCase
         $this->mock(AutogenesiAliExpressApi::class, fn ($m) => $m->shouldReceive('product')->twice()->andReturn($this->response()));
         $url = route('supplier-variants.create', $p);
         $input = ['source_id' => '123', 'sku_id' => '999', 'title' => '8Core 8GB 128GB'];
-        $this->postJson($url, $input)->assertOk()->assertJsonPath('app_variant.label', '8Core 8GB 128GB')->assertJsonPath('app_variant.price', '210.00');
+        $this->postJson($url, $input)->assertOk()->assertJsonPath('app_variant.label', '8Core 8GB 128GB')->assertJsonPath('app_variant.price', '213.00');
         $this->assertSame(2, $p->variants()->count());
         $v = $p->variants()->whereKeyNot($old->id)->firstOrFail();
         $this->assertSame('100.00', $v->meta['variant_cost']);
         $this->assertSame('999', $v->meta['source_sku_id']);
         $this->assertNull($v->shopify_variant_id);
-        $this->assertSame('210.00', $p->fresh()->price_min);
+        $this->assertSame('213.00', $p->fresh()->price_min);
         $this->assertSame('900.00', $old->fresh()->price);
         $this->postJson($url, $input)->assertUnprocessable();
         $this->assertSame(2, $p->variants()->count());
@@ -196,13 +274,13 @@ class CatalogVariantMatchTest extends TestCase
         $url = route('supplier-variants.match', [$p, $v]);
         $data = ['source_id' => '123', 'sku_id' => '999'];
         $this->postJson($url, $data)->assertOk()->assertJsonPath('result.variants.0.status', 'recalculated');
-        $this->assertSame('210.00', $v->fresh()->price);
-        $this->assertSame('210.00', $p->fresh()->price_min);
+        $this->assertSame('213.00', $v->fresh()->price);
+        $this->assertSame('213.00', $p->fresh()->price_min);
         $this->assertSame('reset_to_rule', $v->fresh()->meta['price_update']['mode']);
         $this->assertSame('500.00', $other->fresh()->price);
         $v->update(['price' => null]);
         $this->postJson($url, $data)->assertOk();
-        $this->assertSame('210.00', $v->fresh()->price);
+        $this->assertSame('213.00', $v->fresh()->price);
     }
 
     public function test_final_price_can_be_edited_after_pairing_without_changing_cost_or_rule_reference(): void
@@ -215,7 +293,7 @@ class CatalogVariantMatchTest extends TestCase
         $this->assertSame('199.50', $p->fresh()->price_min);
         $this->assertSame('100.00', $v->fresh()->meta['variant_cost']);
         $this->assertSame('999', $v->fresh()->meta['source_sku_id']);
-        $this->getJson(route('supplier-variants.show', $p))->assertOk()->assertJsonPath('app.0.price', '199.50')->assertJsonPath('app.0.rule_price', '210')
+        $this->getJson(route('supplier-variants.show', $p))->assertOk()->assertJsonPath('app.0.price', '199.50')->assertJsonPath('app.0.rule_price', '213')
             ->assertJsonPath('app.0.supplier_cost', '100.00')->assertJsonPath('app.0.supplier_label', 'PX9 8GB 128GB')->assertJsonPath('app.0.sku_id', '999');
     }
 
@@ -237,7 +315,7 @@ class CatalogVariantMatchTest extends TestCase
         $this->mock(AutogenesiAliExpressApi::class, fn ($m) => $m->shouldReceive('product')->once()->withArgs(fn ($user, $id) => $id === '456')->andReturn($this->response()));
         $this->postJson(route('supplier-variants.attempt', $p), ['source_url' => 'https://es.aliexpress.com/item/456.html'])
             ->assertOk()->assertJsonPath('result.skipped', 1);
-        $this->assertSame('210.00', $v->fresh()->price);
+        $this->assertSame('213.00', $v->fresh()->price);
         $this->assertSame('999', $v->fresh()->meta['source_sku_id']);
         $this->assertArrayNotHasKey('supplier_match_required', $v->fresh()->meta);
         $this->assertSame('300.00', $other->fresh()->price);
@@ -258,6 +336,43 @@ class CatalogVariantMatchTest extends TestCase
         $this->assertSame(0, $result['skipped']);
         $this->assertSame('plain', $v->fresh()->meta['source_sku_id']);
         $this->assertSame('187.94', $v->fresh()->meta['variant_cost']);
+    }
+
+    public function test_name_match_respects_variant_version_letter(): void
+    {
+        $p = $this->product();
+        $a = $p->variants()->create(['title' => '4Core 2G 32G-A', 'price' => 500]);
+        $b = $p->variants()->create(['title' => '4Core 2G 32G-B', 'price' => 500]);
+        $offers = [
+            ['source_id' => '123', 'sku_id' => 'b', 'label' => 'PX1 (2GB 32GB)B · Polonia', 'cost' => '110.00', 'attr' => ''],
+            ['source_id' => '123', 'sku_id' => 'a', 'label' => 'PX1 (2GB 32GB)A · Polonia', 'cost' => '100.00', 'attr' => ''],
+        ];
+        $result = app(\App\Services\CatalogPriceUpdater::class)->apply($p->id, $offers, null, null, true, true);
+        $this->assertSame(0, $result['skipped']);
+        $this->assertSame('a', $a->fresh()->meta['source_sku_id']);
+        $this->assertSame('b', $b->fresh()->meta['source_sku_id']);
+    }
+
+    public function test_create_version_duplicates_all_variants_once_per_letter_without_supplier_mapping(): void
+    {
+        $p = $this->product();
+        $a = $p->variants()->create(['title' => '4Core 2G 32G', 'option_value' => '4Core 2G 32G', 'sku' => 'local-a', 'price' => 250,
+            'meta' => ['source_sku_id' => 'supplier-a', 'variant_cost' => '100.00']]);
+        $b = $p->variants()->create(['title' => '8Core 4G 64G', 'option_value' => '8Core 4G 64G', 'sku' => 'local-b', 'price' => 350]);
+
+        $this->postJson(route('supplier-variants.create-version', $p))->assertOk()->assertJsonPath('letter', 'B')->assertJsonPath('created', 2);
+        $this->assertSame('4Core 2G 32G-A', $a->fresh()->title);
+        $this->assertSame('8Core 4G 64G-A', $b->fresh()->title);
+        $this->postJson(route('supplier-variants.create-version', $p))->assertOk()->assertJsonPath('letter', 'C')->assertJsonPath('created', 2);
+        $this->assertEqualsCanonicalizing([
+            '4Core 2G 32G-A', '4Core 2G 32G-B', '4Core 2G 32G-C',
+            '8Core 4G 64G-A', '8Core 4G 64G-B', '8Core 4G 64G-C',
+        ], $p->variants()->pluck('title')->all());
+        $clones = $p->variants()->whereNotIn('id', [$a->id, $b->id])->get();
+        $this->assertCount(4, $clones);
+        $this->assertCount(4, array_unique($clones->pluck('sku')->all()));
+        foreach ($clones as $clone) $this->assertNull($clone->meta['source_sku_id'] ?? null);
+        $this->assertSame('supplier-a', $a->fresh()->meta['source_sku_id']);
     }
 
     public function test_attempt_with_no_name_matches_keeps_original_link_and_prices(): void
@@ -306,10 +421,10 @@ class CatalogVariantMatchTest extends TestCase
         $this->assertDatabaseMissing('configurator_variants', ['id' => $old->id]);
         $this->assertEqualsCanonicalizing(['999', '998'], $p->variants()->get()->map(fn ($v) => $v->meta['source_sku_id'])->all());
         $this->assertEqualsCanonicalizing(['8Core 6G 64G', '4Core 2G 32G'], $p->variants()->pluck('title')->all());
-        $this->assertSame('210.00', $p->variants()->where('sku', 'AE-123-999')->firstOrFail()->price);
-        $this->assertSame('200.00', $p->fresh()->price_min);
-        $this->assertSame(['200.00', '210.00'], $p->variants()->orderBy('id')->pluck('price')->all());
-        $this->getJson(route('supplier-variants.show', $p))->assertOk()->assertJsonPath('app.0.price', '200.00');
+        $this->assertSame('213.00', $p->variants()->where('sku', 'AE-123-999')->firstOrFail()->price);
+        $this->assertSame('203.00', $p->fresh()->price_min);
+        $this->assertSame(['203.00', '213.00'], $p->variants()->orderBy('id')->pluck('price')->all());
+        $this->getJson(route('supplier-variants.show', $p))->assertOk()->assertJsonPath('app.0.price', '203.00');
         $this->assertSame('old', $p->fresh()->meta['variant_recreation_history'][0]['variants'][0]['sku']);
     }
 
@@ -339,7 +454,7 @@ class CatalogVariantMatchTest extends TestCase
         $new = $p->variants()->firstOrFail();
         $this->assertNotSame($old->id, $new->id);
         $this->assertSame('98765', (string) $new->shopify_variant_id);
-        $this->assertSame('210.00', $new->price);
+        $this->assertSame('213.00', $new->price);
     }
 
     public function test_recreate_is_blocked_for_cameras(): void
@@ -366,7 +481,7 @@ class CatalogVariantMatchTest extends TestCase
         $this->postJson(route('supplier-variants.recreate', $p))->assertOk()->assertJsonPath('created', 2)->assertJsonPath('excluded', 3);
         $this->assertEqualsCanonicalizing(['102', '104'], $p->variants()->get()->map(fn ($v) => $v->meta['source_sku_id'])->all());
         $this->assertEqualsCanonicalizing(['4Core 1G 16G', '8Core 6G 64G'], $p->variants()->pluck('title')->all());
-        $this->assertSame('190.00', $p->variants()->where('sku', 'AE-123-102')->firstOrFail()->price);
+        $this->assertSame('193.00', $p->variants()->where('sku', 'AE-123-102')->firstOrFail()->price);
     }
 
     public function test_recreate_accepts_ram_rom_labels_and_replaces_existing_variants(): void
@@ -426,5 +541,6 @@ class CatalogVariantMatchTest extends TestCase
         $updater = app(\App\Services\CatalogPriceUpdater::class);
         $this->assertSame('8Core 4G 64G', $updater->recreatedVariantName('4GB ram X 64GB rom · Ocho Núcleos'));
         $this->assertSame('4Core 2G 32G', $updater->recreatedVariantName('2GB RAM X 32GB ROM · Cuatro Núcleos'));
+        $this->assertSame('8Core 8G 128G-C', $updater->recreatedVariantName('S8 (8G 128)-C · Polonia'));
     }
 }

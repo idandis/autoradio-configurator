@@ -78,35 +78,68 @@ class AutogenesiAliExpressApi
         if (!in_array($sort, ['price', 'sales', 'best_match'], true)) throw new RuntimeException('Ordinamento API non valido.');
         app(AutogenesiAliExpressAuth::class)->accessToken($user);
         $query = preg_replace('/\s+/u', ' ', trim($query));
-        $key = 'autogenesi.api-search.v3.'.hash('sha256', config('services.aliexpress.app_key').':'.$user.':'.$query.':'.$sort);
+        $key = 'autogenesi.api-search.v6.'.hash('sha256', config('services.aliexpress.app_key').':'.$user.':'.$query.':'.$sort);
         if ($cached = Cache::get($key)) {
             return $cached + ['cached' => true];
         }
-        $data = $this->call($user, 'aliexpress.ds.text.search', [
-            'keyWord' => $query, 'local' => 'es_ES', 'currency' => 'EUR', 'countryCode' => 'ES', 'pageSize' => '20', 'pageIndex' => '1',
-        ]);
-        $items = data_get($data, 'data.products.selection_search_product', []);
-        if (! is_array($items)) { throw new RuntimeException('Risposta ricerca AliExpress non valida.'); }
-        if (isset($items['itemId'])) { $items = [$items]; }
-        $products = [];
-        foreach (array_slice($items, 0, 20) as $item) {
-            $id = (string) ($item['itemId'] ?? '');
-            if (! ctype_digit($id)) { continue; }
-            $price = $item['targetSalePrice'] ?? null;
-            $orders = (string) ($item['orders'] ?? '');
-            $sales = null;
-            if (preg_match('/^\s*(\d+(?:[.,]\d+)?)\s*([kKmM])\+?\s*$/', $orders, $m)) $sales = (int) ((float) str_replace(',', '.', $m[1]) * (strtolower($m[2]) === 'k' ? 1000 : 1000000));
-            elseif (preg_match('/^[\d.,\s]+\+?$/', $orders)) $sales = (int) preg_replace('/\D/', '', $orders);
-            $products[] = ['id' => $id, 'title' => (string) ($item['title'] ?? ''),
-                'price' => is_numeric($price) ? (float) $price : null,
-                'orders' => $orders, 'sales' => $sales,
-                'url' => 'https://es.aliexpress.com/item/'.$id.'.html'];
+        $products = []; $seen = []; $scanned = 0; $pages = 0;
+        for ($page = 1; $page <= 3; $page++) {
+            try {
+                $data = $this->call($user, 'aliexpress.ds.text.search', [
+                    'keyWord' => $query, 'local' => 'es_ES', 'currency' => 'EUR', 'countryCode' => 'ES', 'pageSize' => '20', 'pageIndex' => (string) $page,
+                ]);
+            } catch (RuntimeException $e) {
+                if ($page === 1 || preg_match('/autorizzazione|token|session/i', $e->getMessage())) throw $e;
+                break;
+            }
+            $items = data_get($data, 'data.products.selection_search_product', []);
+            if (! is_array($items)) { throw new RuntimeException('Risposta ricerca AliExpress non valida.'); }
+            if (isset($items['itemId'])) { $items = [$items]; }
+            $pages++;
+            $scanned += count($items);
+            foreach ($items as $item) {
+                $id = (string) ($item['itemId'] ?? '');
+                if (! ctype_digit($id) || isset($seen[$id])) { continue; }
+                $seen[$id] = true;
+                if (! $this->matchesSearchTitle($query, (string) ($item['title'] ?? ''))) continue;
+                $price = $item['targetSalePrice'] ?? null;
+                $orders = (string) ($item['orders'] ?? '');
+                $sales = null;
+                if (preg_match('/^\s*(\d+(?:[.,]\d+)?)\s*([kKmM])\+?\s*$/', $orders, $m)) $sales = (int) ((float) str_replace(',', '.', $m[1]) * (strtolower($m[2]) === 'k' ? 1000 : 1000000));
+                elseif (preg_match('/^[\d.,\s]+\+?$/', $orders)) $sales = (int) preg_replace('/\D/', '', $orders);
+                $products[] = ['id' => $id, 'title' => (string) ($item['title'] ?? ''),
+                    'price' => is_numeric($price) ? (float) $price : null,
+                    'orders' => $orders, 'sales' => $sales,
+                    'url' => 'https://es.aliexpress.com/item/'.$id.'.html'];
+            }
+            if (count($products) >= 20 || count($items) < 20) break;
         }
         if ($sort === 'price') usort($products, fn ($a, $b) => ($a['price'] ?? INF) <=> ($b['price'] ?? INF));
         if ($sort === 'sales') usort($products, fn ($a, $b) => ($b['sales'] ?? -1) <=> ($a['sales'] ?? -1));
-        $result = ['query' => $query, 'sort_by' => $sort, 'products' => $products, 'total' => (int) data_get($data, 'data.totalCount', 0), 'searched_at' => now()->toIso8601String()];
+        $result = ['query' => $query, 'sort_by' => $sort, 'products' => array_slice($products, 0, 20), 'scanned' => $scanned, 'pages' => $pages, 'searched_at' => now()->toIso8601String()];
         Cache::put($key, $result, now()->addMinutes(5));
         return $result + ['cached' => false];
+    }
+
+    private function matchesSearchTitle(string $query, string $title): bool
+    {
+        $normalize = static fn (string $value): string => trim(preg_replace('/[^a-z0-9]+/', ' ', strtolower(iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $value) ?: $value)));
+        $words = array_values(array_filter(explode(' ', $normalize($query)), static fn ($word) => $word !== ''));
+        $years = [];
+        while (count($words) > 2 && preg_match('/^(?:19|20)\d{2}$/', end($words))) $years[] = (int) array_pop($words);
+        $words = array_values(array_filter($words, static fn ($word) => ! in_array($word, ['radio', 'autoradio', 'android', 'carplay', 'pantalla', 'stereo', 'estereo', 'multimedia', 'gps', 'navegacion', 'para', 'for', 'de'], true)));
+        if (in_array('mercedes', $words, true)) $words = array_values(array_diff($words, ['benz']));
+        $text = ' '.$normalize($title).' ';
+        if (preg_match('/\b(?:universal|portable|portatil|dashcam|scanner|obd|lens|lente|fan|ventilador|marco|frame|fascia|cable|cableado|harness|adaptador|adapter|antenna|antena|piezas|repuesto)\b/', $text)
+            || preg_match('/\b(?:rear view camera|backup camera|camera trasera|camara trasera)\b/', $text)
+            || ! preg_match('/\b(?:radio|autoradio|stereo|estereo|multimedia|head unit|android|carplay)\b/', $text)) return false;
+        foreach ($words as $word) if (! str_contains($text, ' '.$word.' ')) return false;
+        if (!$years) return true;
+        preg_match_all('/\b((?:19|20)\d{2})\s*[-–—]\s*((?:19|20)\d{2})\b/u', $title, $ranges, PREG_SET_ORDER);
+        foreach ($ranges as $range) foreach ($years as $year) if ((int) $range[1] <= $year && $year <= (int) $range[2]) return true;
+        if ($ranges) return false;
+        preg_match_all('/\b(?:19|20)\d{2}\b/', $title, $found);
+        return !$found[0] || (bool) array_intersect($years, array_map('intval', $found[0]));
     }
 
     public function product(int $user, string $id): array

@@ -12,7 +12,7 @@ use Throwable;
 
 class AutogenesiApiImport
 {
-    public function importUrl(int $user, string $url): AutogenesiProduct
+    public function importUrl(int $user, string $url, ?array $vehicle = null): AutogenesiProduct
     {
         abort_unless(app()->environment('local'), 403);
         $url = app(AutogenesiSearch::class)->sourceUrl($url);
@@ -24,7 +24,7 @@ class AutogenesiApiImport
         $control->activate();
         $run = $control->state()['run_id'];
         $product = app(AutogenesiAliExpressApi::class)->product($user, $id);
-        $vehicle = app(AutogenesiProductVehicle::class)->infer($product);
+        $vehicle ??= app(AutogenesiProductVehicle::class)->infer($product);
         if (!$this->headUnit($product, $vehicle)) throw new RuntimeException('Il link non contiene un’autoradio specifica per il veicolo rilevato.');
         $variants = $this->variants($product);
         if (!$variants) throw new RuntimeException('Nessuna variante radio con prezzo EUR disponibile dal link.');

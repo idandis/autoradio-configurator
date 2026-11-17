@@ -20,6 +20,23 @@ class ConfiguratorImportTest extends TestCase
 {
     use RefreshDatabase;
 
+    public function test_xlsx_reader_uses_products_sheet_when_files_sheet_is_active(): void
+    {
+        $book = new Spreadsheet;
+        $book->getActiveSheet()->setTitle('Files')->fromArray([['File Name', 'Link'], ['dashboard.png', 'https://example.com/dashboard.png']]);
+        $book->createSheet()->setTitle('Products')->fromArray([['Handle', 'Title'], ['radio-test', 'Radio test']]);
+        $path = tempnam(sys_get_temp_dir(), 'catalog-').'.xlsx';
+        try {
+            (new Xlsx($book))->save($path);
+            [$headers, $rows] = (new \ReflectionMethod(ConfiguratorCsvImporter::class, 'readSpreadsheet'))
+                ->invoke(app(ConfiguratorCsvImporter::class), $path);
+            $this->assertSame(['Handle', 'Title'], $headers);
+            $this->assertSame(['radio-test', 'Radio test'], $rows[0]);
+        } finally {
+            @unlink($path);
+        }
+    }
+
     public function test_image_urls_change_on_each_import_without_changing_filenames(): void
     {
         Http::preventStrayRequests();
