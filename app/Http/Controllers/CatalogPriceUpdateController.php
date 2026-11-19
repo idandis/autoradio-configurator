@@ -52,7 +52,9 @@ class CatalogPriceUpdateController extends Controller
         $ids = $products->keys()->all();
         $items = array_values(array_filter($run->items, fn ($item) => in_array($item['id'], $ids, true)));
         foreach ($items as &$item) {
-            $manual = $products->get($item['id'])->variants->contains(fn ($v) => $this->isManualVariant($v, $run));
+            $product = $products->get($item['id']);
+            $manual = $product->variants->contains(fn ($v) => $this->isManualVariant($v, $run))
+                || $this->allSkippedResolved($item, $product);
             if ($manual) { $item['status'] = 'completed'; unset($item['error']); continue; }
             $variants = collect($item['result']['variants'] ?? []);
             $blue = $item['status'] === 'completed' && $variants->contains(fn ($v) => ($v['status'] ?? '') === 'raised');
@@ -85,13 +87,15 @@ class CatalogPriceUpdateController extends Controller
         $items = array_map(function ($item) use ($products, $run) {
             $product = $products->get($item['id']);
             $item['source_urls'] = $product ? array_map(fn ($id) => 'https://es.aliexpress.com/item/'.$id.'.html', app(CatalogPriceUpdater::class)->sources($product)) : [];
-            $isUpdated = fn ($v) => $this->isManualVariant($v, $run);
-            $item['manual_updated'] = $product && $product->variants->contains($isUpdated);
+            $previous = collect($item['result']['variants'] ?? [])->keyBy('id');
+            $isUpdated = fn ($v) => $this->isManualVariant($v, $run)
+                || (($previous->get($v->id)['status'] ?? null) === 'skipped' && $this->hasPersistedMatch($v, $product));
+            $item['manual_updated'] = $product && ($product->variants->contains(fn ($v) => $this->isManualVariant($v, $run))
+                || $this->allSkippedResolved($item, $product));
             if ($item['manual_updated']) {
                 $item['status'] = 'manual_updated';
                 unset($item['error']);
-                $previous = collect($item['result']['variants'] ?? [])->keyBy('id');
-            $rows = $product->variants->sortBy(fn ($v) => app(CatalogPriceUpdater::class)->variantOrder($v))->values()->map(function ($v) use ($isUpdated, $previous) {
+                $rows = $product->variants->sortBy(fn ($v) => app(CatalogPriceUpdater::class)->variantOrder($v))->values()->map(function ($v) use ($isUpdated, $previous) {
                     $row = $previous->get($v->id, ['id' => $v->id, 'title' => $v->title ?: $v->option_value, 'old_price' => $v->price, 'status' => 'skipped', 'reason' => 'Variante da verificare.']);
                     if (!$isUpdated($v)) return $row;
                     $audit = $v->meta['price_update'] ?? [];
@@ -134,5 +138,25 @@ class CatalogPriceUpdateController extends Controller
         return (!$audit && !empty($meta['supplier_match_manual']))
             || ((string) ($audit['source_sku_id'] ?? '') === (string) $meta['source_sku_id']
                 && (string) ($audit['source_product_id'] ?? '') === (string) $meta['source_product_id']);
+    }
+
+    private function allSkippedResolved(array $item, ConfiguratorProduct $product): bool
+    {
+        $skipped = collect($item['result']['variants'] ?? [])->filter(fn ($row) => ($row['status'] ?? '') === 'skipped');
+        if ($skipped->isEmpty()) return false;
+        $variants = $product->variants->keyBy('id');
+        return $skipped->every(fn ($row) => ($v = $variants->get($row['id'] ?? null)) && $this->hasPersistedMatch($v, $product));
+    }
+
+    private function hasPersistedMatch($variant, ConfiguratorProduct $product): bool
+    {
+        $meta = $variant->meta ?? [];
+        $audit = $meta['price_update'] ?? [];
+        $source = (string) ($meta['source_product_id'] ?? '');
+        $sku = (string) ($meta['source_sku_id'] ?? '');
+        return $source !== '' && $sku !== '' && is_numeric($meta['variant_cost'] ?? null)
+            && in_array($source, app(CatalogPriceUpdater::class)->sources($product), true)
+            && $source === (string) ($audit['source_product_id'] ?? '')
+            && $sku === (string) ($audit['source_sku_id'] ?? '');
     }
 }

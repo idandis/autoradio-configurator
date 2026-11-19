@@ -41,13 +41,26 @@ class ImportedProductsExport
 
     public function writeAllRadios(): string
     {
-        $products = ConfiguratorProduct::with('variants')->where('category', 'screen')
+        $products = $this->radios()->get();
+        if ($products->isEmpty()) throw new \RuntimeException('Nessuna radio nel catalogo.');
+        return $this->writeProducts($products, 'Tutte le radio', 'tutte-le-radio-shopify.xlsx');
+    }
+
+    public function writeBlue(array $ids): string
+    {
+        if (!$ids) throw new \RuntimeException('Nessun prodotto blu da esportare.');
+        $products = $this->radios()->whereIn('id', $ids)->get();
+        if ($products->isEmpty()) throw new \RuntimeException('Nessun prodotto blu da esportare.');
+        return $this->writeProducts($products, 'Prodotti blu', 'prodotti-blu-shopify.xlsx');
+    }
+
+    private function radios(): \Illuminate\Database\Eloquent\Builder
+    {
+        return ConfiguratorProduct::with('variants')->where('category', 'screen')
             ->where(fn ($q) => $q->whereNull('meta->type')->orWhere('meta->type', '!=', 'DASHCAM'))
             ->whereNot(fn ($q) => $q->where('title', 'like', 'DVR %')->orWhere('title', 'like', 'Dashcam %')
                 ->orWhere('title', 'like', 'Marco %')->orWhere('title', 'Donation'))
-            ->orderBy('id')->get();
-        if ($products->isEmpty()) throw new \RuntimeException('Nessuna radio nel catalogo.');
-        return $this->writeProducts($products, 'Tutte le radio', 'tutte-le-radio-shopify.xlsx');
+            ->orderBy('id');
     }
 
     private function writeProducts(\Illuminate\Support\Collection $products, string $date, string $filename): string

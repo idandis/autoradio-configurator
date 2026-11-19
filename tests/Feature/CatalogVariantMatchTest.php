@@ -229,6 +229,28 @@ class CatalogVariantMatchTest extends TestCase
         $this->assertSame(1, $item['result']['skipped']);
     }
 
+    public function test_older_saved_matches_clear_stale_yellow_result(): void
+    {
+        $p = $this->product();
+        $v = $p->variants()->create(['title' => '4G-WIFI 4GB-64GB', 'price' => '470.00', 'meta' => [
+            'source_product_id' => '123', 'source_sku_id' => '999', 'variant_cost' => '188.39',
+            'supplier_match_manual' => ['matched_at' => now()->subDay()->toIso8601String()],
+            'price_update' => ['source_product_id' => '123', 'source_sku_id' => '999', 'pricing' => ['selling_price' => '505']],
+        ]]);
+        $run = \App\Models\ProductPriceUpdate::create(['user_id' => auth()->id(), 'status' => 'completed', 'items' => [[
+            'id' => $p->id, 'title' => $p->title, 'status' => 'completed', 'result' => ['variants' => [[
+                'id' => $v->id, 'title' => $v->title, 'status' => 'skipped', 'reason' => 'Nessuna corrispondenza certa tramite SKU; prezzo invariato.',
+            ]], 'supplier_variants' => 1, 'raised' => 0, 'unchanged' => 0, 'skipped' => 1],
+        ]]]);
+        $item = app(\App\Http\Controllers\CatalogPriceUpdateController::class)->snapshot(auth()->id())['items'][0];
+        $this->assertTrue($item['manual_updated']);
+        $this->assertSame('manual_updated', $item['status']);
+        $this->assertSame(0, $item['result']['skipped']);
+        $this->assertSame('manual_matched', $item['result']['variants'][0]['status']);
+        $this->post(route('price-update.resume', $run))->assertRedirect();
+        $this->assertSame('completed', $run->fresh()->items[0]['status']);
+    }
+
     public function test_can_delete_selected_local_variant_and_refresh_minimum_but_preserves_last_variant(): void
     {
         $p = $this->product();

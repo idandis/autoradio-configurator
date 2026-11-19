@@ -279,6 +279,7 @@ Route::middleware(['auth', 'verified', 'admin'])->group(function () {
     Route::delete('/missing-vehicle-requests/{missingVehicleRequest}', [MissingVehicleRequestsController::class, 'destroy'])->name('missing-vehicle-requests.destroy');
     Route::get('/imported-products/export-shopify', [ImportedProductsController::class, 'exportShopify'])->name('imported-products.export-shopify');
     Route::get('/imported-products/export-all-radios', [ImportedProductsController::class, 'exportAllRadios'])->name('imported-products.export-all-radios');
+    Route::get('/imported-products/export-blue', [ImportedProductsController::class, 'exportBlue'])->name('imported-products.export-blue');
     Route::get('/imported-products/{product}/supplier-variants', [\App\Http\Controllers\CatalogVariantMatchController::class, 'show'])->middleware('throttle:10,1')->name('supplier-variants.show');
     Route::post('/imported-products/{product}/supplier-variants', [\App\Http\Controllers\CatalogVariantMatchController::class, 'show'])->middleware('throttle:10,1')->name('supplier-variants.preview');
     Route::post('/imported-products/{product}/supplier-variants/add', [\App\Http\Controllers\CatalogVariantMatchController::class, 'create'])->middleware('throttle:10,1')->name('supplier-variants.create');

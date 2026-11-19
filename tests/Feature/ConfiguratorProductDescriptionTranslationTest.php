@@ -18,6 +18,10 @@ class ConfiguratorProductDescriptionTranslationTest extends TestCase
         Http::preventStrayRequests();
         config(['services.openai.api_key' => null]);
         $handles = [
+            'autoradio-android-10-2-1-din-para-renault-latitude-y-renault-laguna-carplay-5g-wifi-mirror-link',
+            'bmw-serie-5-e39-x5-e53-m5-1996-2007-ae-1005010332200179',
+            'citroen-c4-grand-picasso-2006-2013-ae-1005012645079689',
+            'hyundai-encino-kona-2018-2022-ae-1005007506396999',
             'opel-astra-j-2009-2018-ae-1005007712837802',
             'citroen-saxo-1996-2003-ae-1005013445297851',
             'citroen-xsara-picasso-1999-2010-ae-1005012872013801',
@@ -115,7 +119,7 @@ class ConfiguratorProductDescriptionTranslationTest extends TestCase
                 'radio-android-9-dacia-duster-2018-2019-mazda-6-2012-2016',
                 'pantalla-tesla-9-7-android-15-con-carplay-y-4g-para-renault-scenic-iv-2016-2020-gps-dsp-y-control-volante',
             ],
-            'camera' => ['camara-360-ahd-para-navegacion-android-1080p-8k'],
+            'camera' => ['camara-360-ahd-para-navegacion-android-1080p-8k', 'hicamrui-rear-view-camera-for-toyota-rav4-rav-4-v-xa50-2019-2020-2021-oem-radio-back-up-parking-camera-accessories'],
             'speaker' => ['sony-xs-nw1202e-subwoofer-30cm-12-300w'],
         ];
         $catalogs = [];

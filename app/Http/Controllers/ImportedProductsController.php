@@ -113,6 +113,20 @@ class ImportedProductsController extends Controller
         }
     }
 
+    public function exportBlue(Request $request, \App\Services\ImportedProductsExport $exporter)
+    {
+        abort_unless(app()->environment('local'), 403);
+        $items = app(CatalogPriceUpdateController::class)->snapshot($request->user()->id)['items'] ?? [];
+        $ids = array_column(array_filter($items, fn ($item) => !empty($item['manual_updated'])
+            || (($item['status'] ?? '') === 'completed' && collect($item['result']['variants'] ?? [])
+                ->contains(fn ($variant) => ($variant['status'] ?? '') === 'raised'))), 'id');
+        try {
+            return response()->download($exporter->writeBlue($ids), 'prodotti-blu-shopify.xlsx');
+        } catch (\RuntimeException $e) {
+            return back()->withErrors(['export_date' => $e->getMessage()]);
+        }
+    }
+
     public function destroy(ConfiguratorProduct $product): RedirectResponse
     {
         DB::transaction(function () use ($product): void {

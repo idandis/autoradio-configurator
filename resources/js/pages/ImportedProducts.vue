@@ -347,6 +347,7 @@ const formatVehicle = (product: (typeof props.products.data)[number]) => {
             <label class="grid gap-1 text-sm">Esporta prodotti importati in data<input v-model="exportDate" name="date" type="date" required class="rounded-lg border border-sidebar-border/70 bg-background px-3 py-2" /></label>
             <button type="submit" class="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground">Esporta Excel Shopify</button>
             <a href="/imported-products/export-all-radios" class="rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-black">Esporta tutte le radio · Excel Shopify</a>
+            <a v-if="canRecoverDsers" href="/imported-products/export-blue" class="rounded-lg bg-sky-500 px-4 py-2 text-sm font-semibold text-white">Esporta Blu · Excel Shopify</a>
             <p class="w-full text-xs text-muted-foreground">«Esporta tutte le radio» include l’intero catalogo radio, con prezzi attuali, tutte le varianti, foto e metafield, indipendentemente da data, filtri e pagina. Esclude camere, dashcam, altoparlanti, accessori e bozze AutoGenesi.</p>
             <p class="w-full text-xs text-muted-foreground">Tutti i prodotti importati quel giorno, in ora italiana, indipendentemente dai filtri. Per gli import storici senza data registrata si usa la data di creazione. Trasferisci le foto su Aruba prima dell’importazione Shopify.</p>
             <p v-if="errors?.date || errors?.export_date" role="alert" class="w-full text-sm text-red-400">{{ errors?.date || errors?.export_date }}</p>

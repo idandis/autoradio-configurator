@@ -215,8 +215,8 @@ class CatalogPriceUpdater
                 }
                 $matches = !empty($meta['supplier_match_required']) ? [] : array_values(array_filter($offers, fn ($o) => in_array($o['source_id'], $sources, true)
                     && (!$source || $source === $o['source_id'])
-                    && $this->variantVersion($v->title ?: $v->option_value ?: '') === $this->variantVersion($o['label'] ?? '')
-                    && ($sourceSku ? $sourceSku === $o['sku_id'] : ($attr !== '' && $attr === $o['attr']))));
+                    && ($sourceSku ? $sourceSku === $o['sku_id'] : ($attr !== '' && $attr === $o['attr']
+                        && $this->variantVersion($v->title ?: $v->option_value ?: '') === $this->variantVersion($o['label'] ?? '')))));
                 $methods[$v->id] = $sourceSku ? 'source_sku_id' : 'sku_attributes';
                 if (empty($meta['supplier_match_required'])) {
                     $title = $v->title ?: $v->option_value ?: '';
@@ -230,6 +230,10 @@ class CatalogPriceUpdater
                     $title = $v->title ?: $v->option_value ?: '';
                     $matches = array_values(array_filter($offers, fn ($o) => in_array($o['source_id'], $sources, true) && $this->compatibleNames($title, $o['label'] ?? '', $o['configuration_profile'] ?? null)));
                     $methods[$v->id] = $this->memory($title) ? 'memory_features' : 'exact_variant_name';
+                }
+                if ($sourceSku && count($matches) > 1 && !$byName) {
+                    $candidates[$v->id] = $matches;
+                    continue;
                 }
                 $matches = $this->preferPlainOffer($matches, $v->title ?: $v->option_value ?: '');
                 $matches = $this->nearestWarehouse($matches);

@@ -83,6 +83,18 @@ class CatalogPriceUpdateTest extends TestCase
         $this->assertSame('8Core 8GB 256GB', $b->fresh()->title);
     }
 
+    public function test_saved_supplier_sku_takes_priority_over_outdated_local_variant_name(): void
+    {
+        $p = $this->product();
+        $v = $p->variants()->create(['title' => '4G-WIFI 4GB-64GB', 'sku' => 'legacy', 'price' => 470,
+            'meta' => ['source_product_id' => '123', 'source_sku_id' => '999']]);
+        $result = app(CatalogPriceUpdater::class)->apply($p->id, [[
+            'source_id' => '123', 'sku_id' => '999', 'attr' => '', 'label' => 'F0 8core(4 64G)R', 'cost' => '188.39',
+        ]]);
+        $this->assertSame(0, $result['skipped']);
+        $this->assertSame('999', $v->fresh()->meta['source_sku_id']);
+    }
+
     public function test_negative_attribute_ids_do_not_collapse_different_hardware_variants(): void
     {
         $p = $this->product();

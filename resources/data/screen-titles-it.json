@@ -356,8 +356,8 @@
         "translation": "Autoradio Android 10\" 1Din per VW Golf 7 2011-2021"
     },
     "autoradio-android-10-2-1-din-para-renault-latitude-y-renault-laguna-carplay-5g-wifi-mirror-link": {
-        "source": "Autoradio Android 10.2\" 1 Din para Renault Latitude y Renault Laguna - CarPlay, 5G Wifi, Mirror Link",
-        "translation": "Autoradio Android 10.2\\\" 1 Din per Renault Latitude e Renault Laguna - CarPlay, 5G WiFi, Mirror Link"
+        "source": "Autoradio Android 10.2\" 1 Din para Renault Latitude y Renault Laguna - 2011-2015",
+        "translation": "Autoradio Android 10.2\" 1 Din per Renault Latitude e Renault Laguna - 2011-2015"
     },
     "autoradio-android-10-25-2-din-para-audi-q5-2010-2017": {
         "source": "Autoradio Android 10.25\" 2 Din para Audi Q5 2010–2017",
@@ -1834,5 +1834,21 @@
     "opel-astra-j-2009-2018-ae-1005007712837802": {
         "source": "Pantalla Android 9.7\" Doble DIN para Opel Astra J 2009-2018",
         "translation": "Schermo Android 9.7\" Doppio DIN per Opel Astra J 2009-2018"
+    },
+    "bmw-serie-5-e39-x5-e53-m5-1996-2007-ae-1005010332200179": {
+        "source": "Autoradio 9 pulgadas 2DIN para BMW E39/X5/M5 1996-2003",
+        "translation": "Autoradio 9 pollici 2DIN per BMW E39/X5/M5 1996-2003"
+    },
+    "citroen-c4-grand-picasso-2006-2013-ae-1005012645079689": {
+        "source": "Pantalla 9\" Doble DIN para Citroen C4 Grand Picasso 2006-2013",
+        "translation": "Schermo 9\" Doppio DIN per Citroen C4 Grand Picasso 2006-2013"
+    },
+    "hyundai-encino-kona-2018-2022-ae-1005007506396999": {
+        "source": "Pantalla 9\" Doble DIN Android para Hyundai Kona 2018-2022",
+        "translation": "Schermo 9\" Doppio DIN Android per Hyundai Kona 2018-2022"
+    },
+    "renault-sandero-2-logan-2-2012-2019-ae-1005013446296169": {
+        "source": "L6 Pro 9\" QLED Doble DIN para Renault Logan 2012-2019",
+        "translation": "L6 Pro 9\" QLED Doppio DIN per Renault Logan 2012-2019"
     }
 }

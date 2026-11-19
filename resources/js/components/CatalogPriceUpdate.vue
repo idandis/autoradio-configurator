@@ -55,6 +55,11 @@ const rowCategory = (item: Item): Exclude<PriceColor, 'all'> => {
     if (item.result?.variants.some(v => v.status === 'skipped')) return 'yellow';
     return 'green';
 };
+const colorCounts = computed(() => {
+    const counts: Record<PriceColor, number> = { all: 0, red: 0, blue: 0, green: 0, yellow: 0, none: 0 };
+    for (const item of props.run?.items ?? []) { counts.all++; counts[rowCategory(item)]++; }
+    return counts;
+});
 const rowColor = (item: Item) => ({ red: 'border-red-500/40 bg-red-500/10', blue: 'border-sky-400/40 bg-sky-400/10', green: 'border-emerald-500/40 bg-emerald-500/10', yellow: 'border-yellow-400/40 bg-yellow-400/10', none: '' })[rowCategory(item)];
 const visibleItems = computed(() => {
     const name = nameFilter.value.trim().normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
@@ -78,12 +83,12 @@ const action = (type: string) => form.post(type === 'start' ? '/imported-product
         <h2 class="font-semibold">Aggiornamento prezzo</h2>
         <CatalogPriceRules />
         <div aria-label="Filtra prodotti per colore" class="mt-3 flex flex-wrap items-center gap-2 text-xs">
-            <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2"><input type="checkbox" :checked="colorFilter === 'all'" @change="setFilter('all')" /> Tutti</label>
-            <button type="button" :aria-pressed="colorFilter === 'red'" class="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2" :class="colorFilter === 'red' ? 'ring-2 ring-red-500' : ''" @click="setFilter('red')">Rosso · errore lettura/link</button>
-            <button type="button" :aria-pressed="colorFilter === 'blue'" class="rounded-md border border-sky-400/40 bg-sky-400/10 px-3 py-2" :class="colorFilter === 'blue' ? 'ring-2 ring-sky-400' : ''" @click="setFilter('blue')">Blu · variante aumentata o abbinamento aggiornato</button>
-            <button type="button" :aria-pressed="colorFilter === 'green'" class="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2" :class="colorFilter === 'green' ? 'ring-2 ring-emerald-500' : ''" @click="setFilter('green')">Verde · completato senza aumenti</button>
-            <button type="button" :aria-pressed="colorFilter === 'yellow'" class="rounded-md border border-yellow-400/40 bg-yellow-400/10 px-3 py-2" :class="colorFilter === 'yellow' ? 'ring-2 ring-yellow-400' : ''" @click="setFilter('yellow')">Giallo · SKU non abbinati, nessun aumento</button>
-            <button type="button" :aria-pressed="colorFilter === 'none'" class="rounded-md border px-3 py-2" :class="colorFilter === 'none' ? 'ring-2 ring-foreground' : ''" @click="setFilter('none')">Nessun colore · in corso/in coda</button>
+            <label class="flex cursor-pointer items-center gap-2 rounded-md border px-3 py-2"><input type="checkbox" :checked="colorFilter === 'all'" @change="setFilter('all')" /> Tutti ({{ colorCounts.all }})</label>
+            <button type="button" :aria-pressed="colorFilter === 'red'" class="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2" :class="colorFilter === 'red' ? 'ring-2 ring-red-500' : ''" @click="setFilter('red')">Rosso · errore lettura/link ({{ colorCounts.red }})</button>
+            <button type="button" :aria-pressed="colorFilter === 'blue'" class="rounded-md border border-sky-400/40 bg-sky-400/10 px-3 py-2" :class="colorFilter === 'blue' ? 'ring-2 ring-sky-400' : ''" @click="setFilter('blue')">Blu · variante aumentata o abbinamento aggiornato ({{ colorCounts.blue }})</button>
+            <button type="button" :aria-pressed="colorFilter === 'green'" class="rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2" :class="colorFilter === 'green' ? 'ring-2 ring-emerald-500' : ''" @click="setFilter('green')">Verde · completato senza aumenti ({{ colorCounts.green }})</button>
+            <button type="button" :aria-pressed="colorFilter === 'yellow'" class="rounded-md border border-yellow-400/40 bg-yellow-400/10 px-3 py-2" :class="colorFilter === 'yellow' ? 'ring-2 ring-yellow-400' : ''" @click="setFilter('yellow')">Giallo · SKU non abbinati, nessun aumento ({{ colorCounts.yellow }})</button>
+            <button type="button" :aria-pressed="colorFilter === 'none'" class="rounded-md border px-3 py-2" :class="colorFilter === 'none' ? 'ring-2 ring-foreground' : ''" @click="setFilter('none')">Nessun colore · in corso/in coda ({{ colorCounts.none }})</button>
         </div>
         <p class="my-3 text-sm text-muted-foreground">Solo autoradio con link AliExpress valido · camere, dashcam, altoparlanti e accessori esclusi. Costi aggiornati in EUR, destinazione Spagna · lavoro in background senza browser. Salva il costo per ogni variante abbinata e aumenta soltanto i prezzi inferiori alla formula. Prezzi già uguali o superiori invariati. Nessuna variante aggiunta; SKU non abbinabili segnalati. Aggiorna solo il database locale: per Shopify usa l’esportazione.</p>
         <button v-if="!run || run.status === 'completed'" :disabled="form.processing" class="rounded-lg bg-primary px-4 py-2 text-primary-foreground disabled:opacity-50" @click="action('start')">Aggiorna costi e prezzi</button>

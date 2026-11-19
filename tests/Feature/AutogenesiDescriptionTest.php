@@ -55,6 +55,27 @@ class AutogenesiDescriptionTest extends TestCase
         } finally { set_time_limit($previous); }
     }
 
+    public function test_large_source_image_is_resized_only_in_the_ai_request(): void
+    {
+        $photo = UploadedFile::fake()->image('large.png', 2000, 1200);
+        copy($photo->getRealPath(), $this->dir.'/image-1.bin');
+        $original = hash_file('sha256', $this->dir.'/image-1.bin');
+        $this->respond($this->copy);
+
+        app(AutogenesiDescription::class)->generate($this->source, ['brand' => 'Hyundai', 'model' => 'Kona', 'year_from' => 2017, 'year_to' => 2020], $this->dir);
+
+        Http::assertSent(function ($request) {
+            $url = collect($request['input'][0]['content'])->firstWhere('type', 'input_image')['image_url'];
+            $this->assertStringStartsWith('data:image/jpeg;base64,', $url);
+            $image = imagecreatefromstring(base64_decode(substr($url, strpos($url, ',') + 1)));
+            $this->assertSame(1280, imagesx($image));
+            $this->assertSame(768, imagesy($image));
+            imagedestroy($image);
+            return true;
+        });
+        $this->assertSame($original, hash_file('sha256', $this->dir.'/image-1.bin'));
+    }
+
     private function respond(array $copy, string $status = 'completed'): void
     {
         Http::fake(['https://api.openai.com/v1/responses' => Http::response(['status' => $status, 'output' => [

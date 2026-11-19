@@ -16,6 +16,11 @@ class AutogenesiDescription
             throw new RuntimeException('Chiave OpenAI necessaria per generare la scheda.');
         }
         set_time_limit(600);
+        $limit = ini_get('memory_limit');
+        if ($limit !== '-1' && preg_match('/^(\d+)([KMG]?)$/i', $limit, $match)
+            && (int) $match[1] * (['' => 1, 'K' => 1024, 'M' => 1048576, 'G' => 1073741824][strtoupper($match[2])] ?? 1) < 512 * 1048576) {
+            ini_set('memory_limit', '512M');
+        }
         $control = app(AutogenesiRunControl::class);
         $runId = $control->state()['run_id'];
         if ($guard) $control->assertActive($runId);
@@ -41,12 +46,12 @@ class AutogenesiDescription
                 || ($info[0] * $info[1]) > 25000000) {
                 throw new RuntimeException('Immagine sorgente non valida.');
             }
-            $total += filesize($path);
-            if ($total > 35 * 1024 * 1024) {
-                throw new RuntimeException('Immagini troppo grandi per una lettura completa.');
-            }
+            [$mime, $bytes] = $this->preview($path, $info);
+            $total += strlen($bytes);
+            if ($total > 20 * 1024 * 1024) throw new RuntimeException('Immagini troppo grandi per la richiesta AI.');
             $content[] = ['type' => 'input_text', 'text' => str_starts_with($image['file'], 'description-') ? 'Immagine della descrizione originale: '.$image['file'] : 'Immagine della galleria '.$image['file'].': può essere pubblicitaria o riferita a una variante diversa.'];
-            $content[] = ['type' => 'input_image', 'image_url' => 'data:'.$info['mime'].';base64,'.base64_encode(file_get_contents($path)), 'detail' => 'high'];
+            $content[] = ['type' => 'input_image', 'image_url' => 'data:'.$mime.';base64,'.base64_encode($bytes), 'detail' => 'high'];
+            unset($bytes);
         }
         $rules = file_get_contents(base_path('docs/autogenesi/regole-scheda-prodotto.md'));
         $strings = ['type' => 'array', 'items' => ['type' => 'string']];
@@ -172,6 +177,33 @@ class AutogenesiDescription
 
         return ['title' => $copy['title'], 'body_html' => $html, 'notes' => $notes, 'generated_at' => now()->toIso8601String(),
             'compatibilities' => $copy['compatibilities'] ?? [], 'product_images' => $copy['product_images'] ?? null, 'accessories_image' => $copy['accessories_image'] ?? null, 'before_after_image' => $copy['before_after_image'] ?? null, 'variant_specs' => $copy['variant_specs'] ?? [], 'model' => config('services.openai.text_model'), 'rules_hash' => hash('sha256', $rules), 'coverage' => $copy['coverage']];
+    }
+
+    private function preview(string $path, array $info): array
+    {
+        $bytes = file_get_contents($path);
+        if (strlen($bytes) <= 512 * 1024 && max($info[0], $info[1]) <= 1600) {
+            return [$info['mime'], $bytes];
+        }
+        $source = @imagecreatefromstring($bytes);
+        unset($bytes);
+        if (! $source) throw new RuntimeException('Immagine sorgente non leggibile.');
+        $scale = min(1, 1280 / max(imagesx($source), imagesy($source)));
+        $width = max(1, (int) round(imagesx($source) * $scale));
+        $height = max(1, (int) round(imagesy($source) * $scale));
+        $preview = imagecreatetruecolor($width, $height);
+        try {
+            imagefill($preview, 0, 0, imagecolorallocate($preview, 255, 255, 255));
+            imagecopyresampled($preview, $source, 0, 0, 0, 0, $width, $height, imagesx($source), imagesy($source));
+            ob_start();
+            $ok = imagejpeg($preview, null, 82);
+            $bytes = ob_get_clean();
+            if (! $ok || $bytes === false) throw new RuntimeException('Anteprima immagine non riuscita.');
+            return ['image/jpeg', $bytes];
+        } finally {
+            imagedestroy($preview);
+            imagedestroy($source);
+        }
     }
 
     private function separateUncertain(array $copy, array $sources): array

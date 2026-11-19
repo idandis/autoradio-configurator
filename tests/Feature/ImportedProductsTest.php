@@ -149,6 +149,36 @@ class ImportedProductsTest extends TestCase
         $this->assertDatabaseCount('configurator_products', 6);
     }
 
+    public function test_export_blue_contains_only_raised_or_manually_updated_radios(): void
+    {
+        $this->app->detectEnvironment(fn () => 'local');
+        \Illuminate\Support\Facades\Storage::fake('local');
+        $user = User::factory()->create(['is_admin' => true]);
+        $radios = [];
+        foreach (['raised', 'manual', 'green', 'yellow', 'red'] as $key) {
+            $radios[$key] = ConfiguratorProduct::create(['handle' => $key, 'category' => 'screen', 'title' => 'Radio '.$key]);
+            $radios[$key]->variants()->create(['title' => '4Core 2GB 32GB', 'sku' => $key, 'price' => 299]);
+        }
+        $run = \App\Models\ProductPriceUpdate::create(['user_id' => $user->id, 'status' => 'completed', 'items' => [
+            ['id' => $radios['raised']->id, 'status' => 'completed', 'result' => ['variants' => [['id' => $radios['raised']->variants[0]->id, 'status' => 'raised']]]],
+            ['id' => $radios['manual']->id, 'status' => 'completed', 'result' => ['variants' => [['id' => $radios['manual']->variants[0]->id, 'status' => 'skipped']]]],
+            ['id' => $radios['green']->id, 'status' => 'completed', 'result' => ['variants' => [['status' => 'unchanged']]]],
+            ['id' => $radios['yellow']->id, 'status' => 'completed', 'result' => ['variants' => [['status' => 'skipped']]]],
+            ['id' => $radios['red']->id, 'status' => 'error'],
+        ]]);
+        $radios['manual']->variants[0]->update(['meta' => ['source_sku_id' => 'sku-1', 'source_product_id' => 'product-1',
+            'supplier_match_manual' => ['matched_at' => $run->created_at->addSecond()->toIso8601String()],
+            'price_update' => ['source_sku_id' => 'sku-1', 'source_product_id' => 'product-1']]]);
+
+        $this->actingAs($user)->get(route('imported-products.export-blue', ['date' => '1995-01-01', 'search' => 'none']))
+            ->assertDownload('prodotti-blu-shopify.xlsx');
+        $book = \PhpOffice\PhpSpreadsheet\IOFactory::load(\Illuminate\Support\Facades\Storage::disk('local')->path('imported-products/exports/prodotti-blu-shopify.xlsx'));
+        $rows = $book->getSheetByName('Products')->toArray();
+        $headers = array_shift($rows);
+        $rows = array_map(fn ($row) => array_combine($headers, $row), $rows);
+        $this->assertSame(['raised', 'manual'], array_column($rows, 'Handle'));
+    }
+
     public function test_admin_can_edit_descriptions_without_changing_the_spanish_original(): void
     {
         $product = ConfiguratorProduct::create([
